@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 
 from slack_bolt import App
@@ -10,7 +11,7 @@ from app.services.slack_helper import get_thread_parent_message
 
 def register_message_handlers(app: App) -> None:
 
-    @app.message(re.compile(r"^!읽기"))
+    @app.message(re.compile(r"^!정산이슈"))
     def handle_read(message, client, say):
         channel_id = message.get("channel")
         thread_ts = message.get("thread_ts")
@@ -33,9 +34,32 @@ def register_message_handlers(app: App) -> None:
         parsed = parse_settlement_message(parent_text)
 
         say(
-            f"*파싱 결과*\n"
-            f"• 예약번호: {parsed.booking_key or '(없음)'}\n"
-            f"• 업체명: {parsed.company_name or '(없음)'}\n"
-            f"• 고객명: {parsed.customer_name or '(없음)'}",
+            text="파싱 결과",
+            blocks=[
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            f"*파싱 결과*\n"
+                            f"• 예약번호: {parsed.booking_key or '(없음)'}\n"
+                            f"• 업체명: {parsed.company_name or '(없음)'}\n"
+                            f"• 고객명: {parsed.customer_name or '(없음)'}"
+                        ),
+                    },
+                },
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "등록"},
+                            "style": "primary",
+                            "action_id": "open_registration_modal",
+                            "value": json.dumps(parsed.model_dump(), ensure_ascii=False),
+                        }
+                    ],
+                },
+            ],
             thread_ts=thread_ts,
         )
