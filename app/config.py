@@ -7,10 +7,17 @@ class Settings(BaseSettings):
     SLACK_BOT_TOKEN: str
     SLACK_APP_TOKEN: str
     SLACK_SIGNING_SECRET: str | None = None
+    APPROVERS: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
+
+    @property
+    def approver_ids(self) -> list[str]:
+        if not self.APPROVERS:
+            return []
+        return [uid.strip() for uid in self.APPROVERS.split(",") if uid.strip()]
 
 
 settings = Settings()

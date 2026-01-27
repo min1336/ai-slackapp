@@ -4,6 +4,8 @@ import json
 
 from slack_bolt import App
 
+from app.config import settings
+
 
 def register_action_handlers(app: App) -> None:
 
@@ -128,4 +130,88 @@ def register_action_handlers(app: App) -> None:
                     },
                 ],
             },
+        )
+
+    @app.action("settlement_approve")
+    def handle_settlement_approve(ack, body, client):
+        ack()
+
+        user_id = body["user"]["id"]
+        channel_id = body.get("channel", {}).get("id", "")
+        message_ts = body.get("message", {}).get("ts", "")
+        thread_ts = body.get("message", {}).get("thread_ts", "")
+
+        if user_id not in settings.approver_ids:
+            client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="⚠️ 승인 권한이 없습니다.",
+                thread_ts=thread_ts if thread_ts else None,
+            )
+            return
+
+        user_info = client.users_info(user=user_id)
+        approver_name = user_info["user"]["real_name"]
+
+        original_blocks = body.get("message", {}).get("blocks", [])
+
+        new_blocks = [b for b in original_blocks if b.get("type") != "actions"]
+        new_blocks[0] = {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "✅ 정산 이슈가 승인되었습니다."},
+        }
+        new_blocks.append({
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": f"승인자: *{approver_name}*"}
+            ],
+        })
+
+        client.chat_update(
+            channel=channel_id,
+            ts=message_ts,
+            text="정산 이슈 승인됨",
+            blocks=new_blocks,
+        )
+
+    @app.action("settlement_reject")
+    def handle_settlement_reject(ack, body, client):
+        ack()
+
+        user_id = body["user"]["id"]
+        channel_id = body.get("channel", {}).get("id", "")
+        message_ts = body.get("message", {}).get("ts", "")
+        thread_ts = body.get("message", {}).get("thread_ts", "")
+
+        if user_id not in settings.approver_ids:
+            client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="⚠️ 반려 권한이 없습니다.",
+                thread_ts=thread_ts if thread_ts else None,
+            )
+            return
+
+        user_info = client.users_info(user=user_id)
+        rejecter_name = user_info["user"]["real_name"]
+
+        original_blocks = body.get("message", {}).get("blocks", [])
+
+        new_blocks = [b for b in original_blocks if b.get("type") != "actions"]
+        new_blocks[0] = {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "❌ 정산 이슈가 반려되었습니다."},
+        }
+        new_blocks.append({
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": f"반려자: *{rejecter_name}*"}
+            ],
+        })
+
+        client.chat_update(
+            channel=channel_id,
+            ts=message_ts,
+            text="정산 이슈 반려됨",
+            blocks=new_blocks,
         )
