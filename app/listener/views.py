@@ -4,6 +4,8 @@ import json
 
 from slack_bolt import App
 
+from app.views.blocks import build_approval_request_message
+
 
 def register_view_handlers(app: App) -> None:
     @app.view("registration_submit")
@@ -22,23 +24,36 @@ def register_view_handlers(app: App) -> None:
 
         # 입력 필드 값 추출
         values = view.get("state", {}).get("values", {})
-        settlement_day = values.get("settlement_standard_day_block", {}).get("settlement_standard_day_input", {}).get(
-            "selected_date", "")
-        company_sub_name = values.get("company_sub_name_block", {}).get("company_sub_name_input", {}).get("value",
-                                                                                                          "") or ""
-        settlement_cost = values.get("settlement_standard_cost_block", {}).get("settlement_standard_cost_input",
-                                                                               {}).get("value", "")
-        carmore_cost = values.get("carmore_cost_block", {}).get("carmore_cost_input", {}).get("value", "") or ""
-        user_refund_cost = values.get("user_refund_cost_block", {}).get("user_refund_cost_input", {}).get("value",
-                                                                                                          "") or ""
+        settlement_day = values.get("settlement_standard_day_block", {}).get(
+            "settlement_standard_day_input", {}
+        ).get("selected_date", "")
+        company_sub_name = values.get("company_sub_name_block", {}).get(
+            "company_sub_name_input", {}
+        ).get("value", "") or ""
+        settlement_cost = values.get("settlement_standard_cost_block", {}).get(
+            "settlement_standard_cost_input", {}
+        ).get("value", "")
+        carmore_cost = values.get("carmore_cost_block", {}).get(
+            "carmore_cost_input", {}
+        ).get("value", "") or ""
+        user_refund_cost = values.get("user_refund_cost_block", {}).get(
+            "user_refund_cost_input", {}
+        ).get("value", "") or ""
+
         # static_select에서 값 추출
-        issue_type_selected = values.get("issue_type_block", {}).get("issue_type_input", {}).get("selected_option", {})
+        issue_type_selected = values.get("issue_type_block", {}).get(
+            "issue_type_input", {}
+        ).get("selected_option", {})
         issue_type = issue_type_selected.get("text", {}).get("text", "") or ""
 
-        seller_channel_selected = values.get("seller_channel_block", {}).get("seller_channel_input", {}).get("selected_option", {})
+        seller_channel_selected = values.get("seller_channel_block", {}).get(
+            "seller_channel_input", {}
+        ).get("selected_option", {})
         seller_channel = seller_channel_selected.get("text", {}).get("text", "") or ""
 
-        description_selected = values.get("description_block", {}).get("description_input", {}).get("selected_option", {})
+        description_selected = values.get("description_block", {}).get(
+            "description_input", {}
+        ).get("selected_option", {})
         description = description_selected.get("text", {}).get("text", "") or ""
 
         # 버튼에 전달할 데이터 (스프레드시트 저장용)
@@ -57,76 +72,22 @@ def register_view_handlers(app: App) -> None:
             "description": description,
         }, ensure_ascii=False)
 
-        # 스레드에 승인 요청 메시지 전송
-        # 주의: section.fields는 최대 10개까지만 허용
-        blocks = [
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "📝 정산 이슈를 등록하시겠습니까?"},
-            },
-            {
-                "type": "section",
-                "fields": [
-                    {"type": "mrkdwn", "text": "*이슈 등록자*"},
-                    {"type": "plain_text", "text": user_name},
-                    {"type": "mrkdwn", "text": "*예약번호*"},
-                    {"type": "plain_text", "text": booking_key or "(없음)"},
-                    {"type": "mrkdwn", "text": "*업체명*"},
-                    {"type": "plain_text", "text": company_name or "(없음)"},
-                    {"type": "mrkdwn", "text": "*고객명*"},
-                    {"type": "plain_text", "text": customer_name or "(없음)"},
-                    {"type": "mrkdwn", "text": "*정산기준일*"},
-                    {"type": "plain_text", "text": settlement_day or "(없음)"},
-                ],
-            },
-            {
-                "type": "section",
-                "fields": [
-                    {"type": "mrkdwn", "text": "*정산기준금액*"},
-                    {"type": "plain_text", "text": settlement_cost or "(없음)"},
-                    {"type": "mrkdwn", "text": "*업체명2(대신배차)*"},
-                    {"type": "plain_text", "text": company_sub_name or "(없음)"},
-                    {"type": "mrkdwn", "text": "*카모아 부담비용*"},
-                    {"type": "plain_text", "text": carmore_cost or "(없음)"},
-                    {"type": "mrkdwn", "text": "*고객 환불 금액*"},
-                    {"type": "plain_text", "text": user_refund_cost or "(없음)"},
-                    {"type": "mrkdwn", "text": "*판매채널*"},
-                    {"type": "plain_text", "text": seller_channel or "(없음)"},
-                ],
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*이슈사항*\n{issue_type or '(없음)'}\n\n*내용*\n{description or '(없음)'}",
-                },
-            },
-            {
-                "type": "actions",
-                "elements": [
-                    {
-                        "type": "button",
-                        "text": {"type": "plain_text", "text": "승인"},
-                        "style": "primary",
-                        "action_id": "settlement_approve",
-                        "value": button_data,
-                    },
-                    {
-                        "type": "button",
-                        "text": {"type": "plain_text", "text": "반려"},
-                        "style": "danger",
-                        "action_id": "settlement_reject",
-                        "value": button_data,
-                    },
-                    {
-                        "type": "button",
-                        "text": {"type": "plain_text", "text": "편집"},
-                        "action_id": "settlement_edit",
-                        "value": button_data,
-                    },
-                ],
-            },
-        ]
+        # 승인 요청 메시지 블록 생성
+        blocks = build_approval_request_message(
+            user_name=user_name,
+            booking_key=booking_key,
+            company_name=company_name,
+            customer_name=customer_name,
+            settlement_day=settlement_day,
+            issue_type=issue_type,
+            settlement_cost=settlement_cost,
+            company_sub_name=company_sub_name,
+            carmore_cost=carmore_cost,
+            user_refund_cost=user_refund_cost,
+            seller_channel=seller_channel,
+            description=description,
+            button_data=button_data,
+        )
 
         # 편집 모드면 기존 메시지 업데이트, 아니면 새 메시지 생성
         if message_ts:

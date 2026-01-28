@@ -7,6 +7,7 @@ from slack_bolt import App
 
 from app.services.message_parser import parse_settlement_message
 from app.services.slack_helper import get_thread_parent_message
+from app.views.blocks import build_parsing_result_message
 
 
 def register_message_handlers(app: App) -> None:
@@ -18,7 +19,7 @@ def register_message_handlers(app: App) -> None:
         message_ts = message.get("ts")
 
         if not thread_ts:
-            say("스레드에서 `!읽기`를 입력해주세요.", thread_ts=message_ts)
+            say("스레드에서 `!정산이슈`를 입력해주세요.", thread_ts=message_ts)
             return
 
         parent_text = get_thread_parent_message(
@@ -32,34 +33,15 @@ def register_message_handlers(app: App) -> None:
             return
 
         parsed = parse_settlement_message(parent_text)
+        button_value = json.dumps(parsed.model_dump(), ensure_ascii=False)
 
         say(
             text="파싱 결과",
-            blocks=[
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": (
-                            f"*파싱 결과*\n"
-                            f"• 예약번호: {parsed.booking_key or '(없음)'}\n"
-                            f"• 업체명: {parsed.company_name or '(없음)'}\n"
-                            f"• 고객명: {parsed.customer_name or '(없음)'}"
-                        ),
-                    },
-                },
-                {
-                    "type": "actions",
-                    "elements": [
-                        {
-                            "type": "button",
-                            "text": {"type": "plain_text", "text": "등록"},
-                            "style": "primary",
-                            "action_id": "open_registration_modal",
-                            "value": json.dumps(parsed.model_dump(), ensure_ascii=False),
-                        }
-                    ],
-                },
-            ],
+            blocks=build_parsing_result_message(
+                booking_key=parsed.booking_key,
+                company_name=parsed.company_name,
+                customer_name=parsed.customer_name,
+                button_value=button_value,
+            ),
             thread_ts=thread_ts,
         )
