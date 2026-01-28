@@ -5,6 +5,7 @@ import json
 from slack_bolt import App
 
 from app.config import settings
+from app.services.spreadsheet import SettlementRow, append_settlement_row
 
 
 def register_action_handlers(app: App) -> None:
@@ -153,6 +154,28 @@ def register_action_handlers(app: App) -> None:
         user_info = client.users_info(user=user_id)
         approver_name = user_info["user"]["real_name"]
 
+        # 버튼 value에서 데이터 추출
+        value = body.get("actions", [{}])[0].get("value", "{}")
+        data = json.loads(value)
+
+        # 스프레드시트에 저장
+        row = SettlementRow(
+            settlement_day=data.get("settlement_day", ""),
+            user_name=data.get("user_name", ""),
+            customer_name=data.get("customer_name", ""),
+            booking_key=data.get("booking_key", ""),
+            company_name=data.get("company_name", ""),
+            company_sub_name=data.get("company_sub_name", ""),
+            settlement_cost=data.get("settlement_cost", ""),
+            carmore_cost=data.get("carmore_cost", ""),
+            user_refund_cost=data.get("user_refund_cost", ""),
+            description=data.get("description", ""),
+            status="승인",
+            approver_name=approver_name,
+        )
+        append_settlement_row(row)
+
+        # 메시지 업데이트
         original_blocks = body.get("message", {}).get("blocks", [])
 
         new_blocks = [b for b in original_blocks if b.get("type") != "actions"]
@@ -195,6 +218,28 @@ def register_action_handlers(app: App) -> None:
         user_info = client.users_info(user=user_id)
         rejecter_name = user_info["user"]["real_name"]
 
+        # 버튼 value에서 데이터 추출
+        value = body.get("actions", [{}])[0].get("value", "{}")
+        data = json.loads(value)
+
+        # 스프레드시트에 저장
+        row = SettlementRow(
+            settlement_day=data.get("settlement_day", ""),
+            user_name=data.get("user_name", ""),
+            customer_name=data.get("customer_name", ""),
+            booking_key=data.get("booking_key", ""),
+            company_name=data.get("company_name", ""),
+            company_sub_name=data.get("company_sub_name", ""),
+            settlement_cost=data.get("settlement_cost", ""),
+            carmore_cost=data.get("carmore_cost", ""),
+            user_refund_cost=data.get("user_refund_cost", ""),
+            description=data.get("description", ""),
+            status="반려",
+            approver_name=rejecter_name,
+        )
+        append_settlement_row(row)
+
+        # 메시지 업데이트
         original_blocks = body.get("message", {}).get("blocks", [])
 
         new_blocks = [b for b in original_blocks if b.get("type") != "actions"]

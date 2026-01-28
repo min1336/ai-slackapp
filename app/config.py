@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     SLACK_SIGNING_SECRET: str | None = None
     APPROVERS: str = ""
 
+    # Google Sheets
+    GOOGLE_CREDENTIALS_FILE: str = "credentials.json"
+    SPREADSHEET_ID: str = ""
+    SHEET_NAME: str = "Sheet1"
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )

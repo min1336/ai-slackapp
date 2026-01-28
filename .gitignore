@@ -224,3 +224,5 @@ __marimo__/
 # Visual Studio Code
 .vscode/
 *.code-workspace
+
+credentials.json

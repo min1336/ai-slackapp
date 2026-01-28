@@ -32,6 +32,20 @@ def register_view_handlers(app: App) -> None:
                                                                                                           "") or ""
         description = values.get("description_block", {}).get("description_input", {}).get("value", "") or ""
 
+        # 버튼에 전달할 데이터 (스프레드시트 저장용)
+        button_data = json.dumps({
+            "user_name": user_name,
+            "booking_key": booking_key,
+            "company_name": company_name,
+            "customer_name": customer_name,
+            "settlement_day": settlement_day,
+            "settlement_cost": settlement_cost,
+            "company_sub_name": company_sub_name,
+            "carmore_cost": carmore_cost,
+            "user_refund_cost": user_refund_cost,
+            "description": description,
+        }, ensure_ascii=False)
+
         # 스레드에 승인 요청 메시지 전송
         # 주의: section.fields는 최대 10개까지만 허용
         blocks = [
@@ -82,12 +96,14 @@ def register_view_handlers(app: App) -> None:
                         "text": {"type": "plain_text", "text": "승인"},
                         "style": "primary",
                         "action_id": "settlement_approve",
+                        "value": button_data,
                     },
                     {
                         "type": "button",
                         "text": {"type": "plain_text", "text": "반려"},
                         "style": "danger",
                         "action_id": "settlement_reject",
+                        "value": button_data,
                     },
                 ],
             },
