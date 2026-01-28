@@ -8,8 +8,8 @@ from app.config import settings
 from app.constants import ActionId
 from app.services.spreadsheet import SettlementRow, append_settlement_row
 from app.views.blocks import (
-    build_registration_modal,
     build_approved_message,
+    build_registration_modal,
     build_rejected_message,
 )
 

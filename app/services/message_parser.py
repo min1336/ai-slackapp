@@ -8,15 +8,16 @@ from pydantic import BaseModel, field_validator
 
 class BookingMessageField(str, Enum):
     """메시지 필드 (영문 필드명 = 한글 레이블)"""
+
     booking_key = "예약번호"
     company_name = "업체"
     customer_name = "예약자명"
 
 
 class ParsedSettlement(BaseModel):
-    booking_key: str = ""   # 예약번호
+    booking_key: str = ""  # 예약번호
     company_name: str = ""  # 업체명
-    customer_name: str = "" # 예약자명
+    customer_name: str = ""  # 예약자명
 
     @field_validator("customer_name", mode="before")
     @classmethod

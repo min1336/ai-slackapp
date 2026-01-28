@@ -7,7 +7,6 @@ from app.services.message_parser import (
 
 
 class TestParseSettlementMessage:
-
     def test_모든_필드가_있는_메시지를_파싱한다(self):
         text = """
                     예약번호: ABC123
@@ -88,7 +87,6 @@ class TestParseSettlementMessage:
 
 
 class TestParsedSettlementValidator:
-
     def test_customer_name_괄호_앞_이름만_추출한다(self):
         settlement = ParsedSettlement(customer_name="나민혁 (아이폰)")
 

@@ -4,13 +4,13 @@ import json
 
 from slack_bolt import App
 
-from app.constants import BlockId, ActionId
+from app.constants import ActionId, BlockId
 from app.views.blocks import build_approval_request_message
 
 
 def register_view_handlers(app: App) -> None:
     @app.view(ActionId.REGISTRATION_SUBMIT)
-    def handle_registration_submit(ack, body, client, view):
+    def handle_registration_submit(ack, client, view):
         ack()
 
         # private_metadata에서 정보 추출

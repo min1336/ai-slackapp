@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List
 
 
 class IssueType(str, Enum):
@@ -76,12 +75,12 @@ class Description(str, Enum):
         }
 
 
-ISSUE_TYPE_OPTIONS: List[dict] = [x.to_slack_option() for x in IssueType]
-SELLER_CHANNEL_OPTIONS: List[dict] = [x.to_slack_option() for x in SellerChannel]
-DESCRIPTION_OPTIONS: List[dict] = [x.to_slack_option() for x in Description]
+ISSUE_TYPE_OPTIONS: list[dict] = [x.to_slack_option() for x in IssueType]
+SELLER_CHANNEL_OPTIONS: list[dict] = [x.to_slack_option() for x in SellerChannel]
+DESCRIPTION_OPTIONS: list[dict] = [x.to_slack_option() for x in Description]
 
 
-def find_option_by_text(options: List[dict], text: str) -> dict | None:
+def find_option_by_text(options: list[dict], text: str) -> dict | None:
     for option in options:
         if option["text"]["text"] == text:
             return option

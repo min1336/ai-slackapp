@@ -16,6 +16,7 @@ register_message_handlers(app)
 register_action_handlers(app)
 register_view_handlers(app)
 
+
 def main():
     SocketModeHandler(app, settings.SLACK_APP_TOKEN).start()
 

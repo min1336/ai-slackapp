@@ -11,7 +11,6 @@ from app.views.blocks import build_parsing_result_message
 
 
 def register_message_handlers(app: App) -> None:
-
     @app.message(re.compile(r"^!정산이슈"))
     def handle_read(message, client, say):
         channel_id = message.get("channel")

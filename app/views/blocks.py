@@ -305,7 +305,10 @@ def build_approval_request_message(
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"*{LabelText.ISSUE_TYPE}*\n{issue_type or CommonText.NONE}\n\n*{LabelText.DESCRIPTION}*\n{description or CommonText.NONE}",
+                "text": (
+                    f"*{LabelText.ISSUE_TYPE}*\n{issue_type or CommonText.NONE}\n\n"
+                    f"*{LabelText.DESCRIPTION}*\n{description or CommonText.NONE}"
+                ),
             },
         },
         {
