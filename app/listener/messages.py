@@ -5,20 +5,24 @@ import re
 
 from slack_bolt import App
 
+from app.constants import Command
 from app.services.message_parser import parse_settlement_message
 from app.services.slack_helper import get_thread_parent_message
 from app.views.blocks import build_parsing_result_message
 
 
 def register_message_handlers(app: App) -> None:
-    @app.message(re.compile(r"^!정산이슈"))
+    @app.message(re.compile(rf"^{re.escape(Command.SETTLEMENT_ISSUE)}$"))
     def handle_read(message, client, say):
         channel_id = message.get("channel")
         thread_ts = message.get("thread_ts")
         message_ts = message.get("ts")
 
         if not thread_ts:
-            say("스레드에서 `!정산이슈`를 입력해주세요.", thread_ts=message_ts)
+            say(
+                f"스레드에서 `{Command.SETTLEMENT_ISSUE}`를 입력해주세요.",
+                thread_ts=message_ts,
+            )
             return
 
         parent_text = get_thread_parent_message(

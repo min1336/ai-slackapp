@@ -15,6 +15,7 @@ from app.constants.slack_ids import (
     CallbackId,
 )
 from app.constants.ui_texts import (
+    Command,
     CommonText,
     HeaderText,
     LabelText,
@@ -33,5 +34,6 @@ __all__ = [
     "LabelText",
     "CommonText",
     "HeaderText",
+    "Command",
     "find_option_by_text",
 ]

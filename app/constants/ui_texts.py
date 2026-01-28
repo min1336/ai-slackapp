@@ -30,6 +30,10 @@ class CommonText:
     REQUIRED = " (필수)"
 
 
+class Command:
+    SETTLEMENT_ISSUE = "!정산이슈"
+
+
 class HeaderText:
     BOOKING_INFO = "📋 예약 정보"
     SETTLEMENT_ISSUE_REGISTER = "📝 정산 이슈를 등록하시겠습니까?"
