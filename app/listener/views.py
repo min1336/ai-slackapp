@@ -14,6 +14,7 @@ def register_view_handlers(app: App) -> None:
         metadata = json.loads(view.get("private_metadata", "{}"))
         channel_id = metadata.get("channel_id", "")
         thread_ts = metadata.get("thread_ts", "")
+        message_ts = metadata.get("message_ts", "")  # 편집 모드일 때만 있음
         user_name = metadata.get("user_name", "")
         booking_key = metadata.get("booking_key", "")
         company_name = metadata.get("company_name", "")
@@ -31,6 +32,9 @@ def register_view_handlers(app: App) -> None:
         user_refund_cost = values.get("user_refund_cost_block", {}).get("user_refund_cost_input", {}).get("value",
                                                                                                           "") or ""
         # static_select에서 값 추출
+        issue_type_selected = values.get("issue_type_block", {}).get("issue_type_input", {}).get("selected_option", {})
+        issue_type = issue_type_selected.get("text", {}).get("text", "") or ""
+
         seller_channel_selected = values.get("seller_channel_block", {}).get("seller_channel_input", {}).get("selected_option", {})
         seller_channel = seller_channel_selected.get("text", {}).get("text", "") or ""
 
@@ -44,6 +48,7 @@ def register_view_handlers(app: App) -> None:
             "company_name": company_name,
             "customer_name": customer_name,
             "settlement_day": settlement_day,
+            "issue_type": issue_type,
             "settlement_cost": settlement_cost,
             "company_sub_name": company_sub_name,
             "carmore_cost": carmore_cost,
@@ -93,7 +98,7 @@ def register_view_handlers(app: App) -> None:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"*내용*\n{description or '(없음)'}",
+                    "text": f"*이슈사항*\n{issue_type or '(없음)'}\n\n*내용*\n{description or '(없음)'}",
                 },
             },
             {
@@ -113,13 +118,28 @@ def register_view_handlers(app: App) -> None:
                         "action_id": "settlement_reject",
                         "value": button_data,
                     },
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "편집"},
+                        "action_id": "settlement_edit",
+                        "value": button_data,
+                    },
                 ],
             },
         ]
 
-        client.chat_postMessage(
-            channel=channel_id,
-            thread_ts=thread_ts if thread_ts else None,
-            text="정산 이슈 등록 요청",
-            blocks=blocks,
-        )
+        # 편집 모드면 기존 메시지 업데이트, 아니면 새 메시지 생성
+        if message_ts:
+            client.chat_update(
+                channel=channel_id,
+                ts=message_ts,
+                text="정산 이슈 등록 요청 (수정됨)",
+                blocks=blocks,
+            )
+        else:
+            client.chat_postMessage(
+                channel=channel_id,
+                thread_ts=thread_ts if thread_ts else None,
+                text="정산 이슈 등록 요청",
+                blocks=blocks,
+            )

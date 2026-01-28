@@ -6,6 +6,12 @@ from slack_bolt import App
 
 from app.config import settings
 from app.services.spreadsheet import SettlementRow, append_settlement_row
+from app.views.options import (
+    ISSUE_TYPE_OPTIONS,
+    SELLER_CHANNEL_OPTIONS,
+    DESCRIPTION_OPTIONS,
+    find_option_by_text,
+)
 
 
 def register_action_handlers(app: App) -> None:
@@ -239,6 +245,7 @@ def register_action_handlers(app: App) -> None:
             settlement_cost=data.get("settlement_cost", ""),
             carmore_cost=data.get("carmore_cost", ""),
             user_refund_cost=data.get("user_refund_cost", ""),
+            issue_type=data.get("issue_type", ""),
             sales_channel=data.get("seller_channel", ""),
             description=data.get("description", ""),
             status="승인",
@@ -304,6 +311,7 @@ def register_action_handlers(app: App) -> None:
             settlement_cost=data.get("settlement_cost", ""),
             carmore_cost=data.get("carmore_cost", ""),
             user_refund_cost=data.get("user_refund_cost", ""),
+            issue_type=data.get("issue_type", ""),
             sales_channel=data.get("seller_channel", ""),
             description=data.get("description", ""),
             status="반려",
@@ -331,4 +339,195 @@ def register_action_handlers(app: App) -> None:
             ts=message_ts,
             text="정산 이슈 반려됨",
             blocks=new_blocks,
+        )
+
+    @app.action("settlement_edit")
+    def handle_settlement_edit(ack, body, client):
+        ack()
+
+        # 버튼 value에서 기존 데이터 추출
+        value = body.get("actions", [{}])[0].get("value", "{}")
+        data = json.loads(value)
+
+        channel_id = body.get("channel", {}).get("id", "")
+        message_ts = body.get("message", {}).get("ts", "")
+        thread_ts = body.get("message", {}).get("thread_ts", "")
+
+        user_name = data.get("user_name", "")
+        booking_key = data.get("booking_key", "")
+        company_name = data.get("company_name", "")
+        customer_name = data.get("customer_name", "")
+
+        # 기존 입력값
+        settlement_day = data.get("settlement_day", "")
+        issue_type = data.get("issue_type", "")
+        company_sub_name = data.get("company_sub_name", "")
+        settlement_cost = data.get("settlement_cost", "")
+        carmore_cost = data.get("carmore_cost", "")
+        user_refund_cost = data.get("user_refund_cost", "")
+        seller_channel = data.get("seller_channel", "")
+        description = data.get("description", "")
+
+        metadata = json.dumps({
+            "channel_id": channel_id,
+            "thread_ts": thread_ts,
+            "message_ts": message_ts,  # 편집 모드 표시
+            "user_name": user_name,
+            "booking_key": booking_key,
+            "company_name": company_name,
+            "customer_name": customer_name,
+        }, ensure_ascii=False)
+
+        # static_select initial_option 찾기
+        issue_type_initial = find_option_by_text(ISSUE_TYPE_OPTIONS, issue_type)
+        seller_channel_initial = find_option_by_text(SELLER_CHANNEL_OPTIONS, seller_channel)
+        description_initial = find_option_by_text(DESCRIPTION_OPTIONS, description)
+
+        # 모달 블록 구성
+        blocks = [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "📋 예약 정보"},
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {"type": "mrkdwn", "text": "*정산 이슈 등록자*"},
+                    {"type": "plain_text", "text": user_name},
+                    {"type": "mrkdwn", "text": "*예약번호*"},
+                    {"type": "plain_text", "text": booking_key or "(없음)"},
+                    {"type": "mrkdwn", "text": "*업체명*"},
+                    {"type": "plain_text", "text": company_name or "(없음)"},
+                    {"type": "mrkdwn", "text": "*고객명*"},
+                    {"type": "plain_text", "text": customer_name or "(없음)"},
+                ],
+            },
+            {"type": "divider"},
+        ]
+
+        # 정산기준일
+        datepicker_element = {
+            "type": "datepicker",
+            "action_id": "settlement_standard_day_input",
+            "placeholder": {"type": "plain_text", "text": "날짜 선택"},
+        }
+        if settlement_day:
+            datepicker_element["initial_date"] = settlement_day
+        blocks.append({
+            "type": "input",
+            "block_id": "settlement_standard_day_block",
+            "label": {"type": "plain_text", "text": "정산기준일 (필수)"},
+            "element": datepicker_element,
+        })
+
+        # 이슈사항
+        issue_type_element = {
+            "type": "static_select",
+            "action_id": "issue_type_input",
+            "placeholder": {"type": "plain_text", "text": "선택하세요"},
+            "options": ISSUE_TYPE_OPTIONS,
+        }
+        if issue_type_initial:
+            issue_type_element["initial_option"] = issue_type_initial
+        blocks.append({
+            "type": "input",
+            "block_id": "issue_type_block",
+            "label": {"type": "plain_text", "text": "이슈사항 (필수)"},
+            "element": issue_type_element,
+        })
+
+        # 업체명2
+        blocks.append({
+            "type": "input",
+            "block_id": "company_sub_name_block",
+            "label": {"type": "plain_text", "text": "업체명2(대신배차)"},
+            "optional": True,
+            "element": {
+                "type": "plain_text_input",
+                "action_id": "company_sub_name_input",
+                "initial_value": company_sub_name,
+            },
+        })
+
+        # 정산기준금액
+        blocks.append({
+            "type": "input",
+            "block_id": "settlement_standard_cost_block",
+            "label": {"type": "plain_text", "text": "정산기준금액 (필수)"},
+            "element": {
+                "type": "plain_text_input",
+                "action_id": "settlement_standard_cost_input",
+                "initial_value": settlement_cost,
+            },
+        })
+
+        # 카모아 부담비용
+        blocks.append({
+            "type": "input",
+            "block_id": "carmore_cost_block",
+            "label": {"type": "plain_text", "text": "카모아 부담비용"},
+            "optional": True,
+            "element": {
+                "type": "plain_text_input",
+                "action_id": "carmore_cost_input",
+                "initial_value": carmore_cost,
+            },
+        })
+
+        # 고객 환불 금액
+        blocks.append({
+            "type": "input",
+            "block_id": "user_refund_cost_block",
+            "label": {"type": "plain_text", "text": "고객 환불 금액"},
+            "optional": True,
+            "element": {
+                "type": "plain_text_input",
+                "action_id": "user_refund_cost_input",
+                "initial_value": user_refund_cost,
+            },
+        })
+
+        # 판매채널
+        seller_channel_element = {
+            "type": "static_select",
+            "action_id": "seller_channel_input",
+            "placeholder": {"type": "plain_text", "text": "선택하세요"},
+            "options": SELLER_CHANNEL_OPTIONS,
+        }
+        if seller_channel_initial:
+            seller_channel_element["initial_option"] = seller_channel_initial
+        blocks.append({
+            "type": "input",
+            "block_id": "seller_channel_block",
+            "label": {"type": "plain_text", "text": "판매채널 (필수)"},
+            "element": seller_channel_element,
+        })
+
+        # 내용
+        description_element = {
+            "type": "static_select",
+            "action_id": "description_input",
+            "placeholder": {"type": "plain_text", "text": "선택하세요"},
+            "options": DESCRIPTION_OPTIONS,
+        }
+        if description_initial:
+            description_element["initial_option"] = description_initial
+        blocks.append({
+            "type": "input",
+            "block_id": "description_block",
+            "label": {"type": "plain_text", "text": "내용 (필수)"},
+            "element": description_element,
+        })
+
+        client.views_open(
+            trigger_id=body["trigger_id"],
+            view={
+                "type": "modal",
+                "callback_id": "registration_submit",
+                "private_metadata": metadata,
+                "title": {"type": "plain_text", "text": "정산 이슈 편집"},
+                "submit": {"type": "plain_text", "text": "수정"},
+                "close": {"type": "plain_text", "text": "취소"},
+                "blocks": blocks,
+            },
         )
