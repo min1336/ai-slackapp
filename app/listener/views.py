@@ -4,11 +4,12 @@ import json
 
 from slack_bolt import App
 
+from app.constants import BlockId, ActionId
 from app.views.blocks import build_approval_request_message
 
 
 def register_view_handlers(app: App) -> None:
-    @app.view("registration_submit")
+    @app.view(ActionId.REGISTRATION_SUBMIT)
     def handle_registration_submit(ack, body, client, view):
         ack()
 
@@ -24,53 +25,75 @@ def register_view_handlers(app: App) -> None:
 
         # 입력 필드 값 추출
         values = view.get("state", {}).get("values", {})
-        settlement_day = values.get("settlement_standard_day_block", {}).get(
-            "settlement_standard_day_input", {}
-        ).get("selected_date", "")
-        company_sub_name = values.get("company_sub_name_block", {}).get(
-            "company_sub_name_input", {}
-        ).get("value", "") or ""
-        settlement_cost = values.get("settlement_standard_cost_block", {}).get(
-            "settlement_standard_cost_input", {}
-        ).get("value", "")
-        carmore_cost = values.get("carmore_cost_block", {}).get(
-            "carmore_cost_input", {}
-        ).get("value", "") or ""
-        user_refund_cost = values.get("user_refund_cost_block", {}).get(
-            "user_refund_cost_input", {}
-        ).get("value", "") or ""
+        settlement_day = (
+            values.get(BlockId.SETTLEMENT_DAY_BLOCK, {})
+            .get(ActionId.SETTLEMENT_DAY_INPUT, {})
+            .get("selected_date", "")
+        )
+        company_sub_name = (
+            values.get(BlockId.COMPANY_SUB_NAME_BLOCK, {})
+            .get(ActionId.COMPANY_SUB_NAME_INPUT, {})
+            .get("value", "")
+            or ""
+        )
+        settlement_cost = (
+            values.get(BlockId.SETTLEMENT_COST_BLOCK, {})
+            .get(ActionId.SETTLEMENT_COST_INPUT, {})
+            .get("value", "")
+        )
+        carmore_cost = (
+            values.get(BlockId.CARMORE_COST_BLOCK, {})
+            .get(ActionId.CARMORE_COST_INPUT, {})
+            .get("value", "")
+            or ""
+        )
+        user_refund_cost = (
+            values.get(BlockId.USER_REFUND_COST_BLOCK, {})
+            .get(ActionId.USER_REFUND_COST_INPUT, {})
+            .get("value", "")
+            or ""
+        )
 
         # static_select에서 값 추출
-        issue_type_selected = values.get("issue_type_block", {}).get(
-            "issue_type_input", {}
-        ).get("selected_option", {})
+        issue_type_selected = (
+            values.get(BlockId.ISSUE_TYPE_BLOCK, {})
+            .get(ActionId.ISSUE_TYPE_INPUT, {})
+            .get("selected_option", {})
+        )
         issue_type = issue_type_selected.get("text", {}).get("text", "") or ""
 
-        seller_channel_selected = values.get("seller_channel_block", {}).get(
-            "seller_channel_input", {}
-        ).get("selected_option", {})
+        seller_channel_selected = (
+            values.get(BlockId.SELLER_CHANNEL_BLOCK, {})
+            .get(ActionId.SELLER_CHANNEL_INPUT, {})
+            .get("selected_option", {})
+        )
         seller_channel = seller_channel_selected.get("text", {}).get("text", "") or ""
 
-        description_selected = values.get("description_block", {}).get(
-            "description_input", {}
-        ).get("selected_option", {})
+        description_selected = (
+            values.get(BlockId.DESCRIPTION_BLOCK, {})
+            .get(ActionId.DESCRIPTION_INPUT, {})
+            .get("selected_option", {})
+        )
         description = description_selected.get("text", {}).get("text", "") or ""
 
         # 버튼에 전달할 데이터 (스프레드시트 저장용)
-        button_data = json.dumps({
-            "user_name": user_name,
-            "booking_key": booking_key,
-            "company_name": company_name,
-            "customer_name": customer_name,
-            "settlement_day": settlement_day,
-            "issue_type": issue_type,
-            "settlement_cost": settlement_cost,
-            "company_sub_name": company_sub_name,
-            "carmore_cost": carmore_cost,
-            "user_refund_cost": user_refund_cost,
-            "seller_channel": seller_channel,
-            "description": description,
-        }, ensure_ascii=False)
+        button_data = json.dumps(
+            {
+                "user_name": user_name,
+                "booking_key": booking_key,
+                "company_name": company_name,
+                "customer_name": customer_name,
+                "settlement_day": settlement_day,
+                "issue_type": issue_type,
+                "settlement_cost": settlement_cost,
+                "company_sub_name": company_sub_name,
+                "carmore_cost": carmore_cost,
+                "user_refund_cost": user_refund_cost,
+                "seller_channel": seller_channel,
+                "description": description,
+            },
+            ensure_ascii=False,
+        )
 
         # 승인 요청 메시지 블록 생성
         blocks = build_approval_request_message(

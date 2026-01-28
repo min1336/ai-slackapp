@@ -5,6 +5,7 @@ import json
 from slack_bolt import App
 
 from app.config import settings
+from app.constants import ActionId
 from app.services.spreadsheet import SettlementRow, append_settlement_row
 from app.views.blocks import (
     build_registration_modal,
@@ -14,8 +15,7 @@ from app.views.blocks import (
 
 
 def register_action_handlers(app: App) -> None:
-
-    @app.action("open_registration_modal")
+    @app.action(ActionId.OPEN_REGISTRATION_MODAL)
     def handle_open_registration_modal(ack, body, client):
         ack()
 
@@ -33,14 +33,17 @@ def register_action_handlers(app: App) -> None:
         channel_id = body.get("channel", {}).get("id", "")
         thread_ts = body.get("message", {}).get("thread_ts", "")
 
-        metadata = json.dumps({
-            "channel_id": channel_id,
-            "thread_ts": thread_ts,
-            "user_name": user_name,
-            "booking_key": booking_key,
-            "company_name": company_name,
-            "customer_name": customer_name,
-        }, ensure_ascii=False)
+        metadata = json.dumps(
+            {
+                "channel_id": channel_id,
+                "thread_ts": thread_ts,
+                "user_name": user_name,
+                "booking_key": booking_key,
+                "company_name": company_name,
+                "customer_name": customer_name,
+            },
+            ensure_ascii=False,
+        )
 
         modal = build_registration_modal(
             user_name=user_name,
@@ -55,7 +58,7 @@ def register_action_handlers(app: App) -> None:
             view=modal,
         )
 
-    @app.action("settlement_approve")
+    @app.action(ActionId.SETTLEMENT_APPROVE)
     def handle_settlement_approve(ack, body, client):
         ack()
 
@@ -110,7 +113,7 @@ def register_action_handlers(app: App) -> None:
             blocks=new_blocks,
         )
 
-    @app.action("settlement_reject")
+    @app.action(ActionId.SETTLEMENT_REJECT)
     def handle_settlement_reject(ack, body, client):
         ack()
 
@@ -165,7 +168,7 @@ def register_action_handlers(app: App) -> None:
             blocks=new_blocks,
         )
 
-    @app.action("settlement_edit")
+    @app.action(ActionId.SETTLEMENT_EDIT)
     def handle_settlement_edit(ack, body, client):
         ack()
 
@@ -177,15 +180,18 @@ def register_action_handlers(app: App) -> None:
         message_ts = body.get("message", {}).get("ts", "")
         thread_ts = body.get("message", {}).get("thread_ts", "")
 
-        metadata = json.dumps({
-            "channel_id": channel_id,
-            "thread_ts": thread_ts,
-            "message_ts": message_ts,  # 편집 모드 표시
-            "user_name": data.get("user_name", ""),
-            "booking_key": data.get("booking_key", ""),
-            "company_name": data.get("company_name", ""),
-            "customer_name": data.get("customer_name", ""),
-        }, ensure_ascii=False)
+        metadata = json.dumps(
+            {
+                "channel_id": channel_id,
+                "thread_ts": thread_ts,
+                "message_ts": message_ts,  # 편집 모드 표시
+                "user_name": data.get("user_name", ""),
+                "booking_key": data.get("booking_key", ""),
+                "company_name": data.get("company_name", ""),
+                "customer_name": data.get("customer_name", ""),
+            },
+            ensure_ascii=False,
+        )
 
         modal = build_registration_modal(
             user_name=data.get("user_name", ""),
