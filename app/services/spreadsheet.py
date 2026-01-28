@@ -33,6 +33,7 @@ class SettlementRow:
     sales_channel: str = ""  # 판매채널 (null)
     created_at: str = ""  # 등록시간
     updated_at: str = ""  # 수정시간
+    thread_url: str = ""  # 스레드 링크
 
     def __post_init__(self):
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -60,6 +61,7 @@ class SettlementRow:
             self.approver_name,  # 승인자
             self.created_at,  # 등록시간
             self.updated_at,  # 수정시간
+            self.thread_url,  # 스레드 링크
         ]
 
 

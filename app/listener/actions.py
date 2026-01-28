@@ -79,6 +79,14 @@ def register_action_handlers(app: App) -> None:
         user_info = client.users_info(user=user_id)
         approver_name = user_info["user"]["real_name"]
 
+        # 스레드 링크 가져오기
+        thread_url = ""
+        if thread_ts:
+            permalink_result = client.chat_getPermalink(
+                channel=channel_id, message_ts=thread_ts
+            )
+            thread_url = permalink_result.get("permalink", "")
+
         # 버튼 value에서 데이터 추출
         value = body.get("actions", [{}])[0].get("value", "{}")
         data = json.loads(value)
@@ -99,6 +107,7 @@ def register_action_handlers(app: App) -> None:
             description=data.get("description", ""),
             status="승인",
             approver_name=approver_name,
+            thread_url=thread_url,
         )
         append_settlement_row(row)
 
@@ -134,6 +143,14 @@ def register_action_handlers(app: App) -> None:
         user_info = client.users_info(user=user_id)
         rejecter_name = user_info["user"]["real_name"]
 
+        # 스레드 링크 가져오기
+        thread_url = ""
+        if thread_ts:
+            permalink_result = client.chat_getPermalink(
+                channel=channel_id, message_ts=thread_ts
+            )
+            thread_url = permalink_result.get("permalink", "")
+
         # 버튼 value에서 데이터 추출
         value = body.get("actions", [{}])[0].get("value", "{}")
         data = json.loads(value)
@@ -154,6 +171,7 @@ def register_action_handlers(app: App) -> None:
             description=data.get("description", ""),
             status="반려",
             approver_name=rejecter_name,
+            thread_url=thread_url,
         )
         append_settlement_row(row)
 
