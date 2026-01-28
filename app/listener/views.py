@@ -30,7 +30,12 @@ def register_view_handlers(app: App) -> None:
         carmore_cost = values.get("carmore_cost_block", {}).get("carmore_cost_input", {}).get("value", "") or ""
         user_refund_cost = values.get("user_refund_cost_block", {}).get("user_refund_cost_input", {}).get("value",
                                                                                                           "") or ""
-        description = values.get("description_block", {}).get("description_input", {}).get("value", "") or ""
+        # static_select에서 값 추출
+        seller_channel_selected = values.get("seller_channel_block", {}).get("seller_channel_input", {}).get("selected_option", {})
+        seller_channel = seller_channel_selected.get("text", {}).get("text", "") or ""
+
+        description_selected = values.get("description_block", {}).get("description_input", {}).get("selected_option", {})
+        description = description_selected.get("text", {}).get("text", "") or ""
 
         # 버튼에 전달할 데이터 (스프레드시트 저장용)
         button_data = json.dumps({
@@ -43,6 +48,7 @@ def register_view_handlers(app: App) -> None:
             "company_sub_name": company_sub_name,
             "carmore_cost": carmore_cost,
             "user_refund_cost": user_refund_cost,
+            "seller_channel": seller_channel,
             "description": description,
         }, ensure_ascii=False)
 
@@ -79,13 +85,15 @@ def register_view_handlers(app: App) -> None:
                     {"type": "plain_text", "text": carmore_cost or "(없음)"},
                     {"type": "mrkdwn", "text": "*고객 환불 금액*"},
                     {"type": "plain_text", "text": user_refund_cost or "(없음)"},
+                    {"type": "mrkdwn", "text": "*판매채널*"},
+                    {"type": "plain_text", "text": seller_channel or "(없음)"},
                 ],
             },
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"*정산 이슈 내용*\n{description or '(없음)'}",
+                    "text": f"*내용*\n{description or '(없음)'}",
                 },
             },
             {
