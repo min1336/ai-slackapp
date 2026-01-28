@@ -172,13 +172,23 @@ def register_action_handlers(app: App) -> None:
     def handle_settlement_edit(ack, body, client):
         ack()
 
-        # 버튼 value에서 기존 데이터 추출
-        value = body.get("actions", [{}])[0].get("value", "{}")
-        data = json.loads(value)
-
+        user_id = body["user"]["id"]
         channel_id = body.get("channel", {}).get("id", "")
         message_ts = body.get("message", {}).get("ts", "")
         thread_ts = body.get("message", {}).get("thread_ts", "")
+
+        if user_id not in settings.approver_ids:
+            client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="⚠️ 편집 권한이 없습니다.",
+                thread_ts=thread_ts if thread_ts else None,
+            )
+            return
+
+        # 버튼 value에서 기존 데이터 추출
+        value = body.get("actions", [{}])[0].get("value", "{}")
+        data = json.loads(value)
 
         metadata = json.dumps(
             {
