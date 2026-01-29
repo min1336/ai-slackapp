@@ -1,0 +1,12 @@
+services:
+  slack-bot:
+    image: ghcr.io/teamo2dev/slack-bot:latest
+    container_name: slack-bot
+    restart: unless-stopped
+    environment:
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
+      - GOOGLE_CREDENTIALS_FILE=credentials.json
+    volumes:
+      - ./credentials.json:/app/credentials.json:ro

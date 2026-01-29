@@ -663,6 +663,7 @@ dependencies = [
     { name = "gspread" },
     { name = "pydantic-settings" },
     { name = "pytest" },
+    { name = "pyyaml" },
     { name = "slack-bolt" },
 ]
 
@@ -686,6 +687,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.12.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.13" },
     { name = "slack-bolt", specifier = ">=1.27.0" },
 ]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from slack_bolt import App
 
-from app.config import settings
+from app.config import config
 from app.constants import ActionId
 from app.models import ModalMetadata, SettlementData, SettlementStatus
 from app.services.settlement_service import save_settlement
@@ -56,7 +56,7 @@ def register_action_handlers(app: App) -> None:
         message_ts = body.get("message", {}).get("ts", "")
         thread_ts = body.get("message", {}).get("thread_ts", "")
 
-        if user_id not in settings.approver_ids:
+        if user_id not in config.approvers:
             client.chat_postEphemeral(
                 channel=channel_id,
                 user=user_id,
@@ -115,7 +115,7 @@ def register_action_handlers(app: App) -> None:
         message_ts = body.get("message", {}).get("ts", "")
         thread_ts = body.get("message", {}).get("thread_ts", "")
 
-        if user_id not in settings.approver_ids:
+        if user_id not in config.approvers:
             client.chat_postEphemeral(
                 channel=channel_id,
                 user=user_id,
