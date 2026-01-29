@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from app.services.spreadsheet import (
-    SettlementRow,
-    append_settlement_row,
-    get_spreadsheet_client,
-)
+from app.infrastructure.spreadsheet import append_settlement_row, get_spreadsheet_client
+from app.models import SettlementRow
 
 
 class TestSpreadsheet:

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
 import re
 
 from slack_bolt import App
 
 from app.constants import Command
 from app.services.message_parser import parse_settlement_message
-from app.services.slack_helper import get_thread_parent_message
+from app.services.slack_service import get_parent_message
 from app.views.blocks import build_parsing_result_message
 
 
@@ -25,7 +24,7 @@ def register_message_handlers(app: App) -> None:
             )
             return
 
-        parent_text = get_thread_parent_message(
+        parent_text = get_parent_message(
             client=client,
             channel_id=channel_id,
             thread_ts=thread_ts,
@@ -36,7 +35,6 @@ def register_message_handlers(app: App) -> None:
             return
 
         parsed = parse_settlement_message(parent_text)
-        button_value = json.dumps(parsed.model_dump(), ensure_ascii=False)
 
         say(
             text="파싱 결과",
@@ -44,7 +42,7 @@ def register_message_handlers(app: App) -> None:
                 booking_key=parsed.booking_key,
                 company_name=parsed.company_name,
                 customer_name=parsed.customer_name,
-                button_value=button_value,
+                button_value=parsed.model_dump_json(),
             ),
             thread_ts=thread_ts,
         )

@@ -43,6 +43,19 @@ def get_thread_parent_message(
     return None
 
 
+def extract_text_value(values: dict, block_id: str, action_id: str) -> str:
+    return values.get(block_id, {}).get(action_id, {}).get("value", "") or ""
+
+
+def extract_date_value(values: dict, block_id: str, action_id: str) -> str:
+    return values.get(block_id, {}).get(action_id, {}).get("selected_date", "") or ""
+
+
+def extract_select_text(values: dict, block_id: str, action_id: str) -> str:
+    selected = values.get(block_id, {}).get(action_id, {}).get("selected_option", {})
+    return selected.get("text", {}).get("text", "") or "" if selected else ""
+
+
 def send_ephemeral_message(
     client: WebClient,
     channel_id: str,
@@ -51,12 +64,7 @@ def send_ephemeral_message(
     blocks: list | None = None,
     thread_ts: str | None = None,
 ) -> bool:
-    """
-    임시 메시지(본인만 보이는)를 전송합니다.
-
-    Returns:
-        성공 여부
-    """
+    """임시 메시지(본인만 보이는)를 전송합니다."""
     try:
         client.chat_postEphemeral(
             channel=channel_id,
@@ -77,12 +85,6 @@ def post_message(
     blocks: list | None = None,
     thread_ts: str | None = None,
 ) -> SlackResponse | None:
-    """
-    채널에 메시지를 전송합니다.
-
-    Returns:
-        API 응답 또는 None
-    """
     try:
         return client.chat_postMessage(
             channel=channel_id,
@@ -101,12 +103,6 @@ def update_message(
     text: str,
     blocks: list | None = None,
 ) -> bool:
-    """
-    기존 메시지를 업데이트합니다.
-
-    Returns:
-        성공 여부
-    """
     try:
         client.chat_update(
             channel=channel_id,

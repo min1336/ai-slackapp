@@ -83,13 +83,62 @@ app/
 ├── main.py                 # 앱 진입점
 ├── config.py               # 환경변수 설정
 ├── constants/              # 상수 (옵션, ID, UI 텍스트)
-├── listener/               # Slack 이벤트 핸들러
-├── services/               # 비즈니스 로직 (파싱, API 연동)
+├── models/                 # 데이터 모델
+├── listener/               # Slack 이벤트 핸들러 (Controller)
+├── services/               # 비즈니스 로직
+├── infrastructure/         # 외부 시스템 연동
 └── views/                  # Slack Block Kit 빌더
 
 tests/
 ├── unit/                   # 유닛 테스트
 └── integration/            # 통합 테스트
+```
+
+### 레이어 아키텍처
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      listener/                          │
+│              (Controller - 요청/응답 처리)               │
+├─────────────────────────────────────────────────────────┤
+│         services/                    views/             │
+│     (비즈니스 로직)              (UI 블록 생성)           │
+├─────────────────────────────────────────────────────────┤
+│                   infrastructure/                       │
+│              (외부 시스템 통신)                          │
+├─────────────────────────────────────────────────────────┤
+│                      models/                            │
+│                   (데이터 모델)                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+| 레이어 | 역할 | 호출 가능 | 경계 |
+|--------|------|----------|------|
+| **listener/** | Slack 이벤트 수신, 응답 반환 | services, views, models | infrastructure 직접 호출 금지 |
+| **services/** | 비즈니스 로직 | infrastructure, models | listener 호출 금지 |
+| **infrastructure/** | 외부 시스템 통신 (Slack API, Google Sheets) | models | 비즈니스 로직 포함 금지 |
+| **views/** | Slack Block Kit JSON 생성 | models | 데이터 가공 금지 |
+| **models/** | 데이터 구조 정의 | (없음) | 모든 레이어에서 import 가능 |
+
+**원칙: 레이어를 건너뛰어 호출하지 않는다** (listener → ~~infrastructure~~ 금지)
+
+### 데이터 모델 선택 기준
+
+| 기준 | Pydantic | dataclass |
+|------|----------|-----------|
+| JSON 직렬화 필요 | O | X |
+| 필드 검증/변환 필요 | O | X |
+| 외부 입력 처리 | O | X |
+| 단순 데이터 홀더 | X | O |
+
+```python
+# Pydantic - Slack 버튼 value 등 JSON 변환 필요시
+data = SettlementData.model_validate_json(button_value)
+button_value = data.model_dump_json()
+
+# dataclass - 내부 데이터 변환만 (스프레드시트 행 등)
+row = SettlementRow(...)
+row.to_row()  # → ["2025-01-28", "작성자", ...]
 ```
 
 ## Slack App 설정

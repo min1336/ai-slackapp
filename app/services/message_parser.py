@@ -7,8 +7,6 @@ from pydantic import BaseModel, field_validator
 
 
 class BookingMessageField(str, Enum):
-    """메시지 필드 (영문 필드명 = 한글 레이블)"""
-
     booking_key = "예약번호"
     company_name = "업체"
     customer_name = "예약자명"

@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-import json
-
 from slack_bolt import App
 
 from app.config import settings
 from app.constants import ActionId
-from app.services.slack_helper import get_thread_permalink, get_user_real_name
-from app.services.spreadsheet import (
-    SettlementRow,
-    SettlementStatus,
-    append_settlement_row,
-)
+from app.models import ModalMetadata, SettlementData, SettlementStatus
+from app.services.settlement_service import save_settlement
+from app.services.slack_service import get_thread_url, get_user_name
 from app.views.blocks import (
     build_approved_message,
     build_registration_modal,
@@ -25,37 +20,29 @@ def register_action_handlers(app: App) -> None:
         ack()
 
         value = body.get("actions", [{}])[0].get("value", "{}")
-        parsed = json.loads(value)
-
-        booking_key = parsed.get("booking_key", "")
-        company_name = parsed.get("company_name", "")
-        customer_name = parsed.get("customer_name", "")
+        parsed = SettlementData.model_validate_json(value)
 
         user_id = body["user"]["id"]
-        user_info = client.users_info(user=user_id)
-        user_name = user_info["user"]["real_name"]
+        user_name = get_user_name(client, user_id)
 
         channel_id = body.get("channel", {}).get("id", "")
         thread_ts = body.get("message", {}).get("thread_ts", "")
 
-        metadata = json.dumps(
-            {
-                "channel_id": channel_id,
-                "thread_ts": thread_ts,
-                "user_name": user_name,
-                "booking_key": booking_key,
-                "company_name": company_name,
-                "customer_name": customer_name,
-            },
-            ensure_ascii=False,
+        metadata = ModalMetadata(
+            channel_id=channel_id,
+            thread_ts=thread_ts,
+            user_name=user_name,
+            booking_key=parsed.booking_key,
+            company_name=parsed.company_name,
+            customer_name=parsed.customer_name,
         )
 
         modal = build_registration_modal(
             user_name=user_name,
-            booking_key=booking_key,
-            company_name=company_name,
-            customer_name=customer_name,
-            metadata=metadata,
+            booking_key=parsed.booking_key,
+            company_name=parsed.company_name,
+            customer_name=parsed.customer_name,
+            metadata=metadata.model_dump_json(),
         )
 
         client.views_open(
@@ -78,21 +65,20 @@ def register_action_handlers(app: App) -> None:
             )
             return
 
-        approver_name = get_user_real_name(client, user_id)
-        thread_url = get_thread_permalink(client, channel_id, thread_ts)
+        approver_name = get_user_name(client, user_id)
+        thread_url = get_thread_url(client, channel_id, thread_ts)
 
         # 버튼 value에서 데이터 추출
         value = body.get("actions", [{}])[0].get("value", "{}")
-        data = json.loads(value)
+        data = SettlementData.model_validate_json(value)
 
         # 스프레드시트에 저장
-        row = SettlementRow.from_button_data(
+        save_settlement(
             data=data,
             status=status,
             approver_name=approver_name,
             thread_url=thread_url,
         )
-        append_settlement_row(row)
 
         # 메시지 업데이트
         original_blocks = body.get("message", {}).get("blocks", [])
@@ -140,35 +126,32 @@ def register_action_handlers(app: App) -> None:
 
         # 버튼 value에서 기존 데이터 추출
         value = body.get("actions", [{}])[0].get("value", "{}")
-        data = json.loads(value)
+        data = SettlementData.model_validate_json(value)
 
-        metadata = json.dumps(
-            {
-                "channel_id": channel_id,
-                "thread_ts": thread_ts,
-                "message_ts": message_ts,
-                "user_name": data.get("user_name", ""),
-                "booking_key": data.get("booking_key", ""),
-                "company_name": data.get("company_name", ""),
-                "customer_name": data.get("customer_name", ""),
-            },
-            ensure_ascii=False,
+        metadata = ModalMetadata(
+            channel_id=channel_id,
+            thread_ts=thread_ts,
+            message_ts=message_ts,
+            user_name=data.user_name,
+            booking_key=data.booking_key,
+            company_name=data.company_name,
+            customer_name=data.customer_name,
         )
 
         modal = build_registration_modal(
-            user_name=data.get("user_name", ""),
-            booking_key=data.get("booking_key", ""),
-            company_name=data.get("company_name", ""),
-            customer_name=data.get("customer_name", ""),
-            metadata=metadata,
-            settlement_day=data.get("settlement_day", ""),
-            issue_type=data.get("issue_type", ""),
-            company_sub_name=data.get("company_sub_name", ""),
-            settlement_cost=data.get("settlement_cost", ""),
-            carmore_cost=data.get("carmore_cost", ""),
-            user_refund_cost=data.get("user_refund_cost", ""),
-            seller_channel=data.get("seller_channel", ""),
-            description=data.get("description", ""),
+            user_name=data.user_name,
+            booking_key=data.booking_key,
+            company_name=data.company_name,
+            customer_name=data.customer_name,
+            metadata=metadata.model_dump_json(),
+            settlement_day=data.settlement_day,
+            issue_type=data.issue_type,
+            company_sub_name=data.company_sub_name,
+            settlement_cost=data.settlement_cost,
+            carmore_cost=data.carmore_cost,
+            user_refund_cost=data.user_refund_cost,
+            seller_channel=data.seller_channel,
+            description=data.description,
             is_edit=True,
         )
 

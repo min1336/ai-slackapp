@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.services.spreadsheet import SettlementRow
+from app.models import SettlementRow
 
 
 class TestSettlementRow:
@@ -66,7 +66,7 @@ class TestSettlementRow:
         print(f"updated_at: {row.updated_at}")
 
     def test_to_row_길이를_확인한다(self):
-        """to_row()가 16개 컬럼을 반환하는지 확인"""
+        """to_row()가 17개 컬럼을 반환하는지 확인"""
         row = SettlementRow(
             settlement_day="2025-01-28",
             user_name="작성자",
@@ -83,4 +83,4 @@ class TestSettlementRow:
         )
 
         result = row.to_row()
-        assert len(result) == 16
+        assert len(result) == 17
