@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -11,6 +12,11 @@ from app.config import settings
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
 ]
+
+
+class SettlementStatus(str, Enum):
+    APPROVED = "승인"
+    REJECTED = "반려"
 
 
 @dataclass
@@ -41,6 +47,32 @@ class SettlementRow:
             self.created_at = now
         if not self.updated_at:
             self.updated_at = now
+
+    @classmethod
+    def from_button_data(
+        cls,
+        data: dict,
+        status: SettlementStatus,
+        approver_name: str,
+        thread_url: str = "",
+    ) -> SettlementRow:
+        return cls(
+            settlement_day=data.get("settlement_day", ""),
+            user_name=data.get("user_name", ""),
+            customer_name=data.get("customer_name", ""),
+            booking_key=data.get("booking_key", ""),
+            company_name=data.get("company_name", ""),
+            company_sub_name=data.get("company_sub_name", ""),
+            settlement_cost=data.get("settlement_cost", ""),
+            carmore_cost=data.get("carmore_cost", ""),
+            user_refund_cost=data.get("user_refund_cost", ""),
+            issue_type=data.get("issue_type", ""),
+            sales_channel=data.get("seller_channel", ""),
+            description=data.get("description", ""),
+            status=status.value,
+            approver_name=approver_name,
+            thread_url=thread_url,
+        )
 
     def to_row(self) -> list[str]:
         """스프레드시트 행 데이터로 변환 (컬럼 순서에 맞게)"""

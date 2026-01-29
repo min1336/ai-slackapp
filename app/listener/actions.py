@@ -6,7 +6,12 @@ from slack_bolt import App
 
 from app.config import settings
 from app.constants import ActionId
-from app.services.spreadsheet import SettlementRow, append_settlement_row
+from app.services.slack_helper import get_thread_permalink, get_user_real_name
+from app.services.spreadsheet import (
+    SettlementRow,
+    SettlementStatus,
+    append_settlement_row,
+)
 from app.views.blocks import (
     build_approved_message,
     build_registration_modal,
@@ -58,10 +63,7 @@ def register_action_handlers(app: App) -> None:
             view=modal,
         )
 
-    @app.action(ActionId.SETTLEMENT_APPROVE)
-    def handle_settlement_approve(ack, body, client):
-        ack()
-
+    def _handle_settlement_decision(body, client, status: SettlementStatus) -> None:
         user_id = body["user"]["id"]
         channel_id = body.get("channel", {}).get("id", "")
         message_ts = body.get("message", {}).get("ts", "")
@@ -71,41 +73,22 @@ def register_action_handlers(app: App) -> None:
             client.chat_postEphemeral(
                 channel=channel_id,
                 user=user_id,
-                text="⚠️ 승인 권한이 없습니다.",
-                thread_ts=thread_ts if thread_ts else None,
+                text=f"⚠️ {status.value} 권한이 없습니다.",
+                thread_ts=thread_ts or None,
             )
             return
 
-        user_info = client.users_info(user=user_id)
-        approver_name = user_info["user"]["real_name"]
-
-        # 스레드 링크 가져오기
-        thread_url = ""
-        if thread_ts:
-            permalink_result = client.chat_getPermalink(
-                channel=channel_id, message_ts=thread_ts
-            )
-            thread_url = permalink_result.get("permalink", "")
+        approver_name = get_user_real_name(client, user_id)
+        thread_url = get_thread_permalink(client, channel_id, thread_ts)
 
         # 버튼 value에서 데이터 추출
         value = body.get("actions", [{}])[0].get("value", "{}")
         data = json.loads(value)
 
         # 스프레드시트에 저장
-        row = SettlementRow(
-            settlement_day=data.get("settlement_day", ""),
-            user_name=data.get("user_name", ""),
-            customer_name=data.get("customer_name", ""),
-            booking_key=data.get("booking_key", ""),
-            company_name=data.get("company_name", ""),
-            company_sub_name=data.get("company_sub_name", ""),
-            settlement_cost=data.get("settlement_cost", ""),
-            carmore_cost=data.get("carmore_cost", ""),
-            user_refund_cost=data.get("user_refund_cost", ""),
-            issue_type=data.get("issue_type", ""),
-            sales_channel=data.get("seller_channel", ""),
-            description=data.get("description", ""),
-            status="승인",
+        row = SettlementRow.from_button_data(
+            data=data,
+            status=status,
             approver_name=approver_name,
             thread_url=thread_url,
         )
@@ -113,78 +96,29 @@ def register_action_handlers(app: App) -> None:
 
         # 메시지 업데이트
         original_blocks = body.get("message", {}).get("blocks", [])
-        new_blocks = build_approved_message(original_blocks, approver_name)
+        if status == SettlementStatus.APPROVED:
+            new_blocks = build_approved_message(original_blocks, approver_name)
+            text = "정산 이슈 승인됨"
+        else:
+            new_blocks = build_rejected_message(original_blocks, approver_name)
+            text = "정산 이슈 반려됨"
 
         client.chat_update(
             channel=channel_id,
             ts=message_ts,
-            text="정산 이슈 승인됨",
+            text=text,
             blocks=new_blocks,
         )
+
+    @app.action(ActionId.SETTLEMENT_APPROVE)
+    def handle_settlement_approve(ack, body, client):
+        ack()
+        _handle_settlement_decision(body, client, SettlementStatus.APPROVED)
 
     @app.action(ActionId.SETTLEMENT_REJECT)
     def handle_settlement_reject(ack, body, client):
         ack()
-
-        user_id = body["user"]["id"]
-        channel_id = body.get("channel", {}).get("id", "")
-        message_ts = body.get("message", {}).get("ts", "")
-        thread_ts = body.get("message", {}).get("thread_ts", "")
-
-        if user_id not in settings.approver_ids:
-            client.chat_postEphemeral(
-                channel=channel_id,
-                user=user_id,
-                text="⚠️ 반려 권한이 없습니다.",
-                thread_ts=thread_ts if thread_ts else None,
-            )
-            return
-
-        user_info = client.users_info(user=user_id)
-        rejecter_name = user_info["user"]["real_name"]
-
-        # 스레드 링크 가져오기
-        thread_url = ""
-        if thread_ts:
-            permalink_result = client.chat_getPermalink(
-                channel=channel_id, message_ts=thread_ts
-            )
-            thread_url = permalink_result.get("permalink", "")
-
-        # 버튼 value에서 데이터 추출
-        value = body.get("actions", [{}])[0].get("value", "{}")
-        data = json.loads(value)
-
-        # 스프레드시트에 저장
-        row = SettlementRow(
-            settlement_day=data.get("settlement_day", ""),
-            user_name=data.get("user_name", ""),
-            customer_name=data.get("customer_name", ""),
-            booking_key=data.get("booking_key", ""),
-            company_name=data.get("company_name", ""),
-            company_sub_name=data.get("company_sub_name", ""),
-            settlement_cost=data.get("settlement_cost", ""),
-            carmore_cost=data.get("carmore_cost", ""),
-            user_refund_cost=data.get("user_refund_cost", ""),
-            issue_type=data.get("issue_type", ""),
-            sales_channel=data.get("seller_channel", ""),
-            description=data.get("description", ""),
-            status="반려",
-            approver_name=rejecter_name,
-            thread_url=thread_url,
-        )
-        append_settlement_row(row)
-
-        # 메시지 업데이트
-        original_blocks = body.get("message", {}).get("blocks", [])
-        new_blocks = build_rejected_message(original_blocks, rejecter_name)
-
-        client.chat_update(
-            channel=channel_id,
-            ts=message_ts,
-            text="정산 이슈 반려됨",
-            blocks=new_blocks,
-        )
+        _handle_settlement_decision(body, client, SettlementStatus.REJECTED)
 
     @app.action(ActionId.SETTLEMENT_EDIT)
     def handle_settlement_edit(ack, body, client):
@@ -200,7 +134,7 @@ def register_action_handlers(app: App) -> None:
                 channel=channel_id,
                 user=user_id,
                 text="⚠️ 편집 권한이 없습니다.",
-                thread_ts=thread_ts if thread_ts else None,
+                thread_ts=thread_ts or None,
             )
             return
 
@@ -212,7 +146,7 @@ def register_action_handlers(app: App) -> None:
             {
                 "channel_id": channel_id,
                 "thread_ts": thread_ts,
-                "message_ts": message_ts,  # 편집 모드 표시
+                "message_ts": message_ts,
                 "user_name": data.get("user_name", ""),
                 "booking_key": data.get("booking_key", ""),
                 "company_name": data.get("company_name", ""),

@@ -2,6 +2,25 @@ from __future__ import annotations
 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+from slack_sdk.web import SlackResponse
+
+
+def get_user_real_name(client: WebClient, user_id: str) -> str:
+    try:
+        result = client.users_info(user=user_id)
+        return result["user"]["real_name"]
+    except SlackApiError:
+        return ""
+
+
+def get_thread_permalink(client: WebClient, channel_id: str, thread_ts: str) -> str:
+    if not thread_ts:
+        return ""
+    try:
+        result = client.chat_getPermalink(channel=channel_id, message_ts=thread_ts)
+        return result.get("permalink", "")
+    except SlackApiError:
+        return ""
 
 
 def get_thread_parent_message(
@@ -57,7 +76,7 @@ def post_message(
     text: str,
     blocks: list | None = None,
     thread_ts: str | None = None,
-) -> dict | None:
+) -> SlackResponse | None:
     """
     채널에 메시지를 전송합니다.
 
