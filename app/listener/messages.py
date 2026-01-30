@@ -30,7 +30,7 @@ def register_message_handlers(app: App) -> None:
 
         if not thread_ts:
             say(
-                f"스레드에서 `{Command.SETTLEMENT_ISSUE}`를 입력해주세요.",
+                "스레드 댓글에서만 사용할 수 있어요!",
                 thread_ts=message_ts,
             )
             return
@@ -42,7 +42,10 @@ def register_message_handlers(app: App) -> None:
         )
 
         if not parent_text:
-            say("원문을 읽을 수 없습니다.", thread_ts=thread_ts)
+            say(
+                "원본 메시지를 불러올 수 없네요. 다시 시도해주세요!",
+                thread_ts=thread_ts,
+            )
             return
 
         parsed = parse_settlement_message(parent_text)
@@ -50,7 +53,7 @@ def register_message_handlers(app: App) -> None:
         logger.info(f"정산 파싱 요청: {parsed.booking_key}")
 
         say(
-            text="파싱 결과",
+            text="예약 정보를 확인해주세요 📋",
             blocks=build_parsing_result_message(
                 booking_key=parsed.booking_key,
                 company_name=parsed.company_name,
@@ -94,7 +97,7 @@ def register_message_handlers(app: App) -> None:
         message_ts = message.get("ts")
         try:
             say(
-                text="이관 예약 파싱 결과",
+                text="이관 예약 정보를 확인해주세요 🚗",
                 blocks=build_transfer_parsing_result_message(
                     booking_key=parsed.booking_key,
                     customer_name=parsed.customer_name,

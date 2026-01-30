@@ -101,13 +101,13 @@ def register_view_handlers(app: App) -> None:
             client.chat_update(
                 channel=metadata.channel_id,
                 ts=metadata.message_ts,
-                text="정산 이슈 등록 요청 (수정됨)",
+                text="정산 이슈 수정됨",
                 blocks=blocks,
             )
         else:
             client.chat_postMessage(
                 channel=metadata.channel_id,
                 thread_ts=metadata.thread_ts or None,
-                text="정산 이슈 등록 요청",
+                text="정산 이슈 승인 요청",
                 blocks=blocks,
             )

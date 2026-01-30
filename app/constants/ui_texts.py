@@ -18,16 +18,16 @@ class LabelText:
 
 
 class CommonText:
-    NONE = "(없음)"
-    SELECT = "선택하세요"
+    NONE = "-"
+    SELECT = "선택해주세요"
     SELECT_DATE = "날짜 선택"
     REGISTER = "등록"
-    EDIT = "편집"
-    MODIFIED = "수정"
+    EDIT = "수정"
+    MODIFIED = "수정됨"
     CANCEL = "취소"
     APPROVE = "승인"
     REJECT = "반려"
-    REQUIRED = " (필수)"
+    REQUIRED = "(필수항목)"
 
 
 class Command:
@@ -36,9 +36,9 @@ class Command:
 
 class HeaderText:
     BOOKING_INFO = "📋 예약 정보"
-    SETTLEMENT_ISSUE_REGISTER = "📝 정산 이슈를 등록하시겠습니까?"
-    TRANSFER_REGISTER = "📝 업체이관을 등록하시겠습니까?"
-    SETTLEMENT_ISSUE_EDIT = "정산 이슈 편집"
+    SETTLEMENT_ISSUE_REGISTER = "정산 이슈를 등록합니다"
+    TRANSFER_REGISTER = "업체 이관을 등록합니다"
+    SETTLEMENT_ISSUE_EDIT = "정산 이슈 수정"
     SETTLEMENT_ISSUE_NEW = "정산 이슈 등록"
-    APPROVED = "✅ 정산 이슈가 승인되었습니다."
-    REJECTED = "❌ 정산 이슈가 반려되었습니다."
+    APPROVED = "승인 완료되었습니다 ✅"
+    REJECTED = "반려되었습니다 ❌"
