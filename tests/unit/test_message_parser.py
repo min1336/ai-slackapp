@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.services.message_parser import (
     ParsedSettlement,
     parse_settlement_message,
+    parse_transfer_reservation_message,
 )
 
 
@@ -108,3 +109,49 @@ class TestParsedSettlementValidator:
         )
 
         assert settlement.customer_name == "홍길동"
+
+
+class TestParseTransferReservationMessage:
+    def test_이관_예약_메시지에서_원하는_필드들을_추출한다(self):
+        text = """[카모아 단기 업체이관]  :morecar_callme: 전화예약 이에요!
+이관 전 예약번호 : 1095976
+예약번호 : 1095983
+예약자명 : 박종선 (01037187349)
+업체 : (주)특별한렌트카 김포지점
+
+<결제 정보>
+원금 : 332,500원
+카모아 부담금 : 0원
+
+예약번호
+1095976
+업체명
+*(주)특별한렌트카 김포지점*
+예약자명
+*박종선*
+"""
+
+        result = parse_transfer_reservation_message(text)
+
+        assert result.booking_key == "1095976"
+        assert result.customer_name == "박종선"
+        assert result.company_name == ""
+        assert result.company_sub_name == "(주)특별한렌트카 김포지점"
+        assert result.settlement_cost == "332500"
+        assert result.carmore_cost == "0"
+
+    def test_카모아_부담비용_라벨도_파싱한다(self):
+        text = """이관 전 예약번호
+1095976
+예약자명
+박종선
+업체명
+(주)특별한렌트카 김포지점
+카모아 부담비용
+0원
+"""
+
+        result = parse_transfer_reservation_message(text)
+
+        assert result.booking_key == "1095976"
+        assert result.carmore_cost == "0"

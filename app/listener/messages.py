@@ -95,6 +95,7 @@ def register_message_handlers(app: App) -> None:
                 blocks=build_transfer_parsing_result_message(
                     booking_key=parsed.booking_key,
                     customer_name=parsed.customer_name,
+                    company_name=parsed.company_name,
                     company_sub_name=parsed.company_sub_name,
                     settlement_cost=parsed.settlement_cost,
                     carmore_cost=parsed.carmore_cost,

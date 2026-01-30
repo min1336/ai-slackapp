@@ -61,6 +61,7 @@ def build_parsing_result_message(
 def build_transfer_parsing_result_message(
     booking_key: str,
     customer_name: str,
+    company_name: str,
     company_sub_name: str,
     settlement_cost: str,
     carmore_cost: str,
@@ -71,27 +72,37 @@ def build_transfer_parsing_result_message(
         {
             "type": "section",
             "fields": [
-                {"type": "mrkdwn", "text": f"*{LabelText.BOOKING_KEY}*"},
+                {"type": "mrkdwn", "text": "*이관전 예약번호*"},
                 {
                     "type": "plain_text",
                     "text": booking_key or CommonText.NONE,
                 },
-                {"type": "mrkdwn", "text": f"*{LabelText.BOOKER_NAME}*"},
+                {"type": "mrkdwn", "text": "*업체명*"},
                 {
                     "type": "plain_text",
-                    "text": customer_name or CommonText.NONE,
+                    "text": company_name or CommonText.NONE,
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.COMPANY_SUB_NAME}*"},
                 {
                     "type": "plain_text",
                     "text": company_sub_name or CommonText.NONE,
                 },
-                {"type": "mrkdwn", "text": f"*{LabelText.SETTLEMENT_COST}*"},
+                {"type": "mrkdwn", "text": f"*{LabelText.BOOKER_NAME}*"},
+                {
+                    "type": "plain_text",
+                    "text": customer_name or CommonText.NONE,
+                },
+                {"type": "mrkdwn", "text": "*원금*"},
                 {
                     "type": "plain_text",
                     "text": settlement_cost or CommonText.NONE,
                 },
-                {"type": "mrkdwn", "text": f"*{LabelText.CARMORE_COST}*"},
+            ],
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": "*카모아 부담금*"},
                 {
                     "type": "plain_text",
                     "text": carmore_cost or CommonText.NONE,
