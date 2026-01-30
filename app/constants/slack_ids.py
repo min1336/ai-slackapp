@@ -12,6 +12,9 @@ class ActionId:
     SETTLEMENT_APPROVE = "settlement_approve"
     SETTLEMENT_REJECT = "settlement_reject"
     SETTLEMENT_EDIT = "settlement_edit"
+    TRANSFER_APPROVE = "transfer_approve"
+    TRANSFER_REJECT = "transfer_reject"
+    TRANSFER_EDIT = "transfer_edit"
     REGISTRATION_SUBMIT = "registration_submit"
 
     USER_NAME_INPUT = "user_name_input"

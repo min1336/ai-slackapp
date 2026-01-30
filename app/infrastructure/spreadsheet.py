@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
+
 import gspread
 from google.oauth2.service_account import Credentials
 
 from app.config import config, spreadsheet
 from app.models import SettlementRow
+
+logger = logging.getLogger(__name__)
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -29,5 +33,7 @@ def append_settlement_row(row: SettlementRow, sheet_name: str | None = None) -> 
         worksheet = spreadsheet.worksheet(sheet_name)
         worksheet.append_row(row.to_row())
         return True
-    except Exception:
+    except Exception as e:
+        logger.exception(f"스프레드시트 행 추가 실패 (sheet: {sheet_name}): {str(e)}")
+        logger.debug(f"실패한 행 데이터: {row.to_row()}")
         return False

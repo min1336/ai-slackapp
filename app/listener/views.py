@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from slack_bolt import App
 
-from app.constants import ActionId, BlockId
+from app.constants import ActionId, BlockId, HeaderText
+from app.constants.options import Description
 from app.models import ModalMetadata, SettlementData
 from app.services.slack_service import (
     extract_date_value,
@@ -21,10 +22,14 @@ def register_view_handlers(app: App) -> None:
 
         values = view.get("state", {}).get("values", {})
 
+        # user_name: input 필드 값이 없으면 metadata에서 사용 (업체이관의 경우)
+        user_name_from_input = extract_text_value(
+            values, BlockId.USER_NAME_BLOCK, ActionId.USER_NAME_INPUT
+        )
+        user_name = user_name_from_input if user_name_from_input else metadata.user_name
+
         data = SettlementData(
-            user_name=extract_text_value(
-                values, BlockId.USER_NAME_BLOCK, ActionId.USER_NAME_INPUT
-            ),
+            user_name=user_name,
             booking_key=extract_text_value(
                 values, BlockId.BOOKING_KEY_BLOCK, ActionId.BOOKING_KEY_INPUT
             ),
@@ -64,6 +69,17 @@ def register_view_handlers(app: App) -> None:
             ),
         )
 
+        # description으로 업체이관 여부 판단하여 적절한 title 전달
+        title = (
+            HeaderText.TRANSFER_REGISTER
+            if data.description
+            in [
+                Description.TRANSFER_UNABLE_DISPATCH.value,
+                Description.TRANSFER_RESERVATION.value,
+            ]
+            else HeaderText.SETTLEMENT_ISSUE_REGISTER
+        )
+
         blocks = build_approval_request_message(
             user_name=data.user_name,
             booking_key=data.booking_key,
@@ -78,6 +94,7 @@ def register_view_handlers(app: App) -> None:
             seller_channel=data.seller_channel,
             description=data.description,
             button_data=data.model_dump_json(),
+            title=title,
         )
 
         if metadata.message_ts:

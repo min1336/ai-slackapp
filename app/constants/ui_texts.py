@@ -37,6 +37,7 @@ class Command:
 class HeaderText:
     BOOKING_INFO = "📋 예약 정보"
     SETTLEMENT_ISSUE_REGISTER = "📝 정산 이슈를 등록하시겠습니까?"
+    TRANSFER_REGISTER = "📝 업체이관을 등록하시겠습니까?"
     SETTLEMENT_ISSUE_EDIT = "정산 이슈 편집"
     SETTLEMENT_ISSUE_NEW = "정산 이슈 등록"
     APPROVED = "✅ 정산 이슈가 승인되었습니다."

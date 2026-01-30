@@ -308,6 +308,14 @@ def build_transfer_registration_modal(
     user_name: str,
     metadata: str,
     description_type: str = "unable_dispatch",
+    company_name_param: str = "",
+    settlement_day: str = "",
+    company_sub_name: str = "",
+    settlement_cost: str = "",
+    carmore_cost: str = "",
+    user_refund_cost: str = "",
+    seller_channel: str = "",
+    is_edit: bool = False,
 ) -> dict:
     # 고정값: 이관 건은 항상 "대신배차"
     fixed_issue_type = IssueType.INSTEAD_DISPATCH.value
@@ -350,12 +358,14 @@ def build_transfer_registration_modal(
         initial_value=parsed_data.booking_key,
     )
 
+    initial_company_name = company_name_param if is_edit else ""
+
     _add_text_input(
         blocks=blocks,
         block_id=BlockId.COMPANY_NAME_BLOCK,
         label_text=f"{LabelText.COMPANY_NAME}{CommonText.REQUIRED}",
         action_id=ActionId.COMPANY_NAME_INPUT,
-        initial_value="",  # 요구사항: 업체명은 비움
+        initial_value=initial_company_name,
     )
 
     _add_text_input(
@@ -366,13 +376,16 @@ def build_transfer_registration_modal(
         initial_value=parsed_data.customer_name,
     )
 
+    # 편집일 때는 기존 settlement_day 사용, 아니면 빈 값
+    initial_date = settlement_day if is_edit else ""
+
     _add_datepicker_with_initial(
         blocks=blocks,
         block_id=BlockId.SETTLEMENT_DAY_BLOCK,
         label_text=LabelText.SETTLEMENT_DAY,
         action_id=ActionId.SETTLEMENT_DAY_INPUT,
         placeholder_text=CommonText.SELECT_DATE,
-        initial_date="",  # 사용자 선택 유도
+        initial_date=initial_date,
     )
 
     _add_select_with_initial(
@@ -386,12 +399,21 @@ def build_transfer_registration_modal(
         is_required=True,
     )
 
+    # 편집일 때는 company_sub_name, settlement_cost, carmore_cost 사용
+    initial_company_sub_name = (
+        company_sub_name if is_edit else (parsed_data.company_sub_name or "")
+    )
+    initial_settlement_cost = (
+        settlement_cost if is_edit else (parsed_data.settlement_cost or "")
+    )
+    initial_carmore_cost = carmore_cost if is_edit else (parsed_data.carmore_cost or "")
+
     _add_text_input(
         blocks=blocks,
         block_id=BlockId.COMPANY_SUB_NAME_BLOCK,
         label_text=LabelText.COMPANY_SUB_NAME,
         action_id=ActionId.COMPANY_SUB_NAME_INPUT,
-        initial_value=parsed_data.company_sub_name,
+        initial_value=initial_company_sub_name,
         is_optional=True,
     )
 
@@ -400,7 +422,7 @@ def build_transfer_registration_modal(
         block_id=BlockId.SETTLEMENT_COST_BLOCK,
         label_text=f"{LabelText.SETTLEMENT_COST}{CommonText.REQUIRED}",
         action_id=ActionId.SETTLEMENT_COST_INPUT,
-        initial_value=parsed_data.settlement_cost,
+        initial_value=initial_settlement_cost,
     )
 
     _add_text_input(
@@ -408,18 +430,28 @@ def build_transfer_registration_modal(
         block_id=BlockId.CARMORE_COST_BLOCK,
         label_text=LabelText.CARMORE_COST,
         action_id=ActionId.CARMORE_COST_INPUT,
-        initial_value=parsed_data.carmore_cost,
+        initial_value=initial_carmore_cost,
         is_optional=True,
     )
+
+    # 편집일 때는 user_refund_cost 사용
+    initial_user_refund_cost = user_refund_cost if is_edit else ""
 
     _add_text_input(
         blocks=blocks,
         block_id=BlockId.USER_REFUND_COST_BLOCK,
         label_text=LabelText.USER_REFUND_COST,
         action_id=ActionId.USER_REFUND_COST_INPUT,
-        initial_value="",
+        initial_value=initial_user_refund_cost,
         is_optional=True,
     )
+
+    # 편집일 때는 seller_channel 사용
+    initial_seller_channel = None
+    if is_edit and seller_channel:
+        initial_seller_channel = find_option_by_text(
+            SELLER_CHANNEL_OPTIONS, seller_channel
+        )
 
     _add_select_with_initial(
         blocks=blocks,
@@ -428,7 +460,7 @@ def build_transfer_registration_modal(
         action_id=ActionId.SELLER_CHANNEL_INPUT,
         placeholder_text=CommonText.SELECT,
         options=SELLER_CHANNEL_OPTIONS,
-        initial_option=None,  # 사용자 선택
+        initial_option=initial_seller_channel,
         is_required=True,
     )
 
@@ -474,39 +506,59 @@ def build_approval_request_message(
     seller_channel: str,
     description: str,
     button_data: str,
+    title: str = HeaderText.SETTLEMENT_ISSUE_REGISTER,
 ) -> list[dict]:
+    # 업체이관인지 확인
+    is_transfer = description in [
+        Description.TRANSFER_UNABLE_DISPATCH.value,
+        Description.TRANSFER_RESERVATION.value,
+    ]
+
+    # 액션 ID 동적 결정
+    approve_action = (
+        ActionId.TRANSFER_APPROVE if is_transfer else ActionId.SETTLEMENT_APPROVE
+    )
+    reject_action = (
+        ActionId.TRANSFER_REJECT if is_transfer else ActionId.SETTLEMENT_REJECT
+    )
+    edit_action = ActionId.TRANSFER_EDIT if is_transfer else ActionId.SETTLEMENT_EDIT
+
+    # 빈 문자열을 None으로 변환하는 헬퍼 함수
+    def _safe_text(value: str) -> str:
+        return value if value else CommonText.NONE
+
     return [
         {
             "type": "header",
             "text": {
                 "type": "plain_text",
-                "text": HeaderText.SETTLEMENT_ISSUE_REGISTER,
+                "text": title,
             },
         },
         {
             "type": "section",
             "fields": [
                 {"type": "mrkdwn", "text": f"*{LabelText.USER_NAME}*"},
-                {"type": "plain_text", "text": user_name},
+                {"type": "plain_text", "text": _safe_text(user_name)},
                 {"type": "mrkdwn", "text": f"*{LabelText.BOOKING_KEY}*"},
                 {
                     "type": "plain_text",
-                    "text": booking_key or CommonText.NONE,
+                    "text": _safe_text(booking_key),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.COMPANY_NAME}*"},
                 {
                     "type": "plain_text",
-                    "text": company_name or CommonText.NONE,
+                    "text": _safe_text(company_name),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.CUSTOMER_NAME}*"},
                 {
                     "type": "plain_text",
-                    "text": customer_name or CommonText.NONE,
+                    "text": _safe_text(customer_name),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.SETTLEMENT_DAY}*"},
                 {
                     "type": "plain_text",
-                    "text": settlement_day or CommonText.NONE,
+                    "text": _safe_text(settlement_day),
                 },
             ],
         },
@@ -519,7 +571,7 @@ def build_approval_request_message(
                 },
                 {
                     "type": "plain_text",
-                    "text": settlement_cost or CommonText.NONE,
+                    "text": _safe_text(settlement_cost),
                 },
                 {
                     "type": "mrkdwn",
@@ -527,12 +579,12 @@ def build_approval_request_message(
                 },
                 {
                     "type": "plain_text",
-                    "text": company_sub_name or CommonText.NONE,
+                    "text": _safe_text(company_sub_name),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.CARMORE_COST}*"},
                 {
                     "type": "plain_text",
-                    "text": carmore_cost or CommonText.NONE,
+                    "text": _safe_text(carmore_cost),
                 },
                 {
                     "type": "mrkdwn",
@@ -540,12 +592,12 @@ def build_approval_request_message(
                 },
                 {
                     "type": "plain_text",
-                    "text": user_refund_cost or CommonText.NONE,
+                    "text": _safe_text(user_refund_cost),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.SELLER_CHANNEL}*"},
                 {
                     "type": "plain_text",
-                    "text": seller_channel or CommonText.NONE,
+                    "text": _safe_text(seller_channel),
                 },
             ],
         },
@@ -569,20 +621,20 @@ def build_approval_request_message(
                         "text": CommonText.APPROVE,
                     },
                     "style": "primary",
-                    "action_id": ActionId.SETTLEMENT_APPROVE,
+                    "action_id": approve_action,
                     "value": button_data,
                 },
                 {
                     "type": "button",
                     "text": {"type": "plain_text", "text": CommonText.REJECT},
                     "style": "danger",
-                    "action_id": ActionId.SETTLEMENT_REJECT,
+                    "action_id": reject_action,
                     "value": button_data,
                 },
                 {
                     "type": "button",
                     "text": {"type": "plain_text", "text": CommonText.EDIT},
-                    "action_id": ActionId.SETTLEMENT_EDIT,
+                    "action_id": edit_action,
                     "value": button_data,
                 },
             ],
