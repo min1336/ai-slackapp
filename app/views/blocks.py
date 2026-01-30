@@ -58,6 +58,64 @@ def build_parsing_result_message(
     ]
 
 
+def build_transfer_parsing_result_message(
+    booking_key: str,
+    customer_name: str,
+    company_sub_name: str,
+    settlement_cost: str,
+    carmore_cost: str,
+    button_value: str,
+) -> list[dict]:
+    """이관 예약 파싱 결과 메시지 빌더"""
+    return [
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*{LabelText.BOOKING_KEY}*"},
+                {
+                    "type": "plain_text",
+                    "text": booking_key or CommonText.NONE,
+                },
+                {"type": "mrkdwn", "text": f"*{LabelText.BOOKER_NAME}*"},
+                {
+                    "type": "plain_text",
+                    "text": customer_name or CommonText.NONE,
+                },
+                {"type": "mrkdwn", "text": f"*{LabelText.COMPANY_SUB_NAME}*"},
+                {
+                    "type": "plain_text",
+                    "text": company_sub_name or CommonText.NONE,
+                },
+                {"type": "mrkdwn", "text": f"*{LabelText.SETTLEMENT_COST}*"},
+                {
+                    "type": "plain_text",
+                    "text": settlement_cost or CommonText.NONE,
+                },
+                {"type": "mrkdwn", "text": f"*{LabelText.CARMORE_COST}*"},
+                {
+                    "type": "plain_text",
+                    "text": carmore_cost or CommonText.NONE,
+                },
+            ],
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": CommonText.REGISTER,
+                    },
+                    "style": "primary",
+                    "action_id": ActionId.OPEN_TRANSFER_REGISTRATION_MODAL,
+                    "value": button_value,
+                }
+            ],
+        },
+    ]
+
+
 def build_registration_modal(
     user_name: str,
     booking_key: str,

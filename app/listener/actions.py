@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from slack_bolt import App
 
 from app.config import config
@@ -12,6 +14,8 @@ from app.views.blocks import (
     build_registration_modal,
     build_rejected_message,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def register_action_handlers(app: App) -> None:
@@ -49,6 +53,12 @@ def register_action_handlers(app: App) -> None:
             trigger_id=body["trigger_id"],
             view=modal,
         )
+
+    @app.action(ActionId.OPEN_TRANSFER_REGISTRATION_MODAL)
+    def handle_open_transfer_registration_modal(ack, body, client):
+        # TODO: 이관 예약 등록 모달 구현
+        ack()
+        logger.warning("[TODO] 이관 예약 등록 모달 기능 - 아직 구현되지 않음")
 
     def _handle_settlement_decision(body, client, status: SettlementStatus) -> None:
         user_id = body["user"]["id"]

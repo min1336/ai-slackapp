@@ -35,6 +35,14 @@ class SheetsConfig(BaseModel):
     settlement: str = "Sheet1"
 
 
+class SlackChannelsConfig(BaseModel):
+    transfer_reservation: str = ""
+
+    class Config:
+        # 필드명을 snake_case에서 YAML 키로 매핑
+        populate_by_name = True
+
+
 class SpreadsheetConfig(BaseModel):
     id: str
     sheets: SheetsConfig = SheetsConfig()
@@ -43,6 +51,7 @@ class SpreadsheetConfig(BaseModel):
 class AppConfig(BaseModel):
     approvers: list[str] = []
     spreadsheet: SpreadsheetConfig
+    slack_channels: SlackChannelsConfig = SlackChannelsConfig()
 
 
 def _load_app_config() -> AppConfig:

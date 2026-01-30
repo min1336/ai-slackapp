@@ -1,13 +1,24 @@
 from __future__ import annotations
 
+import logging
 import re
 
 from slack_bolt import App
 
+from app.config import config
 from app.constants import Command
-from app.services.message_parser import parse_settlement_message
+from app.services.message_parser import (
+    is_transfer_reservation_message,
+    parse_settlement_message,
+    parse_transfer_reservation_message,
+)
 from app.services.slack_service import get_parent_message
-from app.views.blocks import build_parsing_result_message
+from app.views.blocks import (
+    build_parsing_result_message,
+    build_transfer_parsing_result_message,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def register_message_handlers(app: App) -> None:
@@ -46,3 +57,50 @@ def register_message_handlers(app: App) -> None:
             ),
             thread_ts=thread_ts,
         )
+
+    @app.message("")
+    def handle_auto_detect_transfer(message, say):
+        """특정 채널의 이관 예약 메시지 자동 감지"""
+        channel_id = message.get("channel")
+
+        # 이관 예약 채널에서만 처리
+        transfer_channel = config.slack_channels.transfer_reservation
+        if not transfer_channel:
+            logger.warning("[AutoDetect] Transfer reservation channel not configured")
+            return
+
+        if channel_id != transfer_channel:
+            return
+
+        text = message.get("text", "")
+        if not text:
+            return
+
+        # 이관 예약 메시지 패턴 확인
+        if not is_transfer_reservation_message(text):
+            return
+
+        parsed = parse_transfer_reservation_message(text)
+
+        logger.info(
+            f"[이관예약] 파싱 완료 - 예약번호: {parsed.booking_key}, "
+            f"예약자: {parsed.customer_name}, 업체: {parsed.company_sub_name}"
+        )
+
+        message_ts = message.get("ts")
+
+        try:
+            say(
+                text="이관 예약 파싱 결과",
+                blocks=build_transfer_parsing_result_message(
+                    booking_key=parsed.booking_key,
+                    customer_name=parsed.customer_name,
+                    company_sub_name=parsed.company_sub_name,
+                    settlement_cost=parsed.settlement_cost,
+                    carmore_cost=parsed.carmore_cost,
+                    button_value=parsed.model_dump_json(),
+                ),
+                thread_ts=message_ts,
+            )
+        except Exception as e:
+            logger.error(f"[이관예약] 메시지 전송 실패: {e}", exc_info=True)
