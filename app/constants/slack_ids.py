@@ -9,6 +9,10 @@ class ActionId:
     SETTLEMENT_EDIT = "settlement_edit"
     REGISTRATION_SUBMIT = "registration_submit"
 
+    USER_NAME_INPUT = "user_name_input"
+    BOOKING_KEY_INPUT = "booking_key_input"
+    COMPANY_NAME_INPUT = "company_name_input"
+    CUSTOMER_NAME_INPUT = "customer_name_input"
     SETTLEMENT_DAY_INPUT = "settlement_standard_day_input"
     ISSUE_TYPE_INPUT = "issue_type_input"
     COMPANY_SUB_NAME_INPUT = "company_sub_name_input"
@@ -20,6 +24,10 @@ class ActionId:
 
 
 class BlockId:
+    USER_NAME_BLOCK = "user_name_block"
+    BOOKING_KEY_BLOCK = "booking_key_block"
+    COMPANY_NAME_BLOCK = "company_name_block"
+    CUSTOMER_NAME_BLOCK = "customer_name_block"
     SETTLEMENT_DAY_BLOCK = "settlement_standard_day_block"
     ISSUE_TYPE_BLOCK = "issue_type_block"
     COMPANY_SUB_NAME_BLOCK = "company_sub_name_block"

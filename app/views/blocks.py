@@ -160,30 +160,40 @@ def build_registration_modal(
             "type": "header",
             "text": {"type": "plain_text", "text": HeaderText.BOOKING_INFO},
         },
-        {
-            "type": "section",
-            "fields": [
-                {"type": "mrkdwn", "text": f"*{LabelText.USER_NAME}*"},
-                {"type": "plain_text", "text": user_name},
-                {"type": "mrkdwn", "text": f"*{LabelText.BOOKING_KEY}*"},
-                {
-                    "type": "plain_text",
-                    "text": booking_key or CommonText.NONE,
-                },
-                {"type": "mrkdwn", "text": f"*{LabelText.COMPANY_NAME}*"},
-                {
-                    "type": "plain_text",
-                    "text": company_name or CommonText.NONE,
-                },
-                {"type": "mrkdwn", "text": f"*{LabelText.CUSTOMER_NAME}*"},
-                {
-                    "type": "plain_text",
-                    "text": customer_name or CommonText.NONE,
-                },
-            ],
-        },
         {"type": "divider"},
     ]
+
+    _add_text_input(
+        blocks=blocks,
+        block_id=BlockId.USER_NAME_BLOCK,
+        label_text=f"{LabelText.USER_NAME}{CommonText.REQUIRED}",
+        action_id=ActionId.USER_NAME_INPUT,
+        initial_value=user_name,
+    )
+
+    _add_text_input(
+        blocks=blocks,
+        block_id=BlockId.BOOKING_KEY_BLOCK,
+        label_text=f"{LabelText.BOOKING_KEY}{CommonText.REQUIRED}",
+        action_id=ActionId.BOOKING_KEY_INPUT,
+        initial_value=booking_key,
+    )
+
+    _add_text_input(
+        blocks=blocks,
+        block_id=BlockId.COMPANY_NAME_BLOCK,
+        label_text=f"{LabelText.COMPANY_NAME}{CommonText.REQUIRED}",
+        action_id=ActionId.COMPANY_NAME_INPUT,
+        initial_value=company_name,
+    )
+
+    _add_text_input(
+        blocks=blocks,
+        block_id=BlockId.CUSTOMER_NAME_BLOCK,
+        label_text=f"{LabelText.CUSTOMER_NAME}{CommonText.REQUIRED}",
+        action_id=ActionId.CUSTOMER_NAME_INPUT,
+        initial_value=customer_name,
+    )
 
     _add_datepicker_with_initial(
         blocks=blocks,

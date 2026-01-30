@@ -22,10 +22,18 @@ def register_view_handlers(app: App) -> None:
         values = view.get("state", {}).get("values", {})
 
         data = SettlementData(
-            user_name=metadata.user_name,
-            booking_key=metadata.booking_key,
-            company_name=metadata.company_name,
-            customer_name=metadata.customer_name,
+            user_name=extract_text_value(
+                values, BlockId.USER_NAME_BLOCK, ActionId.USER_NAME_INPUT
+            ),
+            booking_key=extract_text_value(
+                values, BlockId.BOOKING_KEY_BLOCK, ActionId.BOOKING_KEY_INPUT
+            ),
+            company_name=extract_text_value(
+                values, BlockId.COMPANY_NAME_BLOCK, ActionId.COMPANY_NAME_INPUT
+            ),
+            customer_name=extract_text_value(
+                values, BlockId.CUSTOMER_NAME_BLOCK, ActionId.CUSTOMER_NAME_INPUT
+            ),
             settlement_day=extract_date_value(
                 values, BlockId.SETTLEMENT_DAY_BLOCK, ActionId.SETTLEMENT_DAY_INPUT
             ),
