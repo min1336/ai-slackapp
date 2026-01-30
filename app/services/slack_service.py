@@ -20,6 +20,8 @@ from app.infrastructure.slack_client import (
 from app.infrastructure.slack_client import (
     get_user_real_name as _get_user_real_name,
 )
+from app.infrastructure.slack_client import send_dm as _send_dm
+from app.infrastructure.spreadsheet import get_spreadsheet_url as _get_spreadsheet_url
 
 
 def get_user_name(client: WebClient, user_id: str) -> str:
@@ -46,3 +48,13 @@ def extract_date_value(values: dict, block_id: str, action_id: str) -> str:
 
 def extract_select_value(values: dict, block_id: str, action_id: str) -> str:
     return _extract_select_text(values, block_id, action_id)
+
+
+def send_dm(
+    client: WebClient, user_id: str, text: str, blocks: list | None = None
+) -> bool:
+    return _send_dm(client, user_id, text, blocks)
+
+
+def get_spreadsheet_url() -> str:
+    return _get_spreadsheet_url()

@@ -9,7 +9,12 @@ from app.core import get_logger
 from app.models import ModalMetadata, SettlementData, SettlementStatus
 from app.services.message_parser import ParsedTransferReservation
 from app.services.settlement_service import save_settlement
-from app.services.slack_service import get_thread_url, get_user_name
+from app.services.slack_service import (
+    get_spreadsheet_url,
+    get_thread_url,
+    get_user_name,
+    send_dm,
+)
 from app.views.blocks import (
     build_approved_message,
     build_registration_modal,
@@ -143,6 +148,19 @@ def register_action_handlers(app: App) -> None:
             blocks=new_blocks,
         )
 
+        # 승인 완료 시 승인자에게 DM 전송
+        if status == SettlementStatus.APPROVED:
+            dm_text = (
+                f"✅ 정산 이슈가 승인되었습니다.\n"
+                f"• 예약번호: {data.booking_key}\n"
+                f"• 업체명: {data.company_name}\n"
+                f"• 고객명: {data.customer_name}\n"
+                f"• 승인자: {approver_name}\n"
+                f"• 스레드: {thread_url}\n"
+                f"• 스프레드시트: {get_spreadsheet_url()}"
+            )
+            send_dm(client, user_id, dm_text)
+
     @app.action(ActionId.SETTLEMENT_APPROVE)
     def handle_settlement_approve(ack, body, client):
         ack()
@@ -269,6 +287,19 @@ def register_action_handlers(app: App) -> None:
                 text=text,
                 blocks=new_blocks,
             )
+
+            # 승인 완료 시 승인자에게 DM 전송
+            if status == SettlementStatus.APPROVED:
+                dm_text = (
+                    f"✅ 업체이관 정산이 승인되었습니다.\n"
+                    f"• 예약번호: {data.booking_key}\n"
+                    f"• 업체명: {data.company_name}\n"
+                    f"• 고객명: {data.customer_name}\n"
+                    f"• 승인자: {approver_name}\n"
+                    f"• 스레드: {thread_url}\n"
+                    f"• 스프레드시트: {get_spreadsheet_url()}"
+                )
+                send_dm(client, user_id, dm_text)
 
             logger.info(f"업체이관 {status.value} 완료: {data.booking_key}")
 

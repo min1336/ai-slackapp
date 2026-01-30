@@ -113,3 +113,26 @@ def update_message(
         return True
     except SlackApiError:
         return False
+
+
+def send_dm(
+    client: WebClient,
+    user_id: str,
+    text: str,
+    blocks: list | None = None,
+) -> bool:
+    """지정 사용자에게 DM을 전송합니다."""
+    try:
+        # DM 채널 열기
+        im = client.conversations_open(users=[user_id])
+        channel_id = im["channel"]["id"]
+
+        # DM 전송
+        client.chat_postMessage(
+            channel=channel_id,
+            text=text,
+            blocks=blocks,
+        )
+        return True
+    except SlackApiError:
+        return False

@@ -81,6 +81,10 @@ def find_row_by_booking_key(booking_key: str, sheet_name: str) -> int | None:
         return None
 
 
+def get_spreadsheet_url() -> str:
+    return f"https://docs.google.com/spreadsheets/d/{config.spreadsheet.id}"
+
+
 def update_settlement_row(
     row: SettlementRow, row_number: int, sheet_name: str, existing_created_at: str
 ) -> bool:
