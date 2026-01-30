@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import logging
-
 from slack_bolt import App
 
 from app.config import config
 from app.constants import ActionId
 from app.constants.options import Description
+from app.core import get_logger
 from app.models import ModalMetadata, SettlementData, SettlementStatus
 from app.services.message_parser import ParsedTransferReservation
 from app.services.settlement_service import save_settlement
@@ -18,7 +17,7 @@ from app.views.blocks import (
     build_transfer_registration_modal,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def register_action_handlers(app: App) -> None:

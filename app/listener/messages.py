@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import logging
 import re
 
 from slack_bolt import App
 
 from app.config import config
 from app.constants import Command
+from app.core import get_logger
 from app.services.message_parser import (
     is_transfer_reservation_message,
     parse_settlement_message,
@@ -18,7 +18,7 @@ from app.views.blocks import (
     build_transfer_parsing_result_message,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def register_message_handlers(app: App) -> None:
@@ -47,6 +47,8 @@ def register_message_handlers(app: App) -> None:
 
         parsed = parse_settlement_message(parent_text)
 
+        logger.info(f"정산 파싱 요청: {parsed.booking_key}")
+
         say(
             text="파싱 결과",
             blocks=build_parsing_result_message(
@@ -66,7 +68,7 @@ def register_message_handlers(app: App) -> None:
         # 이관 예약 채널에서만 처리
         transfer_channel = config.slack_channels.transfer_reservation
         if not transfer_channel:
-            logger.warning("[AutoDetect] Transfer reservation channel not configured")
+            logger.warning("이관 예약 채널이 설정되지 않음")
             return
 
         if channel_id != transfer_channel:
@@ -80,17 +82,16 @@ def register_message_handlers(app: App) -> None:
         if not is_transfer_reservation_message(text):
             return
 
-        logger.info(f"[이관예약] 원본 메시지: {text}")
+        logger.info(f"이관 예약 메시지 감지: {text[:50]}...")
         parsed = parse_transfer_reservation_message(text)
 
         logger.info(
-            f"[이관예약] 파싱 완료 - 예약번호: {parsed.booking_key}, "
-            f"예약자: {parsed.customer_name}, 업체: {parsed.company_sub_name}"
+            f"이관 예약 파싱 완료 - 예약번호: {parsed.booking_key}, "
+            f"예약자: {parsed.customer_name}, 업체: {parsed.company_sub_name}, "
             f"원금: {parsed.settlement_cost}, 카모아 부담금: {parsed.carmore_cost}"
         )
 
         message_ts = message.get("ts")
-
         try:
             say(
                 text="이관 예약 파싱 결과",
@@ -106,4 +107,4 @@ def register_message_handlers(app: App) -> None:
                 thread_ts=message_ts,
             )
         except Exception as e:
-            logger.error(f"[이관예약] 메시지 전송 실패: {e}", exc_info=True)
+            logger.error(f"이관 예약 메시지 전송 실패: {e}", exc_info=True)

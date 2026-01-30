@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import logging
-
 import gspread
 from google.oauth2.service_account import Credentials
 
 from app.config import config, spreadsheet
+from app.core import get_logger
 from app.models import SettlementRow
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
