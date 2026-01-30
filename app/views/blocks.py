@@ -11,6 +11,7 @@ from app.constants import (
     LabelText,
     find_option_by_text,
 )
+from app.constants.options import Description, IssueType
 
 
 def build_parsing_result_message(
@@ -116,12 +117,23 @@ def build_transfer_parsing_result_message(
                     "type": "button",
                     "text": {
                         "type": "plain_text",
-                        "text": CommonText.REGISTER,
+                        "text": "배차불가로 등록",
                     },
                     "style": "primary",
-                    "action_id": ActionId.OPEN_TRANSFER_REGISTRATION_MODAL,
+                    "action_id": (
+                        ActionId.OPEN_TRANSFER_REGISTRATION_MODAL_UNABLE_DISPATCH
+                    ),
                     "value": button_value,
-                }
+                },
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "예약변경으로 등록",
+                    },
+                    "action_id": ActionId.OPEN_TRANSFER_REGISTRATION_MODAL_RESERVATION,
+                    "value": button_value,
+                },
             ],
         },
     ]
@@ -285,6 +297,163 @@ def build_registration_modal(
         "submit": {
             "type": "plain_text",
             "text": CommonText.MODIFIED if is_edit else CommonText.REGISTER,
+        },
+        "close": {"type": "plain_text", "text": CommonText.CANCEL},
+        "blocks": blocks,
+    }
+
+
+def build_transfer_registration_modal(
+    parsed_data,
+    user_name: str,
+    metadata: str,
+    description_type: str = "unable_dispatch",
+) -> dict:
+    # 고정값: 이관 건은 항상 "대신배차"
+    fixed_issue_type = IssueType.INSTEAD_DISPATCH.value
+
+    # description 설정
+    if description_type == "reservation":
+        fixed_description = Description.TRANSFER_RESERVATION.value
+    else:
+        fixed_description = Description.TRANSFER_UNABLE_DISPATCH.value
+
+    # 고정값 옵션 찾기
+    issue_type_initial = find_option_by_text(ISSUE_TYPE_OPTIONS, fixed_issue_type)
+    description_initial = find_option_by_text(DESCRIPTION_OPTIONS, fixed_description)
+
+    blocks = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": HeaderText.BOOKING_INFO},
+        },
+        {"type": "divider"},
+        # 사용자 이름은 section으로 표시 (입력 불필요)
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*{LabelText.USER_NAME}*"},
+                {
+                    "type": "plain_text",
+                    "text": user_name or CommonText.NONE,
+                },
+            ],
+        },
+    ]
+
+    # 나머지 필드들은 build_registration_modal과 동일하게 추가
+    _add_text_input(
+        blocks=blocks,
+        block_id=BlockId.BOOKING_KEY_BLOCK,
+        label_text=f"{LabelText.BOOKING_KEY}{CommonText.REQUIRED}",
+        action_id=ActionId.BOOKING_KEY_INPUT,
+        initial_value=parsed_data.booking_key,
+    )
+
+    _add_text_input(
+        blocks=blocks,
+        block_id=BlockId.COMPANY_NAME_BLOCK,
+        label_text=f"{LabelText.COMPANY_NAME}{CommonText.REQUIRED}",
+        action_id=ActionId.COMPANY_NAME_INPUT,
+        initial_value="",  # 요구사항: 업체명은 비움
+    )
+
+    _add_text_input(
+        blocks=blocks,
+        block_id=BlockId.CUSTOMER_NAME_BLOCK,
+        label_text=f"{LabelText.CUSTOMER_NAME}{CommonText.REQUIRED}",
+        action_id=ActionId.CUSTOMER_NAME_INPUT,
+        initial_value=parsed_data.customer_name,
+    )
+
+    _add_datepicker_with_initial(
+        blocks=blocks,
+        block_id=BlockId.SETTLEMENT_DAY_BLOCK,
+        label_text=LabelText.SETTLEMENT_DAY,
+        action_id=ActionId.SETTLEMENT_DAY_INPUT,
+        placeholder_text=CommonText.SELECT_DATE,
+        initial_date="",  # 사용자 선택 유도
+    )
+
+    _add_select_with_initial(
+        blocks=blocks,
+        block_id=BlockId.ISSUE_TYPE_BLOCK,
+        label_text=LabelText.ISSUE_TYPE,
+        action_id=ActionId.ISSUE_TYPE_INPUT,
+        placeholder_text=CommonText.SELECT,
+        options=ISSUE_TYPE_OPTIONS,
+        initial_option=issue_type_initial,  # 고정값
+        is_required=True,
+    )
+
+    _add_text_input(
+        blocks=blocks,
+        block_id=BlockId.COMPANY_SUB_NAME_BLOCK,
+        label_text=LabelText.COMPANY_SUB_NAME,
+        action_id=ActionId.COMPANY_SUB_NAME_INPUT,
+        initial_value=parsed_data.company_sub_name,
+        is_optional=True,
+    )
+
+    _add_text_input(
+        blocks=blocks,
+        block_id=BlockId.SETTLEMENT_COST_BLOCK,
+        label_text=f"{LabelText.SETTLEMENT_COST}{CommonText.REQUIRED}",
+        action_id=ActionId.SETTLEMENT_COST_INPUT,
+        initial_value=parsed_data.settlement_cost,
+    )
+
+    _add_text_input(
+        blocks=blocks,
+        block_id=BlockId.CARMORE_COST_BLOCK,
+        label_text=LabelText.CARMORE_COST,
+        action_id=ActionId.CARMORE_COST_INPUT,
+        initial_value=parsed_data.carmore_cost,
+        is_optional=True,
+    )
+
+    _add_text_input(
+        blocks=blocks,
+        block_id=BlockId.USER_REFUND_COST_BLOCK,
+        label_text=LabelText.USER_REFUND_COST,
+        action_id=ActionId.USER_REFUND_COST_INPUT,
+        initial_value="",
+        is_optional=True,
+    )
+
+    _add_select_with_initial(
+        blocks=blocks,
+        block_id=BlockId.SELLER_CHANNEL_BLOCK,
+        label_text=LabelText.SELLER_CHANNEL,
+        action_id=ActionId.SELLER_CHANNEL_INPUT,
+        placeholder_text=CommonText.SELECT,
+        options=SELLER_CHANNEL_OPTIONS,
+        initial_option=None,  # 사용자 선택
+        is_required=True,
+    )
+
+    _add_select_with_initial(
+        blocks=blocks,
+        block_id=BlockId.DESCRIPTION_BLOCK,
+        label_text=LabelText.DESCRIPTION,
+        action_id=ActionId.DESCRIPTION_INPUT,
+        placeholder_text=CommonText.SELECT,
+        options=DESCRIPTION_OPTIONS,
+        initial_option=description_initial,  # 고정값
+        is_required=True,
+    )
+
+    return {
+        "type": "modal",
+        "callback_id": ActionId.REGISTRATION_SUBMIT,
+        "private_metadata": metadata,
+        "title": {
+            "type": "plain_text",
+            "text": HeaderText.SETTLEMENT_ISSUE_NEW,
+        },
+        "submit": {
+            "type": "plain_text",
+            "text": CommonText.REGISTER,
         },
         "close": {"type": "plain_text", "text": CommonText.CANCEL},
         "blocks": blocks,

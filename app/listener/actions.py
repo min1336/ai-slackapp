@@ -7,12 +7,14 @@ from slack_bolt import App
 from app.config import config
 from app.constants import ActionId
 from app.models import ModalMetadata, SettlementData, SettlementStatus
+from app.services.message_parser import ParsedTransferReservation
 from app.services.settlement_service import save_settlement
 from app.services.slack_service import get_thread_url, get_user_name
 from app.views.blocks import (
     build_approved_message,
     build_registration_modal,
     build_rejected_message,
+    build_transfer_registration_modal,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,11 +56,46 @@ def register_action_handlers(app: App) -> None:
             view=modal,
         )
 
-    @app.action(ActionId.OPEN_TRANSFER_REGISTRATION_MODAL)
-    def handle_open_transfer_registration_modal(ack, body, client):
-        # TODO: 이관 예약 등록 모달 구현
+    @app.action(ActionId.OPEN_TRANSFER_REGISTRATION_MODAL_UNABLE_DISPATCH)
+    def handle_open_transfer_registration_modal_unable_dispatch(ack, body, client):
+        _handle_transfer_registration_modal(ack, body, client, "unable_dispatch")
+
+    @app.action(ActionId.OPEN_TRANSFER_REGISTRATION_MODAL_RESERVATION)
+    def handle_open_transfer_registration_modal_reservation(ack, body, client):
+        _handle_transfer_registration_modal(ack, body, client, "reservation")
+
+    def _handle_transfer_registration_modal(ack, body, client, description_type: str):
         ack()
-        logger.warning("[TODO] 이관 예약 등록 모달 기능 - 아직 구현되지 않음")
+
+        value = body.get("actions", [{}])[0].get("value", "{}")
+        parsed = ParsedTransferReservation.model_validate_json(value)
+
+        user_id = body["user"]["id"]
+        user_name = get_user_name(client, user_id)
+
+        channel_id = body.get("channel", {}).get("id", "")
+        thread_ts = body.get("message", {}).get("thread_ts", "")
+
+        metadata = ModalMetadata(
+            channel_id=channel_id,
+            thread_ts=thread_ts,
+            user_name=user_name,
+            booking_key=parsed.booking_key,
+            company_name="",  # 이관 건은 업체명이 비어있음
+            customer_name=parsed.customer_name,
+        )
+
+        modal = build_transfer_registration_modal(
+            parsed_data=parsed,
+            user_name=user_name,
+            metadata=metadata.model_dump_json(),
+            description_type=description_type,
+        )
+
+        client.views_open(
+            trigger_id=body["trigger_id"],
+            view=modal,
+        )
 
     def _handle_settlement_decision(body, client, status: SettlementStatus) -> None:
         user_id = body["user"]["id"]

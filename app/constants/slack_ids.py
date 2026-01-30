@@ -3,7 +3,12 @@ from __future__ import annotations
 
 class ActionId:
     OPEN_REGISTRATION_MODAL = "open_registration_modal"
-    OPEN_TRANSFER_REGISTRATION_MODAL = "open_transfer_registration_modal"
+    OPEN_TRANSFER_REGISTRATION_MODAL_UNABLE_DISPATCH = (
+        "open_transfer_registration_modal_unable_dispatch"
+    )
+    OPEN_TRANSFER_REGISTRATION_MODAL_RESERVATION = (
+        "open_transfer_registration_modal_reservation"
+    )
     SETTLEMENT_APPROVE = "settlement_approve"
     SETTLEMENT_REJECT = "settlement_reject"
     SETTLEMENT_EDIT = "settlement_edit"
