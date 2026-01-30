@@ -12,4 +12,5 @@ slack_channels:
 spreadsheet:
   id: "1AS3uLh8rKgHPsjKO_gy6sg1erNjVm_1fOOCPWr458bY"
   sheets:
-    settlement: "Sheet1"
+    settlement: "정산"
+    approval_log: "승인로그"

@@ -37,3 +37,18 @@ def append_settlement_row(row: SettlementRow, sheet_name: str | None = None) -> 
         logger.exception(f"스프레드시트 행 추가 실패 (sheet: {sheet_name}): {str(e)}")
         logger.debug(f"실패한 행 데이터: {row.to_row()}")
         return False
+
+
+def append_approval_log_row(row: SettlementRow) -> bool:
+    """승인로그 시트에 행 추가 (정산 시트와 동일한 컬럼 구조)"""
+    sheet_name = config.spreadsheet.sheets.approval_log
+
+    try:
+        spreadsheet = get_spreadsheet_client()
+        worksheet = spreadsheet.worksheet(sheet_name)
+        worksheet.append_row(row.to_row())
+        return True
+    except Exception as e:
+        logger.exception(f"승인로그 시트 행 추가 실패 (sheet: {sheet_name}): {str(e)}")
+        logger.debug(f"실패한 행 데이터: {row.to_row()}")
+        return False

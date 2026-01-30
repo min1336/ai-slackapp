@@ -32,7 +32,8 @@ class SpreadsheetProperties(BaseSettings):
 
 
 class SheetsConfig(BaseModel):
-    settlement: str = "Sheet1"
+    settlement: str = "정산"
+    approval_log: str = "승인로그"
 
 
 class SlackChannelsConfig(BaseModel):
