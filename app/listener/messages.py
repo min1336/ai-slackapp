@@ -80,11 +80,13 @@ def register_message_handlers(app: App) -> None:
         if not is_transfer_reservation_message(text):
             return
 
+        logger.info(f"[이관예약] 원본 메시지: {text}")
         parsed = parse_transfer_reservation_message(text)
 
         logger.info(
             f"[이관예약] 파싱 완료 - 예약번호: {parsed.booking_key}, "
             f"예약자: {parsed.customer_name}, 업체: {parsed.company_sub_name}"
+            f"원금: {parsed.settlement_cost}, 카모아 부담금: {parsed.carmore_cost}"
         )
 
         message_ts = message.get("ts")

@@ -139,19 +139,3 @@ class TestParseTransferReservationMessage:
         assert result.company_sub_name == "(주)특별한렌트카 김포지점"
         assert result.settlement_cost == "332500"
         assert result.carmore_cost == "0"
-
-    def test_카모아_부담비용_라벨도_파싱한다(self):
-        text = """이관 전 예약번호
-1095976
-예약자명
-박종선
-업체명
-(주)특별한렌트카 김포지점
-카모아 부담비용
-0원
-"""
-
-        result = parse_transfer_reservation_message(text)
-
-        assert result.booking_key == "1095976"
-        assert result.carmore_cost == "0"

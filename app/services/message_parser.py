@@ -74,27 +74,15 @@ def is_transfer_reservation_message(text: str) -> bool:
 
 
 def parse_transfer_reservation_message(text: str) -> ParsedTransferReservation:
-    """이관 예약 메시지 파싱
-
-    Example format:
-        이관 전 예약번호
-        1095976
-        예약자명
-        박종선
-        업체명
-        (주)특별한렌트카[카모아 예약]
-        ...
-        원금 : 111,111원 (대여 : 79,500원, 자차 : 30,000원, 배달 : 20,000원)
-        ...
-        카모아 부담비용
-        0
-    """
     result = ParsedTransferReservation()
+
+    # 전체 텍스트에서 볼드 마크업 제거 (슬랙 포맷팅 정규화)
+    text = re.sub(r"\*([^*]+)\*", r"\1", text)
 
     def _remove_bold(v: str) -> str:
         if not isinstance(v, str) or not v:
             return ""
-        return re.sub(r"\*([^*]+)\*", r"\1", v).strip()
+        return v.strip()
 
     def _clean_name(v: str) -> str:
         v = _remove_bold(v)
@@ -194,10 +182,11 @@ def parse_transfer_reservation_message(text: str) -> ParsedTransferReservation:
             i += 1
             continue
 
-        # "카모아 부담비용"/"카모아 부담금" 다음 줄의 값 추출
-        if line in ("카모아 부담비용", "카모아 부담금"):
-            if not result.carmore_cost:
-                result.carmore_cost = _digits_only(_next_value(i + 1))
+        # "카모아 부담금" 패턴에서 금액 추출
+        if "카모아" in line and "부담금" in line and ":" in line:
+            match = re.search(r"카모아\s*부담금\s*[:：]\s*([0-9,]+)원", line)
+            if match and not result.carmore_cost:
+                result.carmore_cost = _digits_only(match.group(1))
             i += 1
             continue
 
