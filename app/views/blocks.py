@@ -173,15 +173,18 @@ def build_registration_modal(
             "text": {"type": "plain_text", "text": HeaderText.BOOKING_INFO},
         },
         {"type": "divider"},
+        # 사용자 이름은 section으로 표시 (입력 불필요)
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*{LabelText.USER_NAME}*"},
+                {
+                    "type": "plain_text",
+                    "text": user_name or CommonText.NONE,
+                },
+            ],
+        },
     ]
-
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.USER_NAME_BLOCK,
-        label_text=f"{LabelText.USER_NAME}{CommonText.REQUIRED}",
-        action_id=ActionId.USER_NAME_INPUT,
-        initial_value=user_name,
-    )
 
     _add_text_input(
         blocks=blocks,
@@ -189,14 +192,6 @@ def build_registration_modal(
         label_text=f"{LabelText.BOOKING_KEY}{CommonText.REQUIRED}",
         action_id=ActionId.BOOKING_KEY_INPUT,
         initial_value=booking_key,
-    )
-
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.COMPANY_NAME_BLOCK,
-        label_text=f"{LabelText.COMPANY_NAME}{CommonText.REQUIRED}",
-        action_id=ActionId.COMPANY_NAME_INPUT,
-        initial_value=company_name,
     )
 
     _add_text_input(
@@ -225,6 +220,14 @@ def build_registration_modal(
         options=ISSUE_TYPE_OPTIONS,
         initial_option=issue_type_initial,
         is_required=True,
+    )
+
+    _add_text_input(
+        blocks=blocks,
+        block_id=BlockId.COMPANY_NAME_BLOCK,
+        label_text=f"{LabelText.COMPANY_NAME}{CommonText.REQUIRED}",
+        action_id=ActionId.COMPANY_NAME_INPUT,
+        initial_value=company_name,
     )
 
     _add_text_input(
@@ -358,16 +361,6 @@ def build_transfer_registration_modal(
         initial_value=parsed_data.booking_key,
     )
 
-    initial_company_name = company_name_param if is_edit else ""
-
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.COMPANY_NAME_BLOCK,
-        label_text=f"{LabelText.COMPANY_NAME}{CommonText.REQUIRED}",
-        action_id=ActionId.COMPANY_NAME_INPUT,
-        initial_value=initial_company_name,
-    )
-
     _add_text_input(
         blocks=blocks,
         block_id=BlockId.CUSTOMER_NAME_BLOCK,
@@ -397,6 +390,16 @@ def build_transfer_registration_modal(
         options=ISSUE_TYPE_OPTIONS,
         initial_option=issue_type_initial,  # 고정값
         is_required=True,
+    )
+
+    initial_company_name = company_name_param if is_edit else ""
+
+    _add_text_input(
+        blocks=blocks,
+        block_id=BlockId.COMPANY_NAME_BLOCK,
+        label_text=f"{LabelText.COMPANY_NAME}{CommonText.REQUIRED}",
+        action_id=ActionId.COMPANY_NAME_INPUT,
+        initial_value=initial_company_name,
     )
 
     # 편집일 때는 company_sub_name, settlement_cost, carmore_cost 사용
