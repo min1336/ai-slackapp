@@ -36,22 +36,40 @@ SLACK_APP_TOKEN=xapp-xxx          # App-Level Token (Socket Mode용)
 SLACK_BOT_TOKEN=xoxb-xxx          # Bot User OAuth Token
 SLACK_SIGNING_SECRET=xxx          # Signing Secret (선택)
 
-# 승인권자 설정 (필수)
-APPROVERS=U12345678,U87654321     # 쉼표로 구분된 User ID
-
 # Google Sheets 설정 (필수)
 GOOGLE_CREDENTIALS_FILE=credentials.json
-SPREADSHEET_ID=your_spreadsheet_id
-SHEET_NAME=Sheet1
 ```
 
-### 4. Google Sheets 서비스 계정 설정
+### 4. 앱 설정 (config.yaml)
+
+`config.yaml` 파일에서 승인자, 스프레드시트, 채널을 설정합니다:
+
+```yaml
+# 승인자 슬랙 UserID
+approvers:
+  - U12345678
+  - U87654321
+
+# 슬랙 채널 ID (이관 예약 자동 감지용)
+slack_channels:
+  transfer_reservation: "C0XXXXXXXX"
+
+# Spread Sheet ID
+# https://docs.google.com/spreadsheets/d/{id} 에서 id 추출
+spreadsheet:
+  id: "your_spreadsheet_id"
+  sheets:
+    settlement: "정산"
+    approval_log: "승인로그"
+```
+
+### 5. Google Sheets 서비스 계정 설정
 
 1. Google Cloud Console에서 서비스 계정 생성
 2. JSON 키 파일 다운로드 → 프로젝트 루트에 `credentials.json`으로 저장
 3. 스프레드시트에서 서비스 계정 이메일을 편집자로 추가
 
-### 5. 실행
+### 6. 실행
 
 ```bash
 # uv 사용
@@ -61,7 +79,7 @@ uv run python -m app.main
 python -m app.main
 ```
 
-### 6. 테스트
+### 7. 테스트
 
 ```bash
 # 전체 테스트
