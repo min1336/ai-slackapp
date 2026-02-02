@@ -8,5 +8,10 @@ services:
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
       - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
       - GOOGLE_CREDENTIALS_FILE=credentials.json
+      - DATABASE_HOST=${DATABASE_HOST}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - DATABASE_USER=${DATABASE_USER:-postgres}
+      - DATABASE_PORT=${DATABASE_PORT:-5432}
+      - DATABASE_DBNAME=${DATABASE_DBNAME:-postgres}
     volumes:
       - ./credentials.json:/app/credentials.json:ro

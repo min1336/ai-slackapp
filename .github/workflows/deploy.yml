@@ -167,6 +167,11 @@ jobs:
           SLACK_APP_TOKEN: ${{ secrets.SLACK_APP_TOKEN }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
+          DATABASE_HOST: ${{ secrets.DATABASE_HOST }}
+          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+          DATABASE_USER: ${{ secrets.DATABASE_USER }}
+          DATABASE_PORT: ${{ secrets.DATABASE_PORT }}
+          DATABASE_DBNAME: ${{ secrets.DATABASE_DBNAME }}
         with:
           host: ${{ secrets.PROD_SERVER_HOST }}
           username: ${{ secrets.PROD_SERVER_USER }}
@@ -178,7 +183,7 @@ jobs:
           proxy_port: ${{ secrets.AWS_TM2_BASTION_PORT }}
           debug: true
           script_stop: true
-          envs: SLACK_APP_TOKEN,SLACK_BOT_TOKEN,SLACK_SIGNING_SECRET
+          envs: SLACK_APP_TOKEN,SLACK_BOT_TOKEN,SLACK_SIGNING_SECRET,DATABASE_HOST,DATABASE_PASSWORD,DATABASE_USER,DATABASE_PORT,DATABASE_DBNAME
           script: |
             echo "🚀 배포 시작..."
             
@@ -201,6 +206,11 @@ jobs:
             export SLACK_APP_TOKEN="$SLACK_APP_TOKEN"
             export SLACK_BOT_TOKEN="$SLACK_BOT_TOKEN"
             export SLACK_SIGNING_SECRET="$SLACK_SIGNING_SECRET"
+            export DATABASE_HOST="$DATABASE_HOST"
+            export DATABASE_PASSWORD="$DATABASE_PASSWORD"
+            export DATABASE_USER="$DATABASE_USER"
+            export DATABASE_PORT="$DATABASE_PORT"
+            export DATABASE_DBNAME="$DATABASE_DBNAME"
             
             docker compose -f docker-compose.prod.yml up -d
 
