@@ -25,7 +25,7 @@ def _sync_after_commit(settlement_id: int, log_id: int, row: SettlementRow) -> N
     from app.services.sync_service import sync_to_sheets
 
     try:
-        sync_to_sheets(row)
+        sync_to_sheets(row, log_id)
         _mark_synced(settlement_id, log_id)
         logger.info(f"Sheets sync completed for {row.booking_key}")
 

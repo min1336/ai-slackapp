@@ -152,7 +152,7 @@ class TestSaveSettlement:
         )
         monkeypatch.setattr(
             "app.services.sync_service.sync_to_sheets",
-            lambda row: True,  # Sheets 동기화 성공
+            lambda row, log_id: True,  # Sheets 동기화 성공
         )
 
         # When
@@ -180,7 +180,7 @@ class TestSaveSettlement:
             fake_db.get_session,
         )
 
-        def fail_sync(row):
+        def fail_sync(row, log_id):
             raise ConnectionError("Sheets API unavailable")
 
         monkeypatch.setattr(

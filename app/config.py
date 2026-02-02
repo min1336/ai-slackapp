@@ -80,6 +80,7 @@ class AppConfig(BaseModel):
     approvers: list[str] = []
     spreadsheet: SpreadsheetConfig
     slack_channels: SlackChannelsConfig = SlackChannelsConfig()
+    sync_interval_seconds: int = 300
 
 
 def _load_app_config() -> AppConfig:

@@ -14,7 +14,7 @@ class FakeSpreadsheet:
 
     def __init__(self):
         self.settlement_rows: dict[str, list[str]] = {}
-        self.approval_logs: list[list[str]] = []
+        self.approval_logs: dict[str, list[str]] = {}
         self.should_fail: bool = False
 
     def save_settlement_row(
@@ -26,11 +26,11 @@ class FakeSpreadsheet:
         self.settlement_rows[row.booking_key] = row.to_row()
         return True
 
-    def append_approval_log_row(self, row: SettlementRow) -> bool:
-        """승인 로그는 항상 추가"""
+    def append_approval_log_row(self, row: SettlementRow, sync_key: str) -> bool:
+        """승인 로그는 sync_key 기준으로 upsert"""
         if self.should_fail:
             return False
-        self.approval_logs.append(row.to_row())
+        self.approval_logs[sync_key] = row.to_row() + [sync_key]
         return True
 
     def find_row_by_booking_key(
