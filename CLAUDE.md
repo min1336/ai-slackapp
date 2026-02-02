@@ -91,4 +91,5 @@ psql -d <database_name> -f migrations/001_add_sync_status.sql
 
 - 형식: `TYPE: (TICKET) 설명` (예: `FEAT: (AI-98) 시트 동기화 추가`)
 - TYPE: `FEAT`, `FIX`, `TEST`, `DOCS`, `CHORE`, `REFACTOR`
+- TICKET: 현재 브랜치명에서 추출 (예: `feat/AI-100` → `AI-100`)
 - 기능 단위로 커밋, 필요시 squash

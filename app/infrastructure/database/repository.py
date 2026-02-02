@@ -165,6 +165,21 @@ class SettlementRepository:
             settlement.sync_status = "pending"
             settlement.sheets_sync_error = error
 
+    def recover_stale_records(self) -> int:
+        """in_progress 상태의 레코드를 pending으로 복구.
+
+        앱 시작 시 호출하여 이전 실행에서 중단된 레코드 복구.
+        Returns:
+            복구된 레코드 수
+        """
+        stmt = select(Settlement).where(Settlement.sync_status == "in_progress")
+        records = list(self.session.execute(stmt).scalars().all())
+
+        for record in records:
+            record.sync_status = "pending"
+
+        return len(records)
+
 
 class ApprovalLogRepository:
     """승인 로그 저장소"""
@@ -216,3 +231,18 @@ class ApprovalLogRepository:
         if log:
             log.sync_status = "pending"
             log.sheets_sync_error = error
+
+    def recover_stale_records(self) -> int:
+        """in_progress 상태의 레코드를 pending으로 복구.
+
+        앱 시작 시 호출하여 이전 실행에서 중단된 레코드 복구.
+        Returns:
+            복구된 레코드 수
+        """
+        stmt = select(ApprovalLog).where(ApprovalLog.sync_status == "in_progress")
+        records = list(self.session.execute(stmt).scalars().all())
+
+        for record in records:
+            record.sync_status = "pending"
+
+        return len(records)

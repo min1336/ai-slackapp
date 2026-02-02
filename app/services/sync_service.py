@@ -23,6 +23,25 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def recover_stale_sync_records() -> tuple[int, int]:
+    """앱 시작 시 중단된 동기화 레코드 복구.
+
+    이전 실행에서 in_progress 상태로 남은 레코드를 pending으로 되돌림.
+    단일 인스턴스 환경에서 앱 재시작 시 안전하게 재처리 가능하도록 함.
+
+    Returns:
+        (복구된 정산 수, 복구된 로그 수)
+    """
+    with get_session() as session:
+        settlements = SettlementRepository(session).recover_stale_records()
+        logs = ApprovalLogRepository(session).recover_stale_records()
+
+    if settlements or logs:
+        logger.info(f"Recovered stale records: {settlements} settlements, {logs} logs")
+
+    return settlements, logs
+
+
 def sync_to_sheets(row: SettlementRow, log_id: int) -> bool:
     """정산 데이터를 Google Sheets로 동기화.
 
