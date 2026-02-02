@@ -125,7 +125,7 @@ class SettlementRepository:
         return result.scalar_one_or_none()
 
     def list_unsynced(self, limit: int = 100) -> list[Settlement]:
-        """동기화 안 된 정산 목록 조회."""
+        """동기화 안 된 정산 목록 조회. (하위 호환용, claim_unsynced 사용 권장)"""
         stmt = (
             select(Settlement)
             .where(Settlement.sheets_synced == False)  # noqa: E712
@@ -134,18 +134,35 @@ class SettlementRepository:
         result = self.session.execute(stmt)
         return list(result.scalars().all())
 
+    def claim_unsynced(self, limit: int = 100) -> list[Settlement]:
+        """미동기화 레코드 조회 및 in_progress로 변경.
+
+        조회와 상태 변경이 같은 트랜잭션에서 수행되어 중복 처리 방지.
+        """
+        stmt = (
+            select(Settlement).where(Settlement.sync_status == "pending").limit(limit)
+        )
+        records = list(self.session.execute(stmt).scalars().all())
+
+        for record in records:
+            record.sync_status = "in_progress"
+
+        return records
+
     def mark_synced(self, settlement_id: int) -> None:
         """동기화 완료 표시."""
         settlement = self.get(settlement_id)
         if settlement:
+            settlement.sync_status = "completed"
             settlement.sheets_synced = True
             settlement.sheets_synced_at = datetime.now()
             settlement.sheets_sync_error = None
 
     def mark_sync_failed(self, settlement_id: int, error: str) -> None:
-        """동기화 실패 표시."""
+        """동기화 실패 표시. pending으로 되돌려 재시도 가능."""
         settlement = self.get(settlement_id)
         if settlement:
+            settlement.sync_status = "pending"
             settlement.sheets_sync_error = error
 
 
@@ -160,7 +177,7 @@ class ApprovalLogRepository:
         return self.session.get(ApprovalLog, log_id)
 
     def list_unsynced(self, limit: int = 100) -> list[ApprovalLog]:
-        """동기화 안 된 로그 목록 조회."""
+        """동기화 안 된 로그 목록 조회. (하위 호환용, claim_unsynced 사용 권장)"""
         stmt = (
             select(ApprovalLog)
             .where(ApprovalLog.sheets_synced == False)  # noqa: E712
@@ -169,16 +186,33 @@ class ApprovalLogRepository:
         result = self.session.execute(stmt)
         return list(result.scalars().all())
 
+    def claim_unsynced(self, limit: int = 100) -> list[ApprovalLog]:
+        """미동기화 레코드 조회 및 in_progress로 변경.
+
+        조회와 상태 변경이 같은 트랜잭션에서 수행되어 중복 처리 방지.
+        """
+        stmt = (
+            select(ApprovalLog).where(ApprovalLog.sync_status == "pending").limit(limit)
+        )
+        records = list(self.session.execute(stmt).scalars().all())
+
+        for record in records:
+            record.sync_status = "in_progress"
+
+        return records
+
     def mark_synced(self, log_id: int) -> None:
         """동기화 완료 표시."""
         log = self.get(log_id)
         if log:
+            log.sync_status = "completed"
             log.sheets_synced = True
             log.sheets_synced_at = datetime.now()
             log.sheets_sync_error = None
 
     def mark_sync_failed(self, log_id: int, error: str) -> None:
-        """동기화 실패 표시."""
+        """동기화 실패 표시. pending으로 되돌려 재시도 가능."""
         log = self.get(log_id)
         if log:
+            log.sync_status = "pending"
             log.sheets_sync_error = error

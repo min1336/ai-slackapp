@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def sync_to_sheets(row: SettlementRow) -> bool:
+def sync_to_sheets(row: SettlementRow, log_id: int) -> bool:
     """정산 데이터를 Google Sheets로 동기화.
 
     정산 시트 (upsert) + 승인 로그 시트 (append) 모두 저장.
@@ -31,7 +31,7 @@ def sync_to_sheets(row: SettlementRow) -> bool:
     """
     try:
         settlement_result = sheets_save_settlement(row)
-        log_result = sheets_append_log(row)
+        log_result = sheets_append_log(row, str(log_id))
 
         if not settlement_result or not log_result:
             raise SyncError(
@@ -48,9 +48,10 @@ def sync_to_sheets(row: SettlementRow) -> bool:
 def sync_pending_records() -> tuple[int, int]:
     """미동기화 레코드 일괄 동기화 (배치 작업용).
 
-    각 레코드 처리 시:
-    1. 외부 API(Sheets) 호출은 트랜잭션 밖에서
-    2. 성공 시 DB 업데이트는 별도 트랜잭션에서
+    처리 흐름:
+    1. claim_unsynced()로 조회 + in_progress 상태 변경 (같은 트랜잭션)
+    2. 외부 API(Sheets) 호출은 트랜잭션 밖에서
+    3. 성공/실패 시 DB 업데이트는 별도 트랜잭션에서
 
     Returns:
         (동기화된 정산 수, 동기화된 로그 수)
@@ -59,8 +60,8 @@ def sync_pending_records() -> tuple[int, int]:
     synced_logs = 0
 
     with get_session() as session:
-        settlements = SettlementRepository(session).list_unsynced(limit=100)
-        logs = ApprovalLogRepository(session).list_unsynced(limit=100)
+        settlements = SettlementRepository(session).claim_unsynced(limit=100)
+        logs = ApprovalLogRepository(session).claim_unsynced(limit=100)
 
     for settlement in settlements:
         try:
@@ -84,7 +85,7 @@ def sync_pending_records() -> tuple[int, int]:
     for log in logs:
         try:
             row = _approval_log_to_row(log)
-            if sheets_append_log(row):
+            if sheets_append_log(row, str(log.id)):
                 with get_session() as session:
                     ApprovalLogRepository(session).mark_synced(log.id)
                 synced_logs += 1

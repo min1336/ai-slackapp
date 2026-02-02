@@ -38,6 +38,7 @@ class Settlement(Base):
     sheets_synced: Mapped[bool] = mapped_column(Boolean, default=False)
     sheets_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     sheets_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sync_status: Mapped[str] = mapped_column(String(20), default="pending")
 
     # Relationship
     approval_logs: Mapped[list[ApprovalLog]] = relationship(back_populates="settlement")
@@ -71,6 +72,7 @@ class ApprovalLog(Base):
     sheets_synced: Mapped[bool] = mapped_column(Boolean, default=False)
     sheets_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     sheets_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sync_status: Mapped[str] = mapped_column(String(20), default="pending")
 
     # Relationship
     settlement: Mapped[Settlement | None] = relationship(back_populates="approval_logs")
