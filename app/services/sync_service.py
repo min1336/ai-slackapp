@@ -27,17 +27,11 @@ def sync_to_sheets(row: SettlementRow, log_id: int) -> bool:
     """정산 데이터를 Google Sheets로 동기화.
 
     정산 시트 (upsert) + 승인 로그 시트 (append) 모두 저장.
-    둘 다 성공해야 True 반환.
+    예외 발생 시 실패로 처리.
     """
     try:
-        settlement_result = sheets_save_settlement(row)
-        log_result = sheets_append_log(row, str(log_id))
-
-        if not settlement_result or not log_result:
-            raise SyncError(
-                f"Sheets write failed: settlement={settlement_result}, log={log_result}"
-            )
-
+        sheets_save_settlement(row)
+        sheets_append_log(row, str(log_id))
         return True
 
     except Exception as e:
@@ -66,15 +60,10 @@ def sync_pending_records() -> tuple[int, int]:
     for settlement in settlements:
         try:
             row = _settlement_to_row(settlement)
-            if sheets_save_settlement(row):
-                with get_session() as session:
-                    SettlementRepository(session).mark_synced(settlement.id)
-                synced_settlements += 1
-            else:
-                with get_session() as session:
-                    SettlementRepository(session).mark_sync_failed(
-                        settlement.id, "Sheets write returned False"
-                    )
+            sheets_save_settlement(row)  # 실패 시 예외 발생
+            with get_session() as session:
+                SettlementRepository(session).mark_synced(settlement.id)
+            synced_settlements += 1
         except Exception as e:
             logger.warning(
                 f"Retry sync failed for settlement {settlement.booking_key}: {e}"
@@ -85,15 +74,10 @@ def sync_pending_records() -> tuple[int, int]:
     for log in logs:
         try:
             row = _approval_log_to_row(log)
-            if sheets_append_log(row, str(log.id)):
-                with get_session() as session:
-                    ApprovalLogRepository(session).mark_synced(log.id)
-                synced_logs += 1
-            else:
-                with get_session() as session:
-                    ApprovalLogRepository(session).mark_sync_failed(
-                        log.id, "Sheets write returned False"
-                    )
+            sheets_append_log(row, str(log.id))  # 실패 시 예외 발생
+            with get_session() as session:
+                ApprovalLogRepository(session).mark_synced(log.id)
+            synced_logs += 1
         except Exception as e:
             logger.warning(f"Retry sync failed for approval log {log.booking_key}: {e}")
             with get_session() as session:

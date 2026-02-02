@@ -8,6 +8,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from app.config import config, database, slack
 from app.core import get_logger, setup_logging
+from app.error_handler import register_error_handler
 from app.listener.actions import register_action_handlers
 from app.listener.messages import register_message_handlers
 from app.listener.views import register_view_handlers
@@ -19,6 +20,9 @@ logger = get_logger(__name__)
 
 # Initializes your app with your bot token and socket mode handler
 app = App(token=slack.bot_token)
+
+# 에러 핸들러 등록 (다른 핸들러보다 먼저)
+register_error_handler(app)
 
 # 리스너 등록
 register_message_handlers(app)

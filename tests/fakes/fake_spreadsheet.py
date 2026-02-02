@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.exceptions import SpreadsheetError
 from app.models.settlement import SettlementRow
 
 
@@ -19,19 +20,31 @@ class FakeSpreadsheet:
 
     def save_settlement_row(
         self, row: SettlementRow, sheet_name: str | None = None
-    ) -> bool:
-        """settlement 시트에 저장 (동일 키면 업데이트)"""
-        if self.should_fail:
-            return False
-        self.settlement_rows[row.booking_key] = row.to_row()
-        return True
+    ) -> None:
+        """settlement 시트에 저장 (동일 키면 업데이트)
 
-    def append_approval_log_row(self, row: SettlementRow, sync_key: str) -> bool:
-        """승인 로그는 sync_key 기준으로 upsert"""
+        Raises:
+            SpreadsheetError: If should_fail is True
+        """
         if self.should_fail:
-            return False
+            raise SpreadsheetError(
+                message="Fake spreadsheet failure",
+                details={"booking_key": row.booking_key},
+            )
+        self.settlement_rows[row.booking_key] = row.to_row()
+
+    def append_approval_log_row(self, row: SettlementRow, sync_key: str) -> None:
+        """승인 로그는 sync_key 기준으로 upsert
+
+        Raises:
+            SpreadsheetError: If should_fail is True
+        """
+        if self.should_fail:
+            raise SpreadsheetError(
+                message="Fake spreadsheet failure",
+                details={"booking_key": row.booking_key},
+            )
         self.approval_logs[sync_key] = row.to_row() + [sync_key]
-        return True
 
     def find_row_by_booking_key(
         self, booking_key: str, sheet_name: str | None = None

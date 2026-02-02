@@ -30,8 +30,8 @@ class TestSaveSettlement:
             fake_db.get_session,
         )
 
-        # When
-        result = save_settlement(
+        # When - no exception means success
+        save_settlement(
             data=sample_settlement_data,
             status=SettlementStatus.APPROVED,
             approver_name="승인자",
@@ -39,29 +39,25 @@ class TestSaveSettlement:
         )
 
         # Then
-        assert result is True
         with fake_db.get_session() as session:
             repo = SettlementRepository(session)
             found = repo.get_by_booking_key(sample_settlement_data.booking_key)
             assert found is not None
             assert found.user_name == sample_settlement_data.user_name
 
-    def test_반려시_저장하지_않고_성공_반환한다(
-        self, monkeypatch, fake_db, sample_settlement_data
-    ):
+    def test_반려시_저장하지_않는다(self, monkeypatch, fake_db, sample_settlement_data):
         # Given - DATABASE_URL 미설정이어도 반려는 저장 안하므로 성공
         monkeypatch.setattr("app.config.database.host", "")
 
-        # When
-        result = save_settlement(
+        # When - no exception means success
+        save_settlement(
             data=sample_settlement_data,
             status=SettlementStatus.REJECTED,
             approver_name="반려자",
             thread_url="http://example.com/thread",
         )
 
-        # Then
-        assert result is True
+        # Then - 반려 시에는 저장하지 않으므로 예외 없이 완료
 
     def test_DATABASE_URL_미설정시_ValueError_발생(
         self, monkeypatch, sample_settlement_data

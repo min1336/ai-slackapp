@@ -52,8 +52,8 @@ def extract_select_value(values: dict, block_id: str, action_id: str) -> str:
 
 def send_dm(
     client: WebClient, user_id: str, text: str, blocks: list | None = None
-) -> bool:
-    return _send_dm(client, user_id, text, blocks)
+) -> None:
+    _send_dm(client, user_id, text, blocks)
 
 
 def get_spreadsheet_url() -> str:

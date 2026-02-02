@@ -29,10 +29,12 @@ def _create_records(fake_db: FakeDatabase, row: SettlementRow) -> tuple[int, int
 def test_sync_pending_records_success(monkeypatch, fake_db, sample_settlement_data):
     monkeypatch.setattr("app.services.sync_service.get_session", fake_db.get_session)
     monkeypatch.setattr(
-        "app.services.sync_service.sheets_save_settlement", lambda row: True
+        "app.services.sync_service.sheets_save_settlement",
+        lambda row: None,  # 성공 시 예외 없음
     )
     monkeypatch.setattr(
-        "app.services.sync_service.sheets_append_log", lambda row, sync_key: True
+        "app.services.sync_service.sheets_append_log",
+        lambda row, sync_key: None,  # 성공 시 예외 없음
     )
 
     row = SettlementRow.from_settlement_data(
@@ -58,15 +60,21 @@ def test_sync_pending_records_success(monkeypatch, fake_db, sample_settlement_da
         assert log.sync_status == "completed"
 
 
+def _raise_error(row):
+    raise Exception("Sheets API error")
+
+
 def test_sync_pending_records_settlement_failure(
     monkeypatch, fake_db, sample_settlement_data
 ):
     monkeypatch.setattr("app.services.sync_service.get_session", fake_db.get_session)
     monkeypatch.setattr(
-        "app.services.sync_service.sheets_save_settlement", lambda row: False
+        "app.services.sync_service.sheets_save_settlement",
+        _raise_error,  # 실패 시 예외 발생
     )
     monkeypatch.setattr(
-        "app.services.sync_service.sheets_append_log", lambda row, sync_key: True
+        "app.services.sync_service.sheets_append_log",
+        lambda row, sync_key: None,  # 성공
     )
 
     row = SettlementRow.from_settlement_data(

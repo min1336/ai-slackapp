@@ -4,6 +4,8 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web import SlackResponse
 
+from app.exceptions import SlackError
+
 
 def get_user_real_name(client: WebClient, user_id: str) -> str:
     try:
@@ -63,8 +65,7 @@ def send_ephemeral_message(
     text: str,
     blocks: list | None = None,
     thread_ts: str | None = None,
-) -> bool:
-    """임시 메시지(본인만 보이는)를 전송합니다."""
+) -> None:
     try:
         client.chat_postEphemeral(
             channel=channel_id,
@@ -73,9 +74,15 @@ def send_ephemeral_message(
             blocks=blocks,
             thread_ts=thread_ts,
         )
-        return True
-    except SlackApiError:
-        return False
+    except SlackApiError as e:
+        raise SlackError(
+            message=f"Failed to send ephemeral message: {e}",
+            details={
+                "channel_id": channel_id,
+                "user_id": user_id,
+                "original_error": str(e),
+            },
+        ) from e
 
 
 def post_message(
@@ -84,7 +91,7 @@ def post_message(
     text: str,
     blocks: list | None = None,
     thread_ts: str | None = None,
-) -> SlackResponse | None:
+) -> SlackResponse:
     try:
         return client.chat_postMessage(
             channel=channel_id,
@@ -92,8 +99,14 @@ def post_message(
             blocks=blocks,
             thread_ts=thread_ts,
         )
-    except SlackApiError:
-        return None
+    except SlackApiError as e:
+        raise SlackError(
+            message=f"Failed to post message: {e}",
+            details={
+                "channel_id": channel_id,
+                "original_error": str(e),
+            },
+        ) from e
 
 
 def update_message(
@@ -102,7 +115,7 @@ def update_message(
     ts: str,
     text: str,
     blocks: list | None = None,
-) -> bool:
+) -> None:
     try:
         client.chat_update(
             channel=channel_id,
@@ -110,9 +123,15 @@ def update_message(
             text=text,
             blocks=blocks,
         )
-        return True
-    except SlackApiError:
-        return False
+    except SlackApiError as e:
+        raise SlackError(
+            message=f"Failed to update message: {e}",
+            details={
+                "channel_id": channel_id,
+                "message_ts": ts,
+                "original_error": str(e),
+            },
+        ) from e
 
 
 def send_dm(
@@ -120,19 +139,21 @@ def send_dm(
     user_id: str,
     text: str,
     blocks: list | None = None,
-) -> bool:
-    """지정 사용자에게 DM을 전송합니다."""
+) -> None:
     try:
-        # DM 채널 열기
         im = client.conversations_open(users=[user_id])
         channel_id = im["channel"]["id"]
 
-        # DM 전송
         client.chat_postMessage(
             channel=channel_id,
             text=text,
             blocks=blocks,
         )
-        return True
-    except SlackApiError:
-        return False
+    except SlackApiError as e:
+        raise SlackError(
+            message=f"Failed to send DM: {e}",
+            details={
+                "user_id": user_id,
+                "original_error": str(e),
+            },
+        ) from e

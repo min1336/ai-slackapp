@@ -86,3 +86,9 @@ psql -d <database_name> -f migrations/001_add_sync_status.sql
 - `from __future__ import annotations` 필수 (ruff isort 설정)
 - Python 3.12+, line-length 88
 - 선택된 ruff 규칙: E, W, F, I, UP, B, SIM, C4, FA
+
+## 커밋 컨벤션
+
+- 형식: `TYPE: (TICKET) 설명` (예: `FEAT: (AI-98) 시트 동기화 추가`)
+- TYPE: `FEAT`, `FIX`, `TEST`, `DOCS`, `CHORE`, `REFACTOR`
+- 기능 단위로 커밋, 필요시 squash

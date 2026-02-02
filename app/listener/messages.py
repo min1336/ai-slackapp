@@ -95,19 +95,17 @@ def register_message_handlers(app: App) -> None:
         )
 
         message_ts = message.get("ts")
-        try:
-            say(
-                text="이관 예약 정보를 확인해주세요 🚗",
-                blocks=build_transfer_parsing_result_message(
-                    booking_key=parsed.booking_key,
-                    customer_name=parsed.customer_name,
-                    company_name=parsed.company_name,
-                    company_sub_name=parsed.company_sub_name,
-                    settlement_cost=parsed.settlement_cost,
-                    carmore_cost=parsed.carmore_cost,
-                    button_value=parsed.model_dump_json(),
-                ),
-                thread_ts=message_ts,
-            )
-        except Exception as e:
-            logger.error(f"이관 예약 메시지 전송 실패: {e}", exc_info=True)
+        # Let exceptions propagate - global error handler will catch them
+        say(
+            text="이관 예약 정보를 확인해주세요 🚗",
+            blocks=build_transfer_parsing_result_message(
+                booking_key=parsed.booking_key,
+                customer_name=parsed.customer_name,
+                company_name=parsed.company_name,
+                company_sub_name=parsed.company_sub_name,
+                settlement_cost=parsed.settlement_cost,
+                carmore_cost=parsed.carmore_cost,
+                button_value=parsed.model_dump_json(),
+            ),
+            thread_ts=message_ts,
+        )

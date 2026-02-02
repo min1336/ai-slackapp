@@ -15,13 +15,11 @@ logger = get_logger(__name__)
 
 @transactional
 def _mark_synced(session, settlement_id: int, log_id: int) -> None:
-    """동기화 완료 표시 (별도 트랜잭션)."""
     SettlementRepository(session).mark_synced(settlement_id)
     ApprovalLogRepository(session).mark_synced(log_id)
 
 
 def _sync_after_commit(settlement_id: int, log_id: int, row: SettlementRow) -> None:
-    """커밋 후 Sheets 동기화."""
     from app.services.sync_service import sync_to_sheets
 
     try:
@@ -38,9 +36,9 @@ def save_settlement(
     status: SettlementStatus,
     approver_name: str,
     thread_url: str,
-) -> bool:
+) -> None:
     if status == SettlementStatus.REJECTED:
-        return True
+        return
 
     if not database.is_configured:
         raise ValueError("DATABASE_URL is not configured")
@@ -52,17 +50,10 @@ def save_settlement(
         thread_url=thread_url,
     )
 
-    try:
-        with get_session() as session:
-            repo = SettlementRepository(session)
-            settlement = repo.save(row)
-            log = repo.add_log(row, settlement_id=settlement.id)
-            settlement_id = settlement.id
-            log_id = log.id
-            session.after_commit(lambda: _sync_after_commit(settlement_id, log_id, row))
-
-        return True
-
-    except Exception as e:
-        logger.exception(f"Settlement save failed: {e}")
-        return False
+    with get_session() as session:
+        repo = SettlementRepository(session)
+        settlement = repo.save(row)
+        log = repo.add_log(row, settlement_id=settlement.id)
+        settlement_id = settlement.id
+        log_id = log.id
+        session.after_commit(lambda: _sync_after_commit(settlement_id, log_id, row))

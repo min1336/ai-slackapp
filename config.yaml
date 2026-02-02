@@ -5,6 +5,7 @@ approvers:
 # 슬랙 채널 ID
 slack_channels:
   transfer_reservation: "C0AANUJGPAB"
+  error: "C0AANUJGPAB"
 
 # Spread Sheet ID
 # 아래의 URL의 작업 할 시트의 id를 추출해서 작성한다

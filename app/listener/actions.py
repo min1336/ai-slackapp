@@ -6,6 +6,7 @@ from app.config import config
 from app.constants import ActionId
 from app.constants.options import Description
 from app.core import get_logger
+from app.exceptions import ValidationError
 from app.models import ModalMetadata, SettlementData, SettlementStatus
 from app.services.message_parser import ParsedTransferReservation
 from app.services.settlement_service import save_settlement
@@ -23,6 +24,15 @@ from app.views.blocks import (
 )
 
 logger = get_logger(__name__)
+
+
+def _check_approver_permission(user_id: str, action_name: str) -> None:
+    if user_id not in config.approvers:
+        raise ValidationError(
+            message=f"User {user_id} does not have {action_name} permission",
+            user_message=f"⚠️ {action_name} 권한이 없습니다.",
+            details={"user_id": user_id, "action": action_name},
+        )
 
 
 def register_action_handlers(app: App) -> None:
@@ -108,14 +118,8 @@ def register_action_handlers(app: App) -> None:
         message_ts = body.get("message", {}).get("ts", "")
         thread_ts = body.get("message", {}).get("thread_ts", "")
 
-        if user_id not in config.approvers:
-            client.chat_postEphemeral(
-                channel=channel_id,
-                user=user_id,
-                text=f"⚠️ {status.value} 권한이 없습니다.",
-                thread_ts=thread_ts or None,
-            )
-            return
+        # Permission check - raises ValidationError if not authorized
+        _check_approver_permission(user_id, status.value)
 
         approver_name = get_user_name(client, user_id)
         thread_url = get_thread_url(client, channel_id, thread_ts)
@@ -124,7 +128,7 @@ def register_action_handlers(app: App) -> None:
         value = body.get("actions", [{}])[0].get("value", "{}")
         data = SettlementData.model_validate_json(value)
 
-        # 스프레드시트에 저장
+        # 스프레드시트에 저장 - raises SpreadsheetError on failure
         save_settlement(
             data=data,
             status=status,
@@ -148,7 +152,7 @@ def register_action_handlers(app: App) -> None:
             blocks=new_blocks,
         )
 
-        # 승인 완료 시 승인자에게 DM 전송
+        # 승인 완료 시 승인자에게 DM 전송 - raises SlackError on failure
         if status == SettlementStatus.APPROVED:
             dm_text = (
                 f"✅ 정산 이슈가 승인되었습니다.\n"
@@ -195,14 +199,8 @@ def register_action_handlers(app: App) -> None:
         message_ts = body.get("message", {}).get("ts", "")
         thread_ts = body.get("message", {}).get("thread_ts", "")
 
-        if user_id not in config.approvers:
-            client.chat_postEphemeral(
-                channel=channel_id,
-                user=user_id,
-                text="⚠️ 편집 권한이 없습니다.",
-                thread_ts=thread_ts or None,
-            )
-            return
+        # Permission check - raises ValidationError if not authorized
+        _check_approver_permission(user_id, "편집")
 
         # 버튼 value에서 기존 데이터 추출
         value = body.get("actions", [{}])[0].get("value", "{}")
@@ -246,72 +244,55 @@ def register_action_handlers(app: App) -> None:
         message_ts = body.get("message", {}).get("ts", "")
         thread_ts = body.get("message", {}).get("thread_ts", "")
 
-        # 권한 확인
-        if user_id not in config.approvers:
-            client.chat_postEphemeral(
-                channel=channel_id,
-                user=user_id,
-                text=f"⚠️ {status.value} 권한이 없습니다.",
-                thread_ts=thread_ts or None,
+        # Permission check - raises ValidationError if not authorized
+        _check_approver_permission(user_id, status.value)
+
+        approver_name = get_user_name(client, user_id)
+        thread_url = get_thread_url(client, channel_id, thread_ts)
+
+        value = body.get("actions", [{}])[0].get("value", "{}")
+        data = SettlementData.model_validate_json(value)
+
+        logger.info(f"업체이관 {status.value} 시작: {data.booking_key}")
+        logger.debug(f"데이터: {data.model_dump_json(indent=2)}")
+
+        # Save to spreadsheet - raises SpreadsheetError on failure
+        save_settlement(
+            data=data,
+            status=status,
+            approver_name=approver_name,
+            thread_url=thread_url,
+        )
+
+        original_blocks = body.get("message", {}).get("blocks", [])
+        if status == SettlementStatus.APPROVED:
+            new_blocks = build_approved_message(original_blocks, approver_name)
+            text = "정산 이슈 승인됨"
+        else:
+            new_blocks = build_rejected_message(original_blocks, approver_name)
+            text = "정산 이슈 반려됨"
+
+        client.chat_update(
+            channel=channel_id,
+            ts=message_ts,
+            text=text,
+            blocks=new_blocks,
+        )
+
+        # 승인 완료 시 승인자에게 DM 전송 - raises SlackError on failure
+        if status == SettlementStatus.APPROVED:
+            dm_text = (
+                f"✅ 업체이관 정산이 승인되었습니다.\n"
+                f"• 예약번호: {data.booking_key}\n"
+                f"• 업체명: {data.company_name}\n"
+                f"• 고객명: {data.customer_name}\n"
+                f"• 승인자: {approver_name}\n"
+                f"• 스레드: {thread_url}\n"
+                f"• 스프레드시트: {get_spreadsheet_url()}"
             )
-            return
+            send_dm(client, user_id, dm_text)
 
-        try:
-            approver_name = get_user_name(client, user_id)
-            thread_url = get_thread_url(client, channel_id, thread_ts)
-
-            value = body.get("actions", [{}])[0].get("value", "{}")
-            data = SettlementData.model_validate_json(value)
-
-            logger.info(f"업체이관 {status.value} 시작: {data.booking_key}")
-            logger.debug(f"데이터: {data.model_dump_json(indent=2)}")
-
-            save_settlement(
-                data=data,
-                status=status,
-                approver_name=approver_name,
-                thread_url=thread_url,
-            )
-
-            original_blocks = body.get("message", {}).get("blocks", [])
-            if status == SettlementStatus.APPROVED:
-                new_blocks = build_approved_message(original_blocks, approver_name)
-                text = "정산 이슈 승인됨"
-            else:
-                new_blocks = build_rejected_message(original_blocks, approver_name)
-                text = "정산 이슈 반려됨"
-
-            client.chat_update(
-                channel=channel_id,
-                ts=message_ts,
-                text=text,
-                blocks=new_blocks,
-            )
-
-            # 승인 완료 시 승인자에게 DM 전송
-            if status == SettlementStatus.APPROVED:
-                dm_text = (
-                    f"✅ 업체이관 정산이 승인되었습니다.\n"
-                    f"• 예약번호: {data.booking_key}\n"
-                    f"• 업체명: {data.company_name}\n"
-                    f"• 고객명: {data.customer_name}\n"
-                    f"• 승인자: {approver_name}\n"
-                    f"• 스레드: {thread_url}\n"
-                    f"• 스프레드시트: {get_spreadsheet_url()}"
-                )
-                send_dm(client, user_id, dm_text)
-
-            logger.info(f"업체이관 {status.value} 완료: {data.booking_key}")
-
-        except Exception as e:
-            logger.exception(f"업체이관 {status.value} 중 에러 발생: {str(e)}")
-            client.chat_postEphemeral(
-                channel=channel_id,
-                user=user_id,
-                text=f"⚠️ {status.value} 처리 중 오류가 발생했습니다: {str(e)}",
-                thread_ts=thread_ts or None,
-            )
-            return
+        logger.info(f"업체이관 {status.value} 완료: {data.booking_key}")
 
     def _handle_transfer_edit_logic(body, client):
         user_id = body["user"]["id"]
@@ -319,75 +300,58 @@ def register_action_handlers(app: App) -> None:
         message_ts = body.get("message", {}).get("ts", "")
         thread_ts = body.get("message", {}).get("thread_ts", "")
 
-        if user_id not in config.approvers:
-            client.chat_postEphemeral(
-                channel=channel_id,
-                user=user_id,
-                text="⚠️ 편집 권한이 없습니다.",
-                thread_ts=thread_ts or None,
-            )
-            return
+        # Permission check - raises ValidationError if not authorized
+        _check_approver_permission(user_id, "편집")
 
-        try:
-            value = body.get("actions", [{}])[0].get("value", "{}")
-            data = SettlementData.model_validate_json(value)
+        value = body.get("actions", [{}])[0].get("value", "{}")
+        data = SettlementData.model_validate_json(value)
 
-            logger.info(f"업체이관 편집 시작: {data.booking_key}")
-            logger.debug(f"데이터: {data.model_dump_json(indent=2)}")
+        logger.info(f"업체이관 편집 시작: {data.booking_key}")
+        logger.debug(f"데이터: {data.model_dump_json(indent=2)}")
 
-            parsed_data = ParsedTransferReservation(
-                booking_key=data.booking_key,
-                customer_name=data.customer_name,
-                company_name=data.company_name,
-                company_sub_name=data.company_sub_name,
-                settlement_cost=data.settlement_cost,
-                carmore_cost=data.carmore_cost,
-            )
+        parsed_data = ParsedTransferReservation(
+            booking_key=data.booking_key,
+            customer_name=data.customer_name,
+            company_name=data.company_name,
+            company_sub_name=data.company_sub_name,
+            settlement_cost=data.settlement_cost,
+            carmore_cost=data.carmore_cost,
+        )
 
-            is_reservation_change = (
-                Description.TRANSFER_RESERVATION.value in data.description
-            )
+        is_reservation_change = (
+            Description.TRANSFER_RESERVATION.value in data.description
+        )
 
-            metadata = ModalMetadata(
-                channel_id=channel_id,
-                thread_ts=thread_ts,
-                message_ts=message_ts,
-                user_name=data.user_name,
-                booking_key=data.booking_key,
-                company_name=data.company_name,
-                customer_name=data.customer_name,
-            )
+        metadata = ModalMetadata(
+            channel_id=channel_id,
+            thread_ts=thread_ts,
+            message_ts=message_ts,
+            user_name=data.user_name,
+            booking_key=data.booking_key,
+            company_name=data.company_name,
+            customer_name=data.customer_name,
+        )
 
-            modal = build_transfer_registration_modal(
-                parsed_data=parsed_data,
-                user_name=data.user_name,
-                metadata=metadata.model_dump_json(),
-                description_type=(
-                    "reservation" if is_reservation_change else "unable_dispatch"
-                ),
-                company_name_param=data.company_name,
-                settlement_day=data.settlement_day,
-                company_sub_name=data.company_sub_name,
-                settlement_cost=data.settlement_cost,
-                carmore_cost=data.carmore_cost,
-                user_refund_cost=data.user_refund_cost,
-                seller_channel=data.seller_channel,
-                is_edit=True,
-            )
+        modal = build_transfer_registration_modal(
+            parsed_data=parsed_data,
+            user_name=data.user_name,
+            metadata=metadata.model_dump_json(),
+            description_type=(
+                "reservation" if is_reservation_change else "unable_dispatch"
+            ),
+            company_name_param=data.company_name,
+            settlement_day=data.settlement_day,
+            company_sub_name=data.company_sub_name,
+            settlement_cost=data.settlement_cost,
+            carmore_cost=data.carmore_cost,
+            user_refund_cost=data.user_refund_cost,
+            seller_channel=data.seller_channel,
+            is_edit=True,
+        )
 
-            client.views_open(
-                trigger_id=body["trigger_id"],
-                view=modal,
-            )
+        client.views_open(
+            trigger_id=body["trigger_id"],
+            view=modal,
+        )
 
-            logger.info(f"업체이관 편집 모달 열기 완료: {data.booking_key}")
-
-        except Exception as e:
-            logger.exception(f"업체이관 편집 중 에러 발생: {str(e)}")
-            client.chat_postEphemeral(
-                channel=channel_id,
-                user=user_id,
-                text=f"⚠️ 편집 처리 중 오류가 발생했습니다: {str(e)}",
-                thread_ts=thread_ts or None,
-            )
-            return
+        logger.info(f"업체이관 편집 모달 열기 완료: {data.booking_key}")

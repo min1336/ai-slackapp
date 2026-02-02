@@ -65,6 +65,7 @@ class SheetsConfig(BaseModel):
 
 class SlackChannelsConfig(BaseModel):
     transfer_reservation: str = ""
+    error: str = ""  # 에러 모니터링 채널
 
     class Config:
         # 필드명을 snake_case에서 YAML 키로 매핑
@@ -81,6 +82,11 @@ class AppConfig(BaseModel):
     spreadsheet: SpreadsheetConfig
     slack_channels: SlackChannelsConfig = SlackChannelsConfig()
     sync_interval_seconds: int = 300
+
+    @property
+    def error_channel_id(self) -> str:
+        """에러 모니터링 채널 ID."""
+        return self.slack_channels.error
 
 
 def _load_app_config() -> AppConfig:
