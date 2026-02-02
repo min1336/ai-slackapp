@@ -50,8 +50,22 @@ views/                     ← Slack Block Kit JSON 생성 (데이터 가공 금
 
 ## 설정 구조
 
-- `.env`: Slack 토큰, Google 자격 증명 (Pydantic Settings로 로드)
+- `.env`: Slack 토큰, Google 자격 증명, DB 연결 정보 (Pydantic Settings로 로드)
 - `config.yaml`: 승인자 목록, 스프레드시트 ID, 채널 ID
+
+## 데이터베이스
+
+Supabase (PostgreSQL)를 캐시 레이어로 사용. Google Sheets가 primary storage.
+
+```bash
+# 마이그레이션 적용 (Supabase MCP 플러그인 사용)
+# migrations/ 폴더의 SQL 파일을 Supabase apply_migration으로 실행
+
+# 또는 직접 실행
+psql -d <database_name> -f migrations/001_add_sync_status.sql
+```
+
+**Alembic 미사용**: Supabase 마이그레이션 시스템으로 충분. 별도 설정 불필요.
 
 ## 데이터 모델 선택
 

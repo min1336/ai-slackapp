@@ -38,7 +38,16 @@ SLACK_SIGNING_SECRET=xxx          # Signing Secret (선택)
 
 # Google Sheets 설정 (필수)
 GOOGLE_CREDENTIALS_FILE=credentials.json
+
+# PostgreSQL 설정 (선택 - Supabase 사용 시)
+DATABASE_HOST=db.xxx.supabase.co
+DATABASE_PASSWORD=xxx
+DATABASE_USER=postgres
+DATABASE_PORT=5432
+DATABASE_DBNAME=postgres
 ```
+
+> **Note**: DATABASE_HOST와 DATABASE_PASSWORD가 설정되면 PostgreSQL 캐시 레이어가 활성화됩니다. 미설정 시 Google Sheets만 사용합니다.
 
 ### 4. 앱 설정 (config.yaml)
 
