@@ -73,12 +73,12 @@ def build_transfer_parsing_result_message(
         {
             "type": "section",
             "fields": [
-                {"type": "mrkdwn", "text": "*이관전 예약번호*"},
+                {"type": "mrkdwn", "text": f"*{LabelText.TRANSFER_BOOKING_KEY}*"},
                 {
                     "type": "plain_text",
                     "text": booking_key or CommonText.NONE,
                 },
-                {"type": "mrkdwn", "text": "*업체명*"},
+                {"type": "mrkdwn", "text": f"*{LabelText.COMPANY_NAME}*"},
                 {
                     "type": "plain_text",
                     "text": company_name or CommonText.NONE,
@@ -93,7 +93,7 @@ def build_transfer_parsing_result_message(
                     "type": "plain_text",
                     "text": customer_name or CommonText.NONE,
                 },
-                {"type": "mrkdwn", "text": "*원금*"},
+                {"type": "mrkdwn", "text": f"*{LabelText.PRINCIPAL}*"},
                 {
                     "type": "plain_text",
                     "text": settlement_cost or CommonText.NONE,
@@ -103,7 +103,7 @@ def build_transfer_parsing_result_message(
         {
             "type": "section",
             "fields": [
-                {"type": "mrkdwn", "text": "*카모아 부담금*"},
+                {"type": "mrkdwn", "text": f"*{LabelText.CARMORE_BURDEN}*"},
                 {
                     "type": "plain_text",
                     "text": carmore_cost or CommonText.NONE,

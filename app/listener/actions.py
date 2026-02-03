@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Any
+
 from slack_bolt import App
 
 from app.config import config
@@ -26,6 +29,32 @@ from app.views.blocks import (
 logger = get_logger(__name__)
 
 
+# --- 헬퍼 함수 및 데이터 클래스 ---
+
+
+@dataclass
+class ActionContext:
+    user_id: str
+    channel_id: str
+    message_ts: str
+    thread_ts: str
+    trigger_id: str
+
+
+def _get_action_value(body: dict[str, Any]) -> str:
+    return body.get("actions", [{}])[0].get("value", "{}")
+
+
+def _get_action_context(body: dict[str, Any]) -> ActionContext:
+    return ActionContext(
+        user_id=body["user"]["id"],
+        channel_id=body.get("channel", {}).get("id", ""),
+        message_ts=body.get("message", {}).get("ts", ""),
+        thread_ts=body.get("message", {}).get("thread_ts", ""),
+        trigger_id=body.get("trigger_id", ""),
+    )
+
+
 def _check_approver_permission(user_id: str, action_name: str) -> None:
     if user_id not in config.approvers:
         raise ValidationError(
@@ -40,18 +69,13 @@ def register_action_handlers(app: App) -> None:
     def handle_open_registration_modal(ack, body, client):
         ack()
 
-        value = body.get("actions", [{}])[0].get("value", "{}")
-        parsed = SettlementData.model_validate_json(value)
-
-        user_id = body["user"]["id"]
-        user_name = get_user_name(client, user_id)
-
-        channel_id = body.get("channel", {}).get("id", "")
-        thread_ts = body.get("message", {}).get("thread_ts", "")
+        ctx = _get_action_context(body)
+        parsed = SettlementData.model_validate_json(_get_action_value(body))
+        user_name = get_user_name(client, ctx.user_id)
 
         metadata = ModalMetadata(
-            channel_id=channel_id,
-            thread_ts=thread_ts,
+            channel_id=ctx.channel_id,
+            thread_ts=ctx.thread_ts,
             user_name=user_name,
             booking_key=parsed.booking_key,
             company_name=parsed.company_name,
@@ -67,7 +91,7 @@ def register_action_handlers(app: App) -> None:
         )
 
         client.views_open(
-            trigger_id=body["trigger_id"],
+            trigger_id=ctx.trigger_id,
             view=modal,
         )
 
@@ -82,18 +106,13 @@ def register_action_handlers(app: App) -> None:
     def _handle_transfer_registration_modal(ack, body, client, description_type: str):
         ack()
 
-        value = body.get("actions", [{}])[0].get("value", "{}")
-        parsed = ParsedTransferReservation.model_validate_json(value)
-
-        user_id = body["user"]["id"]
-        user_name = get_user_name(client, user_id)
-
-        channel_id = body.get("channel", {}).get("id", "")
-        thread_ts = body.get("message", {}).get("thread_ts", "")
+        ctx = _get_action_context(body)
+        parsed = ParsedTransferReservation.model_validate_json(_get_action_value(body))
+        user_name = get_user_name(client, ctx.user_id)
 
         metadata = ModalMetadata(
-            channel_id=channel_id,
-            thread_ts=thread_ts,
+            channel_id=ctx.channel_id,
+            thread_ts=ctx.thread_ts,
             user_name=user_name,
             booking_key=parsed.booking_key,
             company_name="",  # 이관 건은 업체명이 비어있음
@@ -108,25 +127,21 @@ def register_action_handlers(app: App) -> None:
         )
 
         client.views_open(
-            trigger_id=body["trigger_id"],
+            trigger_id=ctx.trigger_id,
             view=modal,
         )
 
     def _handle_settlement_decision(body, client, status: SettlementStatus) -> None:
-        user_id = body["user"]["id"]
-        channel_id = body.get("channel", {}).get("id", "")
-        message_ts = body.get("message", {}).get("ts", "")
-        thread_ts = body.get("message", {}).get("thread_ts", "")
+        ctx = _get_action_context(body)
 
         # Permission check - raises ValidationError if not authorized
-        _check_approver_permission(user_id, status.value)
+        _check_approver_permission(ctx.user_id, status.value)
 
-        approver_name = get_user_name(client, user_id)
-        thread_url = get_thread_url(client, channel_id, thread_ts)
+        approver_name = get_user_name(client, ctx.user_id)
+        thread_url = get_thread_url(client, ctx.channel_id, ctx.thread_ts)
 
         # 버튼 value에서 데이터 추출
-        value = body.get("actions", [{}])[0].get("value", "{}")
-        data = SettlementData.model_validate_json(value)
+        data = SettlementData.model_validate_json(_get_action_value(body))
 
         # 스프레드시트에 저장 - raises SpreadsheetError on failure
         save_settlement(
@@ -146,8 +161,8 @@ def register_action_handlers(app: App) -> None:
             text = "정산 이슈 반려됨"
 
         client.chat_update(
-            channel=channel_id,
-            ts=message_ts,
+            channel=ctx.channel_id,
+            ts=ctx.message_ts,
             text=text,
             blocks=new_blocks,
         )
@@ -163,7 +178,7 @@ def register_action_handlers(app: App) -> None:
                 f"• 스레드: {thread_url}\n"
                 f"• 스프레드시트: {get_spreadsheet_url()}"
             )
-            send_dm(client, user_id, dm_text)
+            send_dm(client, ctx.user_id, dm_text)
 
     @app.action(ActionId.SETTLEMENT_APPROVE)
     def handle_settlement_approve(ack, body, client):
@@ -194,22 +209,18 @@ def register_action_handlers(app: App) -> None:
     def handle_settlement_edit(ack, body, client):
         ack()
 
-        user_id = body["user"]["id"]
-        channel_id = body.get("channel", {}).get("id", "")
-        message_ts = body.get("message", {}).get("ts", "")
-        thread_ts = body.get("message", {}).get("thread_ts", "")
+        ctx = _get_action_context(body)
 
         # Permission check - raises ValidationError if not authorized
-        _check_approver_permission(user_id, "편집")
+        _check_approver_permission(ctx.user_id, "편집")
 
         # 버튼 value에서 기존 데이터 추출
-        value = body.get("actions", [{}])[0].get("value", "{}")
-        data = SettlementData.model_validate_json(value)
+        data = SettlementData.model_validate_json(_get_action_value(body))
 
         metadata = ModalMetadata(
-            channel_id=channel_id,
-            thread_ts=thread_ts,
-            message_ts=message_ts,
+            channel_id=ctx.channel_id,
+            thread_ts=ctx.thread_ts,
+            message_ts=ctx.message_ts,
             user_name=data.user_name,
             booking_key=data.booking_key,
             company_name=data.company_name,
@@ -234,24 +245,20 @@ def register_action_handlers(app: App) -> None:
         )
 
         client.views_open(
-            trigger_id=body["trigger_id"],
+            trigger_id=ctx.trigger_id,
             view=modal,
         )
 
     def _handle_transfer_decision(body, client, status: SettlementStatus) -> None:
-        user_id = body["user"]["id"]
-        channel_id = body.get("channel", {}).get("id", "")
-        message_ts = body.get("message", {}).get("ts", "")
-        thread_ts = body.get("message", {}).get("thread_ts", "")
+        ctx = _get_action_context(body)
 
         # Permission check - raises ValidationError if not authorized
-        _check_approver_permission(user_id, status.value)
+        _check_approver_permission(ctx.user_id, status.value)
 
-        approver_name = get_user_name(client, user_id)
-        thread_url = get_thread_url(client, channel_id, thread_ts)
+        approver_name = get_user_name(client, ctx.user_id)
+        thread_url = get_thread_url(client, ctx.channel_id, ctx.thread_ts)
 
-        value = body.get("actions", [{}])[0].get("value", "{}")
-        data = SettlementData.model_validate_json(value)
+        data = SettlementData.model_validate_json(_get_action_value(body))
 
         logger.info(f"업체이관 {status.value} 시작: {data.booking_key}")
         logger.debug(f"데이터: {data.model_dump_json(indent=2)}")
@@ -273,8 +280,8 @@ def register_action_handlers(app: App) -> None:
             text = "정산 이슈 반려됨"
 
         client.chat_update(
-            channel=channel_id,
-            ts=message_ts,
+            channel=ctx.channel_id,
+            ts=ctx.message_ts,
             text=text,
             blocks=new_blocks,
         )
@@ -290,21 +297,17 @@ def register_action_handlers(app: App) -> None:
                 f"• 스레드: {thread_url}\n"
                 f"• 스프레드시트: {get_spreadsheet_url()}"
             )
-            send_dm(client, user_id, dm_text)
+            send_dm(client, ctx.user_id, dm_text)
 
         logger.info(f"업체이관 {status.value} 완료: {data.booking_key}")
 
     def _handle_transfer_edit_logic(body, client):
-        user_id = body["user"]["id"]
-        channel_id = body.get("channel", {}).get("id", "")
-        message_ts = body.get("message", {}).get("ts", "")
-        thread_ts = body.get("message", {}).get("thread_ts", "")
+        ctx = _get_action_context(body)
 
         # Permission check - raises ValidationError if not authorized
-        _check_approver_permission(user_id, "편집")
+        _check_approver_permission(ctx.user_id, "편집")
 
-        value = body.get("actions", [{}])[0].get("value", "{}")
-        data = SettlementData.model_validate_json(value)
+        data = SettlementData.model_validate_json(_get_action_value(body))
 
         logger.info(f"업체이관 편집 시작: {data.booking_key}")
         logger.debug(f"데이터: {data.model_dump_json(indent=2)}")
@@ -323,9 +326,9 @@ def register_action_handlers(app: App) -> None:
         )
 
         metadata = ModalMetadata(
-            channel_id=channel_id,
-            thread_ts=thread_ts,
-            message_ts=message_ts,
+            channel_id=ctx.channel_id,
+            thread_ts=ctx.thread_ts,
+            message_ts=ctx.message_ts,
             user_name=data.user_name,
             booking_key=data.booking_key,
             company_name=data.company_name,
@@ -350,7 +353,7 @@ def register_action_handlers(app: App) -> None:
         )
 
         client.views_open(
-            trigger_id=body["trigger_id"],
+            trigger_id=ctx.trigger_id,
             view=modal,
         )
 

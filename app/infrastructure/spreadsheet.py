@@ -5,18 +5,22 @@ from threading import Lock
 
 import gspread
 from google.oauth2.service_account import Credentials
+from gspread import Worksheet
 
 from app.config import config, spreadsheet
 from app.core import get_logger
 from app.exceptions import SpreadsheetError
-from app.models import SettlementRow
+from app.models import SettlementColumnIndex, SettlementRow
 
 logger = get_logger(__name__)
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
 ]
-APPROVAL_LOG_SYNC_KEY_COLUMN = 18
+# 1-based column number for spreadsheet API
+APPROVAL_LOG_SYNC_KEY_COLUMN = SettlementColumnIndex.SYNC_KEY + 1
+# 1-based column number for created_at
+CREATED_AT_COLUMN = SettlementColumnIndex.CREATED_AT + 1
 
 _spreadsheet_client: gspread.Spreadsheet | None = None
 _client_lock = Lock()
@@ -25,7 +29,7 @@ _CLIENT_REFRESH_MINUTES = 55
 
 
 def get_spreadsheet_client() -> gspread.Spreadsheet:
-    """싱글톤 스프레드시트 클라이언트 (자동 갱신)."""
+    # 싱글톤, 55분마다 자동 갱신
     global _spreadsheet_client, _client_created_at
 
     with _client_lock:
@@ -59,7 +63,8 @@ def save_settlement_row(row: SettlementRow, sheet_name: str | None = None) -> No
         if existing_row_number:
             spreadsheet_client = get_spreadsheet_client()
             worksheet = spreadsheet_client.worksheet(sheet_name)
-            existing_created_at = worksheet.cell(existing_row_number, 15).value
+            created_at_cell = worksheet.cell(existing_row_number, CREATED_AT_COLUMN)
+            existing_created_at = created_at_cell.value
             update_settlement_row(
                 row, existing_row_number, sheet_name, existing_created_at or ""
             )
@@ -83,7 +88,6 @@ def save_settlement_row(row: SettlementRow, sheet_name: str | None = None) -> No
 
 
 def append_approval_log_row(row: SettlementRow, sync_key: str) -> None:
-    """승인로그 시트에 행 추가."""
     sheet_name = config.spreadsheet.sheets.approval_log
 
     try:
@@ -150,7 +154,7 @@ def update_settlement_row(
         worksheet = spreadsheet_client.worksheet(sheet_name)
 
         row_data = row.to_row()
-        row_data[14] = existing_created_at
+        row_data[SettlementColumnIndex.CREATED_AT] = existing_created_at
 
         cell_list = worksheet.range(row_number, 1, row_number, len(row_data))
         for i, cell in enumerate(cell_list):
@@ -203,7 +207,7 @@ def update_approval_log_row(row: SettlementRow, row_number: int, sync_key: str) 
         ) from e
 
 
-def find_row_by_sync_key(worksheet, sync_key: str) -> int | None:
+def find_row_by_sync_key(worksheet: Worksheet, sync_key: str) -> int | None:
     try:
         matches = worksheet.findall(sync_key)
     except Exception as e:
@@ -231,7 +235,9 @@ def find_row_by_sync_key(worksheet, sync_key: str) -> int | None:
     return None
 
 
-def find_row_by_legacy_fingerprint(worksheet, row: SettlementRow) -> int | None:
+def find_row_by_legacy_fingerprint(
+    worksheet: Worksheet, row: SettlementRow
+) -> int | None:
     try:
         matches = worksheet.findall(row.booking_key)
     except Exception as e:
@@ -262,12 +268,13 @@ def _to_approval_log_row(row: SettlementRow, sync_key: str) -> list[str]:
 
 
 def _is_same_approval_log(values: list[str], row: SettlementRow) -> bool:
+    # 레거시 중복 방지용 핑거프린트 비교
     return (
-        _get_cell(values, 4) == row.booking_key
-        and _get_cell(values, 12) == row.status
-        and _get_cell(values, 13) == row.approver_name
-        and _get_cell(values, 14) == row.created_at
-        and _get_cell(values, 16) == row.thread_url
+        _get_cell(values, SettlementColumnIndex.BOOKING_KEY) == row.booking_key
+        and _get_cell(values, SettlementColumnIndex.STATUS) == row.status
+        and _get_cell(values, SettlementColumnIndex.APPROVER_NAME) == row.approver_name
+        and _get_cell(values, SettlementColumnIndex.CREATED_AT) == row.created_at
+        and _get_cell(values, SettlementColumnIndex.THREAD_URL) == row.thread_url
     )
 
 

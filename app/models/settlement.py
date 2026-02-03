@@ -2,9 +2,33 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import Enum, IntEnum
 
 from pydantic import BaseModel
+
+
+class SettlementColumnIndex(IntEnum):
+    """SettlementRow.to_row()의 컬럼 인덱스 (0-based)."""
+
+    SETTLEMENT_DAY = 0
+    USER_NAME = 1
+    ISSUE_TYPE = 2
+    CUSTOMER_NAME = 3
+    BOOKING_KEY = 4
+    COMPANY_NAME = 5
+    COMPANY_SUB_NAME = 6
+    SETTLEMENT_COST = 7
+    CARMORE_COST = 8
+    USER_REFUND_COST = 9
+    SALES_CHANNEL = 10
+    DESCRIPTION = 11
+    STATUS = 12
+    APPROVER_NAME = 13
+    CREATED_AT = 14
+    UPDATED_AT = 15
+    THREAD_URL = 16
+    # 승인로그 시트 전용 (to_row() + sync_key)
+    SYNC_KEY = 17
 
 
 class SettlementStatus(str, Enum):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from slack_bolt import App
 from slack_sdk import WebClient
@@ -12,8 +13,9 @@ from app.exceptions import AppError, SlackError, SpreadsheetError, ValidationErr
 logger = get_logger(__name__)
 
 
-def extract_context_from_body(body: dict) -> tuple[str | None, str | None, str | None]:
-    """body에서 channel_id, user_id, thread_ts 추출."""
+def extract_context_from_body(
+    body: dict[str, Any],
+) -> tuple[str | None, str | None, str | None]:
     channel_id = None
     user_id = None
     thread_ts = None
@@ -41,7 +43,6 @@ def extract_context_from_body(body: dict) -> tuple[str | None, str | None, str |
 
 
 def is_user_error(error: Exception) -> bool:
-    """사용자 실수(400대)인지 시스템 에러(500대)인지 구분."""
     return isinstance(error, ValidationError)
 
 
@@ -61,7 +62,7 @@ def get_error_emoji_and_type(error: Exception) -> tuple[str, str]:
 def send_monitoring_alert(
     client: WebClient,
     error: Exception,
-    body: dict,
+    body: dict[str, Any],
     channel_id: str | None,
     user_id: str | None,
 ) -> None:
@@ -135,7 +136,7 @@ def register_error_handler(app: App) -> None:
     @app.error
     def handle_error(
         error: Exception,
-        body: dict,
+        body: dict[str, Any],
         client: WebClient,
         logger: logging.Logger,
     ) -> None:

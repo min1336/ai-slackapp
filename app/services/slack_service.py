@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from slack_sdk import WebClient
 
 from app.infrastructure.slack_client import (
@@ -38,20 +40,23 @@ def get_parent_message(
     return _get_thread_parent_message(client, channel_id, thread_ts)
 
 
-def extract_text_value(values: dict, block_id: str, action_id: str) -> str:
+def extract_text_value(values: dict[str, Any], block_id: str, action_id: str) -> str:
     return _extract_text_value(values, block_id, action_id)
 
 
-def extract_date_value(values: dict, block_id: str, action_id: str) -> str:
+def extract_date_value(values: dict[str, Any], block_id: str, action_id: str) -> str:
     return _extract_date_value(values, block_id, action_id)
 
 
-def extract_select_value(values: dict, block_id: str, action_id: str) -> str:
+def extract_select_value(values: dict[str, Any], block_id: str, action_id: str) -> str:
     return _extract_select_text(values, block_id, action_id)
 
 
 def send_dm(
-    client: WebClient, user_id: str, text: str, blocks: list | None = None
+    client: WebClient,
+    user_id: str,
+    text: str,
+    blocks: list[dict[str, Any]] | None = None,
 ) -> None:
     _send_dm(client, user_id, text, blocks)
 

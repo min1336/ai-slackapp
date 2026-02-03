@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Generator
+from collections.abc import Generator
 from contextlib import contextmanager
 from functools import wraps
-from typing import ParamSpec, TypeVar
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import database
 from app.core import get_logger
-
-P = ParamSpec("P")
-T = TypeVar("T")
 
 logger = get_logger(__name__)
 
@@ -93,24 +93,8 @@ def get_session() -> Generator[SessionWithAfterCommit, None, None]:
         session.close()
 
 
-def transactional(fn: Callable[P, T]) -> Callable[P, T]:
-    """Spring @Transactional과 유사한 트랜잭션 데코레이터.
-
-    사용법:
-        @transactional
-        def save_data(session: Session, data: Data) -> Result:
-            repo = Repository(session)
-            return repo.save(data)
-
-        # 호출 시 session 인자 생략
-        result = save_data(data)
-
-    동작:
-        - 함수의 첫 번째 파라미터(session)에 자동으로 Session 주입
-        - 성공 시 자동 commit
-        - 예외 시 자동 rollback
-        - after_commit 훅 지원
-    """
+def transactional[**P, T](fn: Callable[P, T]) -> Callable[P, T]:
+    """첫 번째 파라미터(session)를 자동 주입. 호출 시 session 생략."""
 
     @wraps(fn)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:

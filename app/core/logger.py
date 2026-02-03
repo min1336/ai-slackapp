@@ -11,7 +11,6 @@ def get_log_level() -> int:
 
 
 def setup_logging(env: str | None = None) -> None:
-    """Configure root logger with environment-based log level."""
     if env:
         os.environ["ENVIRONMENT"] = env
 
@@ -26,5 +25,4 @@ def setup_logging(env: str | None = None) -> None:
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Get a logger instance."""
     return logging.getLogger(name)

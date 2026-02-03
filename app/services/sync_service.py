@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from datetime import datetime
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from app.constants import DateFormat
 from app.core import get_logger
 from app.infrastructure.database import (
     ApprovalLogRepository,
@@ -78,7 +80,7 @@ def sync_pending_records() -> tuple[int, int]:
 
     for settlement in settlements:
         try:
-            row = _settlement_to_row(settlement)
+            row = _entity_to_row(settlement, include_updated_at=True)
             sheets_save_settlement(row)  # 실패 시 예외 발생
             with get_session() as session:
                 SettlementRepository(session).mark_synced(settlement.id)
@@ -92,7 +94,7 @@ def sync_pending_records() -> tuple[int, int]:
 
     for log in logs:
         try:
-            row = _approval_log_to_row(log)
+            row = _entity_to_row(log, include_updated_at=False)
             sheets_append_log(row, str(log.id))  # 실패 시 예외 발생
             with get_session() as session:
                 ApprovalLogRepository(session).mark_synced(log.id)
@@ -110,63 +112,63 @@ def sync_pending_records() -> tuple[int, int]:
     return synced_settlements, synced_logs
 
 
-def _settlement_to_row(settlement) -> SettlementRow:
-    """Settlement 엔티티를 SettlementRow로 변환."""
+@runtime_checkable
+class RowConvertible(Protocol):
+    """SettlementRow로 변환 가능한 엔티티 프로토콜."""
+
+    settlement_day: str
+    user_name: str
+    customer_name: str
+    booking_key: str
+    company_name: str
+    company_sub_name: str
+    settlement_cost: int | None
+    carmore_cost: int | None
+    user_refund_cost: int | None
+    issue_type: str
+    sales_channel: str
+    description: str
+    status: str
+    approver_name: str
+    thread_url: str
+    created_at: datetime
+
+
+def _entity_to_row(
+    entity: RowConvertible, *, include_updated_at: bool = True
+) -> SettlementRow:
     from app.models import SettlementRow
 
-    return SettlementRow(
-        settlement_day=settlement.settlement_day,
-        user_name=settlement.user_name,
-        customer_name=settlement.customer_name,
-        booking_key=settlement.booking_key,
-        company_name=settlement.company_name,
-        company_sub_name=settlement.company_sub_name,
-        settlement_cost=_format_cost(settlement.settlement_cost),
-        carmore_cost=_format_cost(settlement.carmore_cost),
-        user_refund_cost=_format_cost(settlement.user_refund_cost),
-        issue_type=settlement.issue_type,
-        sales_channel=settlement.sales_channel,
-        description=settlement.description,
-        status=settlement.status,
-        approver_name=settlement.approver_name,
-        thread_url=settlement.thread_url,
-        created_at=settlement.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-        updated_at=settlement.updated_at.strftime("%Y-%m-%d %H:%M:%S"),
-    )
-
-
-def _approval_log_to_row(log) -> SettlementRow:
-    """ApprovalLog 엔티티를 SettlementRow로 변환."""
-    from app.models import SettlementRow
+    updated_at = ""
+    if include_updated_at and hasattr(entity, "updated_at"):
+        updated_at = entity.updated_at.strftime(DateFormat.DATETIME)
 
     return SettlementRow(
-        settlement_day=log.settlement_day,
-        user_name=log.user_name,
-        customer_name=log.customer_name,
-        booking_key=log.booking_key,
-        company_name=log.company_name,
-        company_sub_name=log.company_sub_name,
-        settlement_cost=_format_cost(log.settlement_cost),
-        carmore_cost=_format_cost(log.carmore_cost),
-        user_refund_cost=_format_cost(log.user_refund_cost),
-        issue_type=log.issue_type,
-        sales_channel=log.sales_channel,
-        description=log.description,
-        status=log.status,
-        approver_name=log.approver_name,
-        thread_url=log.thread_url,
-        created_at=log.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        settlement_day=entity.settlement_day,
+        user_name=entity.user_name,
+        customer_name=entity.customer_name,
+        booking_key=entity.booking_key,
+        company_name=entity.company_name,
+        company_sub_name=entity.company_sub_name,
+        settlement_cost=_format_cost(entity.settlement_cost),
+        carmore_cost=_format_cost(entity.carmore_cost),
+        user_refund_cost=_format_cost(entity.user_refund_cost),
+        issue_type=entity.issue_type,
+        sales_channel=entity.sales_channel,
+        description=entity.description,
+        status=entity.status,
+        approver_name=entity.approver_name,
+        thread_url=entity.thread_url,
+        created_at=entity.created_at.strftime(DateFormat.DATETIME),
+        updated_at=updated_at,
     )
 
 
 def _format_cost(value: int | None) -> str:
-    """정수 금액을 문자열로 변환. None이면 빈 문자열."""
     if value is None:
         return ""
     return str(value)
 
 
 class SyncError(Exception):
-    """동기화 실패 예외"""
-
     pass

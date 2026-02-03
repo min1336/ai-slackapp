@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 
 
 def _parse_cost(value: str) -> int | None:
-    """문자열 금액을 정수로 변환. 빈 문자열이면 None 반환."""
     if not value or not value.strip():
         return None
     # 콤마, 원, 공백 제거
@@ -44,7 +43,6 @@ class SettlementRepository:
         self.session = session
 
     def save(self, row: SettlementRow) -> Settlement:
-        """정산 저장 (upsert by booking_key)."""
         stmt = insert(Settlement).values(
             booking_key=row.booking_key,
             settlement_day=row.settlement_day,
@@ -91,7 +89,6 @@ class SettlementRepository:
     def add_log(
         self, row: SettlementRow, settlement_id: int | None = None
     ) -> ApprovalLog:
-        """승인 로그 추가."""
         log = ApprovalLog(
             settlement_id=settlement_id,
             booking_key=row.booking_key,
@@ -115,11 +112,9 @@ class SettlementRepository:
         return log
 
     def get(self, settlement_id: int) -> Settlement | None:
-        """ID로 정산 조회."""
         return self.session.get(Settlement, settlement_id)
 
     def get_by_booking_key(self, booking_key: str) -> Settlement | None:
-        """예약번호로 정산 조회."""
         stmt = select(Settlement).where(Settlement.booking_key == booking_key)
         result = self.session.execute(stmt)
         return result.scalar_one_or_none()
@@ -150,7 +145,6 @@ class SettlementRepository:
         return records
 
     def mark_synced(self, settlement_id: int) -> None:
-        """동기화 완료 표시."""
         settlement = self.get(settlement_id)
         if settlement:
             settlement.sync_status = "completed"
@@ -182,13 +176,10 @@ class SettlementRepository:
 
 
 class ApprovalLogRepository:
-    """승인 로그 저장소"""
-
     def __init__(self, session: Session):
         self.session = session
 
     def get(self, log_id: int) -> ApprovalLog | None:
-        """ID로 로그 조회."""
         return self.session.get(ApprovalLog, log_id)
 
     def list_unsynced(self, limit: int = 100) -> list[ApprovalLog]:
@@ -217,7 +208,6 @@ class ApprovalLogRepository:
         return records
 
     def mark_synced(self, log_id: int) -> None:
-        """동기화 완료 표시."""
         log = self.get(log_id)
         if log:
             log.sync_status = "completed"
@@ -226,7 +216,7 @@ class ApprovalLogRepository:
             log.sheets_sync_error = None
 
     def mark_sync_failed(self, log_id: int, error: str) -> None:
-        """동기화 실패 표시. pending으로 되돌려 재시도 가능."""
+        # pending으로 되돌려 재시도 가능
         log = self.get(log_id)
         if log:
             log.sync_status = "pending"
