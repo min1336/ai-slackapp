@@ -21,10 +21,8 @@ from app.services.slack_service import (
     extract_date_value,
     extract_select_value,
     extract_text_value,
-    get_spreadsheet_url,
     get_thread_url,
     get_user_name,
-    send_dm,
 )
 from app.views.blocks import (
     build_approved_message,
@@ -66,24 +64,6 @@ def _build_decision_message(
             original_blocks, approver_name
         )
     return "정산 이슈 반려됨", build_rejected_message(original_blocks, approver_name)
-
-
-def _build_approval_dm_text(
-    *,
-    prefix: str,
-    data: SettlementData,
-    approver_name: str,
-    thread_url: str,
-) -> str:
-    return (
-        f"✅ {prefix} 승인되었습니다.\n"
-        f"• 예약번호: {data.booking_key}\n"
-        f"• 업체명: {data.company_name}\n"
-        f"• 고객명: {data.customer_name}\n"
-        f"• 승인자: {approver_name}\n"
-        f"• 스레드: {thread_url}\n"
-        f"• 스프레드시트: {get_spreadsheet_url()}"
-    )
 
 
 def _notify_processing_error(
@@ -201,13 +181,13 @@ def _handle_settlement_approve(
             blocks=new_blocks,
         )
 
-        dm_text = _build_approval_dm_text(
-            prefix="정산 이슈가",
-            data=data,
-            approver_name=approver_name,
-            thread_url=thread_url,
-        )
-        send_dm(client, context.user_id, dm_text)
+        # 원본 스레드에 요청자 멘션 메시지
+        if data.requester_id:
+            client.chat_postMessage(
+                channel=context.channel_id,
+                thread_ts=context.thread_ts or None,
+                text=f"<@{data.requester_id}> 정산 이슈가 승인되었습니다.",
+            )
     except (SlackApiError, ValidationError, KeyError):
         logger.exception("정산 이슈 승인 중 에러 발생")
         _notify_processing_error(
@@ -295,13 +275,13 @@ def _handle_transfer_approve(
             blocks=new_blocks,
         )
 
-        dm_text = _build_approval_dm_text(
-            prefix="업체이관 정산이",
-            data=data,
-            approver_name=approver_name,
-            thread_url=thread_url,
-        )
-        send_dm(client, context.user_id, dm_text)
+        # 원본 스레드에 요청자 멘션 메시지
+        if data.requester_id:
+            client.chat_postMessage(
+                channel=context.channel_id,
+                thread_ts=context.thread_ts or None,
+                text=f"<@{data.requester_id}> 업체이관이 승인되었습니다.",
+            )
 
         logger.info("업체이관 승인 완료: %s", data.booking_key)
     except (SlackApiError, ValidationError, KeyError):
