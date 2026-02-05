@@ -45,19 +45,30 @@ class TestSaveSettlement:
             assert found is not None
             assert found.user_name == sample_settlement_data.user_name
 
-    def test_반려시_저장하지_않는다(self, monkeypatch, fake_db, sample_settlement_data):
-        # Given - DATABASE_URL 미설정이어도 반려는 저장 안하므로 성공
-        monkeypatch.setattr("app.config.database.host", "")
+    def test_반려시_DB에_저장한다(self, monkeypatch, fake_db, sample_settlement_data):
+        # Given
+        monkeypatch.setattr("app.config.database.host", "test-host")
+        monkeypatch.setattr("app.config.database.password", "test-password")
+        monkeypatch.setattr(
+            "app.services.settlement_service.get_session",
+            fake_db.get_session,
+        )
 
-        # When - no exception means success
+        # When
         save_settlement(
             data=sample_settlement_data,
             status=SettlementStatus.REJECTED,
             approver_name="반려자",
             thread_url="http://example.com/thread",
+            rejection_reason="테스트 반려 사유",
         )
 
-        # Then - 반려 시에는 저장하지 않으므로 예외 없이 완료
+        # Then - 반려도 DB에 저장됨
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            found = repo.get_by_booking_key(sample_settlement_data.booking_key)
+            assert found is not None
+            assert found.status == SettlementStatus.REJECTED.value
 
     def test_DATABASE_URL_미설정시_ValueError_발생(
         self, monkeypatch, sample_settlement_data

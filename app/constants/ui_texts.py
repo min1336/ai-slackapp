@@ -19,6 +19,7 @@ class LabelText:
     SELLER_CHANNEL = "판매채널"
     DESCRIPTION = "내용"
     NOTE = "비고"
+    REJECTION_REASON = "반려 사유"
 
 
 class CommonText:
@@ -46,3 +47,4 @@ class HeaderText:
     SETTLEMENT_ISSUE_NEW = "정산 이슈 등록"
     APPROVED = "승인 완료되었습니다 ✅"
     REJECTED = "반려되었습니다 ❌"
+    REJECTION_MODAL = "반려 사유 입력"

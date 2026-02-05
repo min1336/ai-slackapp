@@ -6,11 +6,13 @@ class ActionId:
     OPEN_TRANSFER_MODAL = "open_transfer_modal"  # 통합된 Transfer 모달 열기
     SETTLEMENT_APPROVE = "settlement_approve"
     SETTLEMENT_REJECT = "settlement_reject"
-    SETTLEMENT_EDIT = "settlement_edit"
     TRANSFER_APPROVE = "transfer_approve"
     TRANSFER_REJECT = "transfer_reject"
-    TRANSFER_EDIT = "transfer_edit"
     REGISTRATION_SUBMIT = "registration_submit"
+
+    # 반려 모달
+    REJECTION_REASON_INPUT = "rejection_reason_input"
+    REJECTION_SUBMIT = "rejection_submit"
 
     USER_NAME_INPUT = "user_name_input"
     BOOKING_KEY_INPUT = "booking_key_input"
@@ -53,6 +55,9 @@ class BlockId:
 
     # 비고 필드
     NOTE_BLOCK = "note_block"
+
+    # 반려 모달
+    REJECTION_REASON_BLOCK = "rejection_reason_block"
 
 
 class CallbackId:

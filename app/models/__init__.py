@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.models.settlement import (
     ModalMetadata,
+    RejectionMetadata,
     SettlementColumnIndex,
     SettlementData,
     SettlementRow,
@@ -10,6 +11,7 @@ from app.models.settlement import (
 
 __all__ = [
     "ModalMetadata",
+    "RejectionMetadata",
     "SettlementColumnIndex",
     "SettlementData",
     "SettlementRow",

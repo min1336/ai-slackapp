@@ -24,6 +24,9 @@ pytest tests/integration -v        # 통합 테스트 (실제 구글시트에 �
 uv run ruff check --fix            # 자동 수정
 uv run ruff format                 # 포매팅
 
+# 커밋 전 검증 (린트 + 테스트)
+uv run ruff check && uv run pytest tests/unit -q
+
 # Pre-commit 설정
 uv run pre-commit install
 ```
@@ -34,6 +37,7 @@ uv run pre-commit install
 
 ```
 listener/ (Controller)     ← Slack 이벤트 수신, services/views 호출
+    ├── payload.py         ← Slack body 파싱 헬퍼 (TypedDict, MessageContext)
     ↓
 services/                  ← 비즈니스 로직, infrastructure 호출
     ↓
@@ -76,10 +80,27 @@ psql -d <database_name> -f migrations/001_add_sync_status.sql
 
 예: `SettlementData`(Pydantic)는 버튼 value로 전달, `SettlementRow`(dataclass)는 시트 행 변환용.
 
+**새 필드 추가 시 체크리스트:**
+1. `models/settlement.py` - Pydantic/dataclass 필드
+2. `models/__init__.py` - 새 모델 export 추가 (누락 시 런타임 ImportError)
+3. `infrastructure/database/repository.py` - INSERT/UPDATE 쿼리
+4. `migrations/` - DB 마이그레이션 SQL
+5. `infrastructure/database/models.py` - SQLAlchemy 컬럼 (DB 저장 필요시)
+
 ## 핵심 흐름
 
 1. **정산 이슈**: 스레드에서 `!정산` 명령 → 원본 메시지 파싱 → 모달 → 승인 요청 → 시트 저장
 2. **이관 예약**: 특정 채널에 메시지 작성 시 자동 감지 → 파싱 → 모달 → 승인/반려
+
+## 에러 핸들링 패턴
+
+`listener/` 핸들러에서 Slack API 호출 시 표준 예외 처리:
+```python
+try:
+    # 핸들러 로직
+except (SlackApiError, ValidationError, KeyError):
+    logger.exception("처리 중 에러 발생")
+```
 
 ## 코드 스타일
 

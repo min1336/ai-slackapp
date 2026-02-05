@@ -7,6 +7,7 @@ from app.views.blocks import (
     build_approved_message,
     build_registration_modal,
     build_rejected_message,
+    build_rejection_modal,
 )
 
 
@@ -29,9 +30,9 @@ class TestApprovalRequestMessage:
         )
 
         actions = blocks[-1]["elements"]
+        assert len(actions) == 2  # 승인/반려 버튼만 존재
         assert actions[0]["action_id"] == ActionId.TRANSFER_APPROVE
         assert actions[1]["action_id"] == ActionId.TRANSFER_REJECT
-        assert actions[2]["action_id"] == ActionId.TRANSFER_EDIT
 
     def test_빈_필드는_none_text로_표시한다(self):
         blocks = build_approval_request_message(
@@ -210,3 +211,46 @@ class TestApprovalRequestMessageWithNote:
         )
         assert f"*{LabelText.NOTE}*" in text_section["text"]["text"]
         assert "테스트 비고 내용" in text_section["text"]["text"]
+
+
+class TestRejectionModal:
+    def test_반려_모달은_사유_입력_필드를_포함한다(self):
+        modal = build_rejection_modal(metadata="{}")
+
+        assert modal["type"] == "modal"
+        assert modal["callback_id"] == ActionId.REJECTION_SUBMIT
+        assert modal["title"]["text"] == HeaderText.REJECTION_MODAL
+
+        # 반려 사유 입력 블록 확인
+        reason_block = modal["blocks"][0]
+        assert reason_block["block_id"] == BlockId.REJECTION_REASON_BLOCK
+        assert reason_block["element"]["action_id"] == ActionId.REJECTION_REASON_INPUT
+        assert reason_block["element"]["multiline"] is True
+
+
+class TestRejectedMessageWithReason:
+    def test_반려_메시지에_사유가_표시된다(self):
+        original_blocks = [
+            {"type": "header", "text": {"type": "plain_text", "text": "원본"}},
+            {"type": "actions", "elements": []},
+        ]
+        result = build_rejected_message(
+            original_blocks=original_blocks,
+            rejecter_name="김반려",
+            rejection_reason="테스트 반려 사유입니다",
+        )
+
+        # 헤더 변경 확인
+        assert result[0]["text"]["text"] == HeaderText.REJECTED
+
+        # 반려 사유 섹션 확인
+        reason_section = next(
+            (block for block in result if block.get("type") == "section"),
+            None,
+        )
+        assert reason_section is not None
+        assert f"*{LabelText.REJECTION_REASON}*" in reason_section["text"]["text"]
+        assert "테스트 반려 사유입니다" in reason_section["text"]["text"]
+
+        # 반려자 context 확인
+        assert result[-1]["elements"][0]["text"] == "반려자: *김반려*"

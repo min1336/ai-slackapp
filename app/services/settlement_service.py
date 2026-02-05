@@ -36,10 +36,8 @@ def save_settlement(
     status: SettlementStatus,
     approver_name: str,
     thread_url: str,
+    rejection_reason: str = "",
 ) -> None:
-    if status == SettlementStatus.REJECTED:
-        return
-
     if not database.is_configured:
         raise ValueError("DATABASE_URL is not configured")
 
@@ -50,10 +48,16 @@ def save_settlement(
         thread_url=thread_url,
     )
 
+    if rejection_reason:
+        logger.info(f"반려 사유: {rejection_reason}")
+
     with get_session() as session:
         repo = SettlementRepository(session)
         settlement = repo.save(row)
         log = repo.add_log(row, settlement_id=settlement.id)
         settlement_id = settlement.id
         log_id = log.id
-        session.after_commit(lambda: _sync_after_commit(settlement_id, log_id, row))
+
+        # 승인만 Sheets 동기화 (반려는 DB 저장만)
+        if status == SettlementStatus.APPROVED:
+            session.after_commit(lambda: _sync_after_commit(settlement_id, log_id, row))

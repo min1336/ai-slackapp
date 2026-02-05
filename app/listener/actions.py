@@ -9,7 +9,12 @@ from app.constants import ActionId, BlockId, IssueType
 from app.constants.options import Description
 from app.core import get_logger
 from app.listener.payload import Blocks, MessageContext, action_value, message_context
-from app.models import ModalMetadata, SettlementData, SettlementStatus
+from app.models import (
+    ModalMetadata,
+    RejectionMetadata,
+    SettlementData,
+    SettlementStatus,
+)
 from app.services.message_parser import ParsedTransferReservation
 from app.services.settlement_service import save_settlement
 from app.services.slack_service import (
@@ -25,6 +30,7 @@ from app.views.blocks import (
     build_approved_message,
     build_registration_modal,
     build_rejected_message,
+    build_rejection_modal,
 )
 
 logger = get_logger(__name__)
@@ -154,135 +160,19 @@ def _open_transfer_modal(body: dict, client) -> None:
     )
 
 
-def _handle_settlement_decision(
-    *,
-    body: dict,
-    client,
-    status: SettlementStatus,
-    approvers: Approvers,
-) -> None:
-    context = message_context(body)
-    if not _has_permission(
-        client=client,
-        approvers=approvers,
-        context=context,
-        denied_text=f"⚠️ {status.value} 권한이 없습니다.",
-    ):
-        return
-
-    approver_name = get_user_name(client, context.user_id)
-    thread_url = get_thread_url(client, context.channel_id, context.thread_ts)
-    data = SettlementData.model_validate_json(action_value(body))
-
-    save_settlement(
-        data=data,
-        status=status,
-        approver_name=approver_name,
-        thread_url=thread_url,
-    )
-
-    original_blocks = body.get("message", {}).get("blocks", [])
-    text, new_blocks = _build_decision_message(
-        status=status,
-        original_blocks=original_blocks,
-        approver_name=approver_name,
-    )
-    client.chat_update(
-        channel=context.channel_id,
-        ts=context.message_ts,
-        text=text,
-        blocks=new_blocks,
-    )
-
-    if status == SettlementStatus.APPROVED:
-        dm_text = _build_approval_dm_text(
-            prefix="정산 이슈가",
-            data=data,
-            approver_name=approver_name,
-            thread_url=thread_url,
-        )
-        send_dm(client, context.user_id, dm_text)
-
-
-def _is_custom_value(value: str, options: list) -> bool:
-    """주어진 값이 사전 정의된 옵션에 없는 커스텀 값인지 확인"""
-    from app.constants import find_option_by_text
-
-    return bool(value) and find_option_by_text(options, value) is None
-
-
-def _open_settlement_edit_modal(
+def _handle_settlement_approve(
     *,
     body: dict,
     client,
     approvers: Approvers,
 ) -> None:
+    """정산 이슈 승인 처리"""
     context = message_context(body)
     if not _has_permission(
         client=client,
         approvers=approvers,
         context=context,
-        denied_text="⚠️ 편집 권한이 없습니다.",
-    ):
-        return
-
-    from app.constants import DESCRIPTION_OPTIONS, ISSUE_TYPE_OPTIONS
-
-    data = SettlementData.model_validate_json(action_value(body))
-    metadata = ModalMetadata(
-        channel_id=context.channel_id,
-        thread_ts=context.thread_ts,
-        message_ts=context.message_ts,
-        user_name=data.user_name,
-        booking_key=data.booking_key,
-        company_name=data.company_name,
-        customer_name=data.customer_name,
-    )
-
-    # 커스텀 값 감지: 사전 정의 옵션에 없으면 텍스트 입력으로 표시
-    is_custom_issue = _is_custom_value(data.issue_type, ISSUE_TYPE_OPTIONS)
-    is_custom_description = _is_custom_value(data.description, DESCRIPTION_OPTIONS)
-
-    modal = build_registration_modal(
-        user_name=data.user_name,
-        booking_key=data.booking_key,
-        company_name=data.company_name,
-        customer_name=data.customer_name,
-        metadata=metadata.model_dump_json(),
-        settlement_day=data.settlement_day,
-        issue_type="" if is_custom_issue else data.issue_type,
-        company_sub_name=data.company_sub_name,
-        settlement_cost=data.settlement_cost,
-        carmore_cost=data.carmore_cost,
-        user_refund_cost=data.user_refund_cost,
-        seller_channel=data.seller_channel,
-        description="" if is_custom_description else data.description,
-        note=data.note,
-        is_edit=True,
-        show_issue_type_text=is_custom_issue,
-        show_description_text=is_custom_description,
-        custom_issue_type=data.issue_type if is_custom_issue else "",
-        custom_description=data.description if is_custom_description else "",
-    )
-    client.views_open(
-        trigger_id=body["trigger_id"],
-        view=modal,
-    )
-
-
-def _handle_transfer_decision(
-    *,
-    body: dict,
-    client,
-    status: SettlementStatus,
-    approvers: Approvers,
-) -> None:
-    context = message_context(body)
-    if not _has_permission(
-        client=client,
-        approvers=approvers,
-        context=context,
-        denied_text=f"⚠️ {status.value} 권한이 없습니다.",
+        denied_text="⚠️ 승인 권한이 없습니다.",
     ):
         return
 
@@ -291,19 +181,16 @@ def _handle_transfer_decision(
         thread_url = get_thread_url(client, context.channel_id, context.thread_ts)
         data = SettlementData.model_validate_json(action_value(body))
 
-        logger.info("업체이관 %s 시작: %s", status.value, data.booking_key)
-        logger.debug("데이터: %s", data.model_dump_json(indent=2))
-
         save_settlement(
             data=data,
-            status=status,
+            status=SettlementStatus.APPROVED,
             approver_name=approver_name,
             thread_url=thread_url,
         )
 
         original_blocks = body.get("message", {}).get("blocks", [])
         text, new_blocks = _build_decision_message(
-            status=status,
+            status=SettlementStatus.APPROVED,
             original_blocks=original_blocks,
             approver_name=approver_name,
         )
@@ -314,95 +201,115 @@ def _handle_transfer_decision(
             blocks=new_blocks,
         )
 
-        if status == SettlementStatus.APPROVED:
-            dm_text = _build_approval_dm_text(
-                prefix="업체이관 정산이",
-                data=data,
-                approver_name=approver_name,
-                thread_url=thread_url,
-            )
-            send_dm(client, context.user_id, dm_text)
-
-        logger.info("업체이관 %s 완료: %s", status.value, data.booking_key)
+        dm_text = _build_approval_dm_text(
+            prefix="정산 이슈가",
+            data=data,
+            approver_name=approver_name,
+            thread_url=thread_url,
+        )
+        send_dm(client, context.user_id, dm_text)
     except (SlackApiError, ValidationError, KeyError):
-        logger.exception("업체이관 %s 중 에러 발생", status.value)
+        logger.exception("정산 이슈 승인 중 에러 발생")
         _notify_processing_error(
             client=client,
             context=context,
-            prefix=status.value,
+            prefix="승인",
         )
 
 
-def _open_transfer_edit_modal(
+def _open_rejection_modal(
     *,
     body: dict,
     client,
     approvers: Approvers,
 ) -> None:
-    """Transfer 편집 모달 열기 - 통합 build_registration_modal 사용"""
+    """반려 사유 입력 모달 열기"""
     context = message_context(body)
     if not _has_permission(
         client=client,
         approvers=approvers,
         context=context,
-        denied_text="⚠️ 편집 권한이 없습니다.",
+        denied_text="⚠️ 반려 권한이 없습니다.",
+    ):
+        return
+
+    button_data = action_value(body)
+    data = SettlementData.model_validate_json(button_data)
+
+    metadata = RejectionMetadata(
+        channel_id=context.channel_id,
+        thread_ts=context.thread_ts,
+        message_ts=context.message_ts,
+        requester_id=data.requester_id,
+        button_data=button_data,
+    )
+
+    modal = build_rejection_modal(metadata=metadata.model_dump_json())
+    client.views_open(
+        trigger_id=body["trigger_id"],
+        view=modal,
+    )
+
+
+def _handle_transfer_approve(
+    *,
+    body: dict,
+    client,
+    approvers: Approvers,
+) -> None:
+    """업체이관 승인 처리"""
+    context = message_context(body)
+    if not _has_permission(
+        client=client,
+        approvers=approvers,
+        context=context,
+        denied_text="⚠️ 승인 권한이 없습니다.",
     ):
         return
 
     try:
-        from app.constants import DESCRIPTION_OPTIONS, ISSUE_TYPE_OPTIONS
-
+        approver_name = get_user_name(client, context.user_id)
+        thread_url = get_thread_url(client, context.channel_id, context.thread_ts)
         data = SettlementData.model_validate_json(action_value(body))
-        logger.info("업체이관 편집 시작: %s", data.booking_key)
+
+        logger.info("업체이관 승인 시작: %s", data.booking_key)
         logger.debug("데이터: %s", data.model_dump_json(indent=2))
 
-        metadata = ModalMetadata(
-            channel_id=context.channel_id,
-            thread_ts=context.thread_ts,
-            message_ts=context.message_ts,
-            user_name=data.user_name,
-            booking_key=data.booking_key,
-            company_name=data.company_name,
-            customer_name=data.customer_name,
+        save_settlement(
+            data=data,
+            status=SettlementStatus.APPROVED,
+            approver_name=approver_name,
+            thread_url=thread_url,
         )
 
-        # 커스텀 값 감지: 사전 정의 옵션에 없으면 텍스트 입력으로 표시
-        is_custom_issue = _is_custom_value(data.issue_type, ISSUE_TYPE_OPTIONS)
-        is_custom_description = _is_custom_value(data.description, DESCRIPTION_OPTIONS)
+        original_blocks = body.get("message", {}).get("blocks", [])
+        text, new_blocks = _build_decision_message(
+            status=SettlementStatus.APPROVED,
+            original_blocks=original_blocks,
+            approver_name=approver_name,
+        )
+        client.chat_update(
+            channel=context.channel_id,
+            ts=context.message_ts,
+            text=text,
+            blocks=new_blocks,
+        )
 
-        # 통합 모달 사용 (Transfer 편집도 동일한 모달)
-        modal = build_registration_modal(
-            user_name=data.user_name,
-            booking_key=data.booking_key,
-            company_name=data.company_name,
-            customer_name=data.customer_name,
-            metadata=metadata.model_dump_json(),
-            settlement_day=data.settlement_day,
-            issue_type="" if is_custom_issue else data.issue_type,
-            company_sub_name=data.company_sub_name,
-            settlement_cost=data.settlement_cost,
-            carmore_cost=data.carmore_cost,
-            user_refund_cost=data.user_refund_cost,
-            seller_channel=data.seller_channel,
-            description="" if is_custom_description else data.description,
-            note=data.note,
-            is_edit=True,
-            show_issue_type_text=is_custom_issue,
-            show_description_text=is_custom_description,
-            custom_issue_type=data.issue_type if is_custom_issue else "",
-            custom_description=data.description if is_custom_description else "",
+        dm_text = _build_approval_dm_text(
+            prefix="업체이관 정산이",
+            data=data,
+            approver_name=approver_name,
+            thread_url=thread_url,
         )
-        client.views_open(
-            trigger_id=body["trigger_id"],
-            view=modal,
-        )
-        logger.info("업체이관 편집 모달 열기 완료: %s", data.booking_key)
+        send_dm(client, context.user_id, dm_text)
+
+        logger.info("업체이관 승인 완료: %s", data.booking_key)
     except (SlackApiError, ValidationError, KeyError):
-        logger.exception("업체이관 편집 중 에러 발생")
+        logger.exception("업체이관 승인 중 에러 발생")
         _notify_processing_error(
             client=client,
             context=context,
-            prefix="편집",
+            prefix="승인",
         )
 
 
@@ -528,49 +435,35 @@ def register_action_handlers(app: App) -> None:
     @app.action(ActionId.SETTLEMENT_APPROVE)
     def handle_settlement_approve(ack, body, client):
         ack()
-        _handle_settlement_decision(
+        _handle_settlement_approve(
             body=body,
             client=client,
-            status=SettlementStatus.APPROVED,
             approvers=approvers,
         )
 
     @app.action(ActionId.SETTLEMENT_REJECT)
     def handle_settlement_reject(ack, body, client):
         ack()
-        _handle_settlement_decision(
+        _open_rejection_modal(
             body=body,
             client=client,
-            status=SettlementStatus.REJECTED,
             approvers=approvers,
         )
 
     @app.action(ActionId.TRANSFER_APPROVE)
     def handle_transfer_approve(ack, body, client):
         ack()
-        _handle_transfer_decision(
+        _handle_transfer_approve(
             body=body,
             client=client,
-            status=SettlementStatus.APPROVED,
             approvers=approvers,
         )
 
     @app.action(ActionId.TRANSFER_REJECT)
     def handle_transfer_reject(ack, body, client):
         ack()
-        _handle_transfer_decision(
+        _open_rejection_modal(
             body=body,
             client=client,
-            status=SettlementStatus.REJECTED,
             approvers=approvers,
         )
-
-    @app.action(ActionId.TRANSFER_EDIT)
-    def handle_transfer_edit(ack, body, client):
-        ack()
-        _open_transfer_edit_modal(body=body, client=client, approvers=approvers)
-
-    @app.action(ActionId.SETTLEMENT_EDIT)
-    def handle_settlement_edit(ack, body, client):
-        ack()
-        _open_settlement_edit_modal(body=body, client=client, approvers=approvers)

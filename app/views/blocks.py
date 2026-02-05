@@ -389,7 +389,6 @@ def build_approval_request_message(
     reject_action = (
         ActionId.TRANSFER_REJECT if is_transfer else ActionId.SETTLEMENT_REJECT
     )
-    edit_action = ActionId.TRANSFER_EDIT if is_transfer else ActionId.SETTLEMENT_EDIT
 
     return [
         {
@@ -494,12 +493,6 @@ def build_approval_request_message(
                     "text": {"type": "plain_text", "text": CommonText.REJECT},
                     "style": "danger",
                     "action_id": reject_action,
-                    "value": button_data,
-                },
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": CommonText.EDIT},
-                    "action_id": edit_action,
                     "value": button_data,
                 },
             ],
@@ -643,12 +636,17 @@ def build_approved_message(original_blocks: Blocks, approver_name: str) -> Block
     )
 
 
-def build_rejected_message(original_blocks: Blocks, rejecter_name: str) -> Blocks:
+def build_rejected_message(
+    original_blocks: Blocks,
+    rejecter_name: str,
+    rejection_reason: str = "",
+) -> Blocks:
     return _build_decision_message(
         original_blocks=original_blocks,
         header_text=HeaderText.REJECTED,
         actor_label="반려자",
         actor_name=rejecter_name,
+        rejection_reason=rejection_reason,
     )
 
 
@@ -658,6 +656,7 @@ def _build_decision_message(
     header_text: str,
     actor_label: str,
     actor_name: str,
+    rejection_reason: str = "",
 ) -> Blocks:
     new_blocks = [b for b in original_blocks if b.get("type") != "actions"]
     header_block = {
@@ -668,6 +667,19 @@ def _build_decision_message(
         new_blocks[0] = header_block
     else:
         new_blocks.insert(0, header_block)
+
+    # 반려 사유가 있으면 섹션으로 추가
+    if rejection_reason:
+        new_blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*{LabelText.REJECTION_REASON}*\n{rejection_reason}",
+                },
+            }
+        )
+
     new_blocks.append(
         {
             "type": "context",
@@ -675,3 +687,34 @@ def _build_decision_message(
         }
     )
     return new_blocks
+
+
+def build_rejection_modal(metadata: str) -> dict:
+    """반려 사유 입력 모달 빌더"""
+    return {
+        "type": "modal",
+        "callback_id": ActionId.REJECTION_SUBMIT,
+        "private_metadata": metadata,
+        "title": {"type": "plain_text", "text": HeaderText.REJECTION_MODAL},
+        "submit": {"type": "plain_text", "text": CommonText.REJECT},
+        "close": {"type": "plain_text", "text": CommonText.CANCEL},
+        "blocks": [
+            {
+                "type": "input",
+                "block_id": BlockId.REJECTION_REASON_BLOCK,
+                "label": {
+                    "type": "plain_text",
+                    "text": f"{LabelText.REJECTION_REASON}{CommonText.REQUIRED}",
+                },
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": ActionId.REJECTION_REASON_INPUT,
+                    "multiline": True,
+                    "placeholder": {
+                        "type": "plain_text",
+                        "text": "반려 사유를 입력하세요",
+                    },
+                },
+            }
+        ],
+    }

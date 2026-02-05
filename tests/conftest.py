@@ -24,6 +24,7 @@ def sample_settlement_data() -> SettlementData:
         user_refund_cost="",
         seller_channel="",
         description="",
+        requester_id="U12345678",
     )
 
 

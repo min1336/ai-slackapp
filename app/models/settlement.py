@@ -51,6 +51,7 @@ class SettlementData(BaseModel):
     seller_channel: str = ""
     description: str = ""
     note: str = ""  # 비고 필드
+    requester_id: str = ""  # 모달 제출자 Slack ID
 
 
 class ModalMetadata(BaseModel):
@@ -61,6 +62,16 @@ class ModalMetadata(BaseModel):
     booking_key: str = ""
     company_name: str = ""
     customer_name: str = ""
+
+
+class RejectionMetadata(BaseModel):
+    """반려 모달용 메타데이터"""
+
+    channel_id: str
+    thread_ts: str
+    message_ts: str
+    requester_id: str
+    button_data: str  # SettlementData JSON
 
 
 @dataclass(slots=True)
