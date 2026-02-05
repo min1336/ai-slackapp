@@ -59,6 +59,7 @@ class SettlementRepository:
             status=row.status,
             approver_name=row.approver_name,
             thread_url=row.thread_url,
+            note=row.note,
         )
 
         stmt = stmt.on_conflict_do_update(
@@ -78,6 +79,7 @@ class SettlementRepository:
                 "status": row.status,
                 "approver_name": row.approver_name,
                 "thread_url": row.thread_url,
+                "note": row.note,
                 "updated_at": datetime.now(),
                 "sheets_synced": False,
             },
@@ -106,6 +108,7 @@ class SettlementRepository:
             status=row.status,
             approver_name=row.approver_name,
             thread_url=row.thread_url,
+            note=row.note,
         )
         self.session.add(log)
         self.session.flush()

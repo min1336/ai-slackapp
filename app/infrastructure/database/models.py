@@ -29,6 +29,7 @@ class Settlement(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     approver_name: Mapped[str] = mapped_column(String(100), nullable=False)
     thread_url: Mapped[str] = mapped_column(Text, default="")
+    note: Mapped[str] = mapped_column(Text, default="")  # 비고 필드
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, onupdate=datetime.now
@@ -66,6 +67,7 @@ class ApprovalLog(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     approver_name: Mapped[str] = mapped_column(String(100), nullable=False)
     thread_url: Mapped[str] = mapped_column(Text, default="")
+    note: Mapped[str] = mapped_column(Text, default="")  # 비고 필드
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     # Sync metadata
