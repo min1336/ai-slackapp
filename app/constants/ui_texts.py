@@ -18,6 +18,7 @@ class LabelText:
     USER_REFUND_COST = "고객 환불 금액"
     SELLER_CHANNEL = "판매채널"
     DESCRIPTION = "내용"
+    NOTE = "비고"
 
 
 class CommonText:

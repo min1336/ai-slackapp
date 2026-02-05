@@ -3,12 +3,7 @@ from __future__ import annotations
 
 class ActionId:
     OPEN_REGISTRATION_MODAL = "open_registration_modal"
-    OPEN_TRANSFER_REGISTRATION_MODAL_UNABLE_DISPATCH = (
-        "open_transfer_registration_modal_unable_dispatch"
-    )
-    OPEN_TRANSFER_REGISTRATION_MODAL_RESERVATION = (
-        "open_transfer_registration_modal_reservation"
-    )
+    OPEN_TRANSFER_MODAL = "open_transfer_modal"  # 통합된 Transfer 모달 열기
     SETTLEMENT_APPROVE = "settlement_approve"
     SETTLEMENT_REJECT = "settlement_reject"
     SETTLEMENT_EDIT = "settlement_edit"
@@ -30,6 +25,13 @@ class ActionId:
     SELLER_CHANNEL_INPUT = "seller_channel_input"
     DESCRIPTION_INPUT = "description_input"
 
+    # 동적 폼용: "기타" 선택 시 텍스트 입력
+    ISSUE_TYPE_TEXT_INPUT = "issue_type_text_input"
+    DESCRIPTION_TEXT_INPUT = "description_text_input"
+
+    # 비고 필드
+    NOTE_INPUT = "note_input"
+
 
 class BlockId:
     USER_NAME_BLOCK = "user_name_block"
@@ -44,6 +46,13 @@ class BlockId:
     USER_REFUND_COST_BLOCK = "user_refund_cost_block"
     SELLER_CHANNEL_BLOCK = "seller_channel_block"
     DESCRIPTION_BLOCK = "description_block"
+
+    # 동적 폼용: "기타" 선택 시 텍스트 입력 블록
+    ISSUE_TYPE_TEXT_BLOCK = "issue_type_text_block"
+    DESCRIPTION_TEXT_BLOCK = "description_text_block"
+
+    # 비고 필드
+    NOTE_BLOCK = "note_block"
 
 
 class CallbackId:

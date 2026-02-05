@@ -27,8 +27,9 @@ class SettlementColumnIndex(IntEnum):
     CREATED_AT = 14
     UPDATED_AT = 15
     THREAD_URL = 16
+    NOTE = 17  # 비고 필드 인덱스
     # 승인로그 시트 전용 (to_row() + sync_key)
-    SYNC_KEY = 17
+    SYNC_KEY = 18
 
 
 class SettlementStatus(str, Enum):
@@ -49,6 +50,7 @@ class SettlementData(BaseModel):
     user_refund_cost: str = ""
     seller_channel: str = ""
     description: str = ""
+    note: str = ""  # 비고 필드
 
 
 class ModalMetadata(BaseModel):
@@ -61,7 +63,7 @@ class ModalMetadata(BaseModel):
     customer_name: str = ""
 
 
-@dataclass
+@dataclass(slots=True)
 class SettlementRow:
     settlement_day: str
     user_name: str
@@ -80,8 +82,9 @@ class SettlementRow:
     created_at: str = ""
     updated_at: str = ""
     thread_url: str = ""
+    note: str = ""  # 비고 필드
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if not self.created_at:
             self.created_at = now
@@ -112,6 +115,7 @@ class SettlementRow:
             status=status.value,
             approver_name=approver_name,
             thread_url=thread_url,
+            note=data.note,
         )
 
     def to_row(self) -> list[str]:
@@ -133,4 +137,5 @@ class SettlementRow:
             self.created_at,
             self.updated_at,
             self.thread_url,
+            self.note,  # 맨 마지막에 추가하여 기존 시트와 호환성 유지
         ]

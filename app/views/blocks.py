@@ -10,8 +10,46 @@ from app.constants import (
     HeaderText,
     LabelText,
     find_option_by_text,
+    is_transfer_description,
 )
-from app.constants.options import Description, IssueType
+from app.constants.options import SlackOption
+
+Block = dict[str, object]
+Blocks = list[Block]
+TextInputConfig = tuple[str, str, str, str | None, bool]
+
+
+def _display_text(value: str) -> str:
+    return value or CommonText.NONE
+
+
+def _add_text_inputs(blocks: Blocks, configs: list[TextInputConfig]) -> None:
+    for block_id, label_text, action_id, initial_value, is_optional in configs:
+        _add_text_input(
+            blocks=blocks,
+            block_id=block_id,
+            label_text=label_text,
+            action_id=action_id,
+            initial_value=initial_value,
+            is_optional=is_optional,
+        )
+
+
+def _build_booking_header_blocks(user_name: str) -> Blocks:
+    return [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": HeaderText.BOOKING_INFO},
+        },
+        {"type": "divider"},
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*{LabelText.USER_NAME}*"},
+                {"type": "plain_text", "text": _display_text(user_name)},
+            ],
+        },
+    ]
 
 
 def build_parsing_result_message(
@@ -19,7 +57,7 @@ def build_parsing_result_message(
     company_name: str,
     customer_name: str,
     button_value: str,
-) -> list[dict]:
+) -> Blocks:
     return [
         {
             "type": "section",
@@ -27,17 +65,17 @@ def build_parsing_result_message(
                 {"type": "mrkdwn", "text": f"*{LabelText.BOOKING_KEY}*"},
                 {
                     "type": "plain_text",
-                    "text": booking_key or CommonText.NONE,
+                    "text": _display_text(booking_key),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.COMPANY_NAME}*"},
                 {
                     "type": "plain_text",
-                    "text": company_name or CommonText.NONE,
+                    "text": _display_text(company_name),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.BOOKER_NAME}*"},
                 {
                     "type": "plain_text",
-                    "text": customer_name or CommonText.NONE,
+                    "text": _display_text(customer_name),
                 },
             ],
         },
@@ -67,46 +105,46 @@ def build_transfer_parsing_result_message(
     settlement_cost: str,
     carmore_cost: str,
     button_value: str,
-) -> list[dict]:
-    """이관 예약 파싱 결과 메시지 빌더"""
+) -> Blocks:
+    """이관 예약 파싱 결과 메시지 빌더 (통합된 1개 버튼)"""
     return [
         {
             "type": "section",
             "fields": [
-                {"type": "mrkdwn", "text": f"*{LabelText.TRANSFER_BOOKING_KEY}*"},
+                {"type": "mrkdwn", "text": "*이관전 예약번호*"},
                 {
                     "type": "plain_text",
-                    "text": booking_key or CommonText.NONE,
+                    "text": _display_text(booking_key),
                 },
-                {"type": "mrkdwn", "text": f"*{LabelText.COMPANY_NAME}*"},
+                {"type": "mrkdwn", "text": "*업체명*"},
                 {
                     "type": "plain_text",
-                    "text": company_name or CommonText.NONE,
+                    "text": _display_text(company_name),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.COMPANY_SUB_NAME}*"},
                 {
                     "type": "plain_text",
-                    "text": company_sub_name or CommonText.NONE,
+                    "text": _display_text(company_sub_name),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.BOOKER_NAME}*"},
                 {
                     "type": "plain_text",
-                    "text": customer_name or CommonText.NONE,
+                    "text": _display_text(customer_name),
                 },
-                {"type": "mrkdwn", "text": f"*{LabelText.PRINCIPAL}*"},
+                {"type": "mrkdwn", "text": "*원금*"},
                 {
                     "type": "plain_text",
-                    "text": settlement_cost or CommonText.NONE,
+                    "text": _display_text(settlement_cost),
                 },
             ],
         },
         {
             "type": "section",
             "fields": [
-                {"type": "mrkdwn", "text": f"*{LabelText.CARMORE_BURDEN}*"},
+                {"type": "mrkdwn", "text": "*카모아 부담금*"},
                 {
                     "type": "plain_text",
-                    "text": carmore_cost or CommonText.NONE,
+                    "text": _display_text(carmore_cost),
                 },
             ],
         },
@@ -117,21 +155,10 @@ def build_transfer_parsing_result_message(
                     "type": "button",
                     "text": {
                         "type": "plain_text",
-                        "text": "배차불가로 등록",
+                        "text": CommonText.REGISTER,
                     },
                     "style": "primary",
-                    "action_id": (
-                        ActionId.OPEN_TRANSFER_REGISTRATION_MODAL_UNABLE_DISPATCH
-                    ),
-                    "value": button_value,
-                },
-                {
-                    "type": "button",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "예약변경으로 등록",
-                    },
-                    "action_id": ActionId.OPEN_TRANSFER_REGISTRATION_MODAL_RESERVATION,
+                    "action_id": ActionId.OPEN_TRANSFER_MODAL,
                     "value": button_value,
                 },
             ],
@@ -153,53 +180,50 @@ def build_registration_modal(
     user_refund_cost: str = "",
     seller_channel: str = "",
     description: str = "",
+    note: str = "",
     is_edit: bool = False,
+    # 동적 폼 상태
+    show_issue_type_text: bool = False,
+    show_description_text: bool = False,
+    custom_issue_type: str = "",
+    custom_description: str = "",
 ) -> dict:
-    issue_type_initial = (
-        find_option_by_text(ISSUE_TYPE_OPTIONS, issue_type) if issue_type else None
-    )
+    """통합 등록 모달 빌더 (일반 정산 + Transfer 통합)"""
+    # 동적 폼: 텍스트 입력 중이면 셀렉트 initial 설정 안함
+    issue_type_initial = None
+    if not show_issue_type_text and issue_type:
+        issue_type_initial = find_option_by_text(ISSUE_TYPE_OPTIONS, issue_type)
+
     seller_channel_initial = (
         find_option_by_text(SELLER_CHANNEL_OPTIONS, seller_channel)
         if seller_channel
         else None
     )
-    description_initial = (
-        find_option_by_text(DESCRIPTION_OPTIONS, description) if description else None
-    )
 
-    blocks = [
-        {
-            "type": "header",
-            "text": {"type": "plain_text", "text": HeaderText.BOOKING_INFO},
-        },
-        {"type": "divider"},
-        # 사용자 이름은 section으로 표시 (입력 불필요)
-        {
-            "type": "section",
-            "fields": [
-                {"type": "mrkdwn", "text": f"*{LabelText.USER_NAME}*"},
-                {
-                    "type": "plain_text",
-                    "text": user_name or CommonText.NONE,
-                },
-            ],
-        },
-    ]
+    description_initial = None
+    if not show_description_text and description:
+        description_initial = find_option_by_text(DESCRIPTION_OPTIONS, description)
 
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.BOOKING_KEY_BLOCK,
-        label_text=f"{LabelText.BOOKING_KEY}{CommonText.REQUIRED}",
-        action_id=ActionId.BOOKING_KEY_INPUT,
-        initial_value=booking_key,
-    )
+    blocks = _build_booking_header_blocks(user_name)
 
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.CUSTOMER_NAME_BLOCK,
-        label_text=f"{LabelText.CUSTOMER_NAME}{CommonText.REQUIRED}",
-        action_id=ActionId.CUSTOMER_NAME_INPUT,
-        initial_value=customer_name,
+    _add_text_inputs(
+        blocks,
+        [
+            (
+                BlockId.BOOKING_KEY_BLOCK,
+                f"{LabelText.BOOKING_KEY}{CommonText.REQUIRED}",
+                ActionId.BOOKING_KEY_INPUT,
+                booking_key,
+                False,
+            ),
+            (
+                BlockId.CUSTOMER_NAME_BLOCK,
+                f"{LabelText.CUSTOMER_NAME}{CommonText.REQUIRED}",
+                ActionId.CUSTOMER_NAME_INPUT,
+                customer_name,
+                False,
+            ),
+        ],
     )
 
     _add_datepicker_with_initial(
@@ -211,58 +235,68 @@ def build_registration_modal(
         initial_date=settlement_day,
     )
 
-    _add_select_with_initial(
-        blocks=blocks,
-        block_id=BlockId.ISSUE_TYPE_BLOCK,
-        label_text=LabelText.ISSUE_TYPE,
-        action_id=ActionId.ISSUE_TYPE_INPUT,
-        placeholder_text=CommonText.SELECT,
-        options=ISSUE_TYPE_OPTIONS,
-        initial_option=issue_type_initial,
-        is_required=True,
-    )
+    # 동적 폼: 이슈사항 - "기타" 선택 시 텍스트 입력으로 전환
+    if show_issue_type_text:
+        _add_text_input(
+            blocks=blocks,
+            block_id=BlockId.ISSUE_TYPE_TEXT_BLOCK,
+            label_text=f"{LabelText.ISSUE_TYPE}{CommonText.REQUIRED}",
+            action_id=ActionId.ISSUE_TYPE_TEXT_INPUT,
+            initial_value=custom_issue_type,
+            is_optional=False,
+        )
+    else:
+        _add_select_with_initial(
+            blocks=blocks,
+            block_id=BlockId.ISSUE_TYPE_BLOCK,
+            label_text=LabelText.ISSUE_TYPE,
+            action_id=ActionId.ISSUE_TYPE_INPUT,
+            placeholder_text=CommonText.SELECT,
+            options=ISSUE_TYPE_OPTIONS,
+            initial_option=issue_type_initial,
+            is_required=True,
+            dispatch_action=True,
+        )
 
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.COMPANY_NAME_BLOCK,
-        label_text=f"{LabelText.COMPANY_NAME}{CommonText.REQUIRED}",
-        action_id=ActionId.COMPANY_NAME_INPUT,
-        initial_value=company_name,
-    )
-
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.COMPANY_SUB_NAME_BLOCK,
-        label_text=LabelText.COMPANY_SUB_NAME,
-        action_id=ActionId.COMPANY_SUB_NAME_INPUT,
-        initial_value=company_sub_name,
-        is_optional=True,
-    )
-
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.SETTLEMENT_COST_BLOCK,
-        label_text=f"{LabelText.SETTLEMENT_COST}{CommonText.REQUIRED}",
-        action_id=ActionId.SETTLEMENT_COST_INPUT,
-        initial_value=settlement_cost,
-    )
-
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.CARMORE_COST_BLOCK,
-        label_text=LabelText.CARMORE_COST,
-        action_id=ActionId.CARMORE_COST_INPUT,
-        initial_value=carmore_cost,
-        is_optional=True,
-    )
-
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.USER_REFUND_COST_BLOCK,
-        label_text=LabelText.USER_REFUND_COST,
-        action_id=ActionId.USER_REFUND_COST_INPUT,
-        initial_value=user_refund_cost,
-        is_optional=True,
+    _add_text_inputs(
+        blocks,
+        [
+            (
+                BlockId.COMPANY_NAME_BLOCK,
+                f"{LabelText.COMPANY_NAME}{CommonText.REQUIRED}",
+                ActionId.COMPANY_NAME_INPUT,
+                company_name,
+                False,
+            ),
+            (
+                BlockId.COMPANY_SUB_NAME_BLOCK,
+                LabelText.COMPANY_SUB_NAME,
+                ActionId.COMPANY_SUB_NAME_INPUT,
+                company_sub_name,
+                True,
+            ),
+            (
+                BlockId.SETTLEMENT_COST_BLOCK,
+                f"{LabelText.SETTLEMENT_COST}{CommonText.REQUIRED}",
+                ActionId.SETTLEMENT_COST_INPUT,
+                settlement_cost,
+                False,
+            ),
+            (
+                BlockId.CARMORE_COST_BLOCK,
+                LabelText.CARMORE_COST,
+                ActionId.CARMORE_COST_INPUT,
+                carmore_cost,
+                True,
+            ),
+            (
+                BlockId.USER_REFUND_COST_BLOCK,
+                LabelText.USER_REFUND_COST,
+                ActionId.USER_REFUND_COST_INPUT,
+                user_refund_cost,
+                True,
+            ),
+        ],
     )
 
     _add_select_with_initial(
@@ -276,15 +310,37 @@ def build_registration_modal(
         is_required=True,
     )
 
-    _add_select_with_initial(
+    # 동적 폼: 내용 - "기타" 선택 시 텍스트 입력으로 전환
+    if show_description_text:
+        _add_text_input(
+            blocks=blocks,
+            block_id=BlockId.DESCRIPTION_TEXT_BLOCK,
+            label_text=f"{LabelText.DESCRIPTION}{CommonText.REQUIRED}",
+            action_id=ActionId.DESCRIPTION_TEXT_INPUT,
+            initial_value=custom_description,
+            is_optional=False,
+        )
+    else:
+        _add_select_with_initial(
+            blocks=blocks,
+            block_id=BlockId.DESCRIPTION_BLOCK,
+            label_text=LabelText.DESCRIPTION,
+            action_id=ActionId.DESCRIPTION_INPUT,
+            placeholder_text=CommonText.SELECT,
+            options=DESCRIPTION_OPTIONS,
+            initial_option=description_initial,
+            is_required=True,
+            dispatch_action=True,
+        )
+
+    # 비고 필드 (선택 입력, multiline)
+    _add_multiline_text_input(
         blocks=blocks,
-        block_id=BlockId.DESCRIPTION_BLOCK,
-        label_text=LabelText.DESCRIPTION,
-        action_id=ActionId.DESCRIPTION_INPUT,
-        placeholder_text=CommonText.SELECT,
-        options=DESCRIPTION_OPTIONS,
-        initial_option=description_initial,
-        is_required=True,
+        block_id=BlockId.NOTE_BLOCK,
+        label_text=LabelText.NOTE,
+        action_id=ActionId.NOTE_INPUT,
+        initial_value=note,
+        is_optional=True,
     )
 
     return {
@@ -306,195 +362,6 @@ def build_registration_modal(
     }
 
 
-def build_transfer_registration_modal(
-    parsed_data,
-    user_name: str,
-    metadata: str,
-    description_type: str = "unable_dispatch",
-    company_name_param: str = "",
-    settlement_day: str = "",
-    company_sub_name: str = "",
-    settlement_cost: str = "",
-    carmore_cost: str = "",
-    user_refund_cost: str = "",
-    seller_channel: str = "",
-    is_edit: bool = False,
-) -> dict:
-    # 고정값: 이관 건은 항상 "대신배차"
-    fixed_issue_type = IssueType.INSTEAD_DISPATCH.value
-
-    # description 설정
-    if description_type == "reservation":
-        fixed_description = Description.TRANSFER_RESERVATION.value
-    else:
-        fixed_description = Description.TRANSFER_UNABLE_DISPATCH.value
-
-    # 고정값 옵션 찾기
-    issue_type_initial = find_option_by_text(ISSUE_TYPE_OPTIONS, fixed_issue_type)
-    description_initial = find_option_by_text(DESCRIPTION_OPTIONS, fixed_description)
-
-    blocks = [
-        {
-            "type": "header",
-            "text": {"type": "plain_text", "text": HeaderText.BOOKING_INFO},
-        },
-        {"type": "divider"},
-        # 사용자 이름은 section으로 표시 (입력 불필요)
-        {
-            "type": "section",
-            "fields": [
-                {"type": "mrkdwn", "text": f"*{LabelText.USER_NAME}*"},
-                {
-                    "type": "plain_text",
-                    "text": user_name or CommonText.NONE,
-                },
-            ],
-        },
-    ]
-
-    # 나머지 필드들은 build_registration_modal과 동일하게 추가
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.BOOKING_KEY_BLOCK,
-        label_text=f"{LabelText.BOOKING_KEY}{CommonText.REQUIRED}",
-        action_id=ActionId.BOOKING_KEY_INPUT,
-        initial_value=parsed_data.booking_key,
-    )
-
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.CUSTOMER_NAME_BLOCK,
-        label_text=f"{LabelText.CUSTOMER_NAME}{CommonText.REQUIRED}",
-        action_id=ActionId.CUSTOMER_NAME_INPUT,
-        initial_value=parsed_data.customer_name,
-    )
-
-    # 편집일 때는 기존 settlement_day 사용, 아니면 빈 값
-    initial_date = settlement_day if is_edit else ""
-
-    _add_datepicker_with_initial(
-        blocks=blocks,
-        block_id=BlockId.SETTLEMENT_DAY_BLOCK,
-        label_text=LabelText.SETTLEMENT_DAY,
-        action_id=ActionId.SETTLEMENT_DAY_INPUT,
-        placeholder_text=CommonText.SELECT_DATE,
-        initial_date=initial_date,
-    )
-
-    _add_select_with_initial(
-        blocks=blocks,
-        block_id=BlockId.ISSUE_TYPE_BLOCK,
-        label_text=LabelText.ISSUE_TYPE,
-        action_id=ActionId.ISSUE_TYPE_INPUT,
-        placeholder_text=CommonText.SELECT,
-        options=ISSUE_TYPE_OPTIONS,
-        initial_option=issue_type_initial,  # 고정값
-        is_required=True,
-    )
-
-    initial_company_name = company_name_param if is_edit else ""
-
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.COMPANY_NAME_BLOCK,
-        label_text=f"{LabelText.COMPANY_NAME}{CommonText.REQUIRED}",
-        action_id=ActionId.COMPANY_NAME_INPUT,
-        initial_value=initial_company_name,
-    )
-
-    # 편집일 때는 company_sub_name, settlement_cost, carmore_cost 사용
-    initial_company_sub_name = (
-        company_sub_name if is_edit else (parsed_data.company_sub_name or "")
-    )
-    initial_settlement_cost = (
-        settlement_cost if is_edit else (parsed_data.settlement_cost or "")
-    )
-    initial_carmore_cost = carmore_cost if is_edit else (parsed_data.carmore_cost or "")
-
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.COMPANY_SUB_NAME_BLOCK,
-        label_text=LabelText.COMPANY_SUB_NAME,
-        action_id=ActionId.COMPANY_SUB_NAME_INPUT,
-        initial_value=initial_company_sub_name,
-        is_optional=True,
-    )
-
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.SETTLEMENT_COST_BLOCK,
-        label_text=f"{LabelText.SETTLEMENT_COST}{CommonText.REQUIRED}",
-        action_id=ActionId.SETTLEMENT_COST_INPUT,
-        initial_value=initial_settlement_cost,
-    )
-
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.CARMORE_COST_BLOCK,
-        label_text=LabelText.CARMORE_COST,
-        action_id=ActionId.CARMORE_COST_INPUT,
-        initial_value=initial_carmore_cost,
-        is_optional=True,
-    )
-
-    # 편집일 때는 user_refund_cost 사용
-    initial_user_refund_cost = user_refund_cost if is_edit else ""
-
-    _add_text_input(
-        blocks=blocks,
-        block_id=BlockId.USER_REFUND_COST_BLOCK,
-        label_text=LabelText.USER_REFUND_COST,
-        action_id=ActionId.USER_REFUND_COST_INPUT,
-        initial_value=initial_user_refund_cost,
-        is_optional=True,
-    )
-
-    # 편집일 때는 seller_channel 사용
-    initial_seller_channel = None
-    if is_edit and seller_channel:
-        initial_seller_channel = find_option_by_text(
-            SELLER_CHANNEL_OPTIONS, seller_channel
-        )
-
-    _add_select_with_initial(
-        blocks=blocks,
-        block_id=BlockId.SELLER_CHANNEL_BLOCK,
-        label_text=LabelText.SELLER_CHANNEL,
-        action_id=ActionId.SELLER_CHANNEL_INPUT,
-        placeholder_text=CommonText.SELECT,
-        options=SELLER_CHANNEL_OPTIONS,
-        initial_option=initial_seller_channel,
-        is_required=True,
-    )
-
-    _add_select_with_initial(
-        blocks=blocks,
-        block_id=BlockId.DESCRIPTION_BLOCK,
-        label_text=LabelText.DESCRIPTION,
-        action_id=ActionId.DESCRIPTION_INPUT,
-        placeholder_text=CommonText.SELECT,
-        options=DESCRIPTION_OPTIONS,
-        initial_option=description_initial,  # 고정값
-        is_required=True,
-    )
-
-    return {
-        "type": "modal",
-        "callback_id": ActionId.REGISTRATION_SUBMIT,
-        "private_metadata": metadata,
-        "title": {
-            "type": "plain_text",
-            "text": HeaderText.SETTLEMENT_ISSUE_NEW,
-        },
-        "submit": {
-            "type": "plain_text",
-            "text": CommonText.REGISTER,
-        },
-        "close": {"type": "plain_text", "text": CommonText.CANCEL},
-        "blocks": blocks,
-    }
-
-
 def build_approval_request_message(
     user_name: str,
     booking_key: str,
@@ -510,12 +377,10 @@ def build_approval_request_message(
     description: str,
     button_data: str,
     title: str = HeaderText.SETTLEMENT_ISSUE_REGISTER,
-) -> list[dict]:
+    note: str = "",
+) -> Blocks:
     # 업체이관인지 확인
-    is_transfer = description in [
-        Description.TRANSFER_UNABLE_DISPATCH.value,
-        Description.TRANSFER_RESERVATION.value,
-    ]
+    is_transfer = is_transfer_description(description)
 
     # 액션 ID 동적 결정
     approve_action = (
@@ -525,10 +390,6 @@ def build_approval_request_message(
         ActionId.TRANSFER_REJECT if is_transfer else ActionId.SETTLEMENT_REJECT
     )
     edit_action = ActionId.TRANSFER_EDIT if is_transfer else ActionId.SETTLEMENT_EDIT
-
-    # 빈 문자열을 None으로 변환하는 헬퍼 함수
-    def _safe_text(value: str) -> str:
-        return value if value else CommonText.NONE
 
     return [
         {
@@ -542,26 +403,26 @@ def build_approval_request_message(
             "type": "section",
             "fields": [
                 {"type": "mrkdwn", "text": f"*{LabelText.USER_NAME}*"},
-                {"type": "plain_text", "text": _safe_text(user_name)},
+                {"type": "plain_text", "text": _display_text(user_name)},
                 {"type": "mrkdwn", "text": f"*{LabelText.BOOKING_KEY}*"},
                 {
                     "type": "plain_text",
-                    "text": _safe_text(booking_key),
+                    "text": _display_text(booking_key),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.COMPANY_NAME}*"},
                 {
                     "type": "plain_text",
-                    "text": _safe_text(company_name),
+                    "text": _display_text(company_name),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.CUSTOMER_NAME}*"},
                 {
                     "type": "plain_text",
-                    "text": _safe_text(customer_name),
+                    "text": _display_text(customer_name),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.SETTLEMENT_DAY}*"},
                 {
                     "type": "plain_text",
-                    "text": _safe_text(settlement_day),
+                    "text": _display_text(settlement_day),
                 },
             ],
         },
@@ -574,7 +435,7 @@ def build_approval_request_message(
                 },
                 {
                     "type": "plain_text",
-                    "text": _safe_text(settlement_cost),
+                    "text": _display_text(settlement_cost),
                 },
                 {
                     "type": "mrkdwn",
@@ -582,12 +443,12 @@ def build_approval_request_message(
                 },
                 {
                     "type": "plain_text",
-                    "text": _safe_text(company_sub_name),
+                    "text": _display_text(company_sub_name),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.CARMORE_COST}*"},
                 {
                     "type": "plain_text",
-                    "text": _safe_text(carmore_cost),
+                    "text": _display_text(carmore_cost),
                 },
                 {
                     "type": "mrkdwn",
@@ -595,12 +456,12 @@ def build_approval_request_message(
                 },
                 {
                     "type": "plain_text",
-                    "text": _safe_text(user_refund_cost),
+                    "text": _display_text(user_refund_cost),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.SELLER_CHANNEL}*"},
                 {
                     "type": "plain_text",
-                    "text": _safe_text(seller_channel),
+                    "text": _display_text(seller_channel),
                 },
             ],
         },
@@ -610,7 +471,8 @@ def build_approval_request_message(
                 "type": "mrkdwn",
                 "text": (
                     f"*{LabelText.ISSUE_TYPE}*\n{issue_type or CommonText.NONE}\n\n"
-                    f"*{LabelText.DESCRIPTION}*\n{description or CommonText.NONE}"
+                    f"*{LabelText.DESCRIPTION}*\n{description or CommonText.NONE}\n\n"
+                    f"*{LabelText.NOTE}*\n{note or CommonText.NONE}"
                 ),
             },
         },
@@ -646,14 +508,15 @@ def build_approval_request_message(
 
 
 def _add_select_with_initial(
-    blocks: list[dict],
+    blocks: Blocks,
     block_id: str,
     label_text: str,
     action_id: str,
     placeholder_text: str,
-    options: list[dict],
-    initial_option: dict | None = None,
+    options: list[SlackOption],
+    initial_option: SlackOption | None = None,
     is_required: bool = True,
+    dispatch_action: bool = False,
 ) -> None:
     """static_select 블록 초기화와 함께 추가"""
     element = {
@@ -666,23 +529,25 @@ def _add_select_with_initial(
     if initial_option:
         element["initial_option"] = initial_option
 
-    blocks.append(
-        {
-            "type": "input",
-            "block_id": block_id,
-            "label": {
-                "type": "plain_text",
-                "text": f"{label_text}{CommonText.REQUIRED}"
-                if is_required
-                else label_text,
-            },
-            "element": element,
-        }
-    )
+    input_block: Block = {
+        "type": "input",
+        "block_id": block_id,
+        "label": {
+            "type": "plain_text",
+            "text": f"{label_text}{CommonText.REQUIRED}" if is_required else label_text,
+        },
+        "element": element,
+    }
+
+    # dispatch_action이 True면 선택 즉시 서버에 이벤트 전송
+    if dispatch_action:
+        input_block["dispatch_action"] = True
+
+    blocks.append(input_block)
 
 
 def _add_text_input(
-    blocks: list[dict],
+    blocks: Blocks,
     block_id: str,
     label_text: str,
     action_id: str,
@@ -709,8 +574,37 @@ def _add_text_input(
     )
 
 
+def _add_multiline_text_input(
+    blocks: Blocks,
+    block_id: str,
+    label_text: str,
+    action_id: str,
+    initial_value: str | None = None,
+    is_optional: bool = True,
+) -> None:
+    """multiline text input 블록 추가 (비고 필드용)"""
+    element: Block = {
+        "type": "plain_text_input",
+        "action_id": action_id,
+        "multiline": True,
+    }
+
+    if initial_value:
+        element["initial_value"] = initial_value
+
+    blocks.append(
+        {
+            "type": "input",
+            "block_id": block_id,
+            "label": {"type": "plain_text", "text": label_text},
+            "optional": is_optional,
+            "element": element,
+        }
+    )
+
+
 def _add_datepicker_with_initial(
-    blocks: list[dict],
+    blocks: Blocks,
     block_id: str,
     label_text: str,
     action_id: str,
@@ -740,35 +634,44 @@ def _add_datepicker_with_initial(
     )
 
 
-def build_approved_message(
-    original_blocks: list[dict], approver_name: str
-) -> list[dict]:
-    new_blocks = [b for b in original_blocks if b.get("type") != "actions"]
-    new_blocks[0] = {
-        "type": "header",
-        "text": {"type": "plain_text", "text": HeaderText.APPROVED},
-    }
-    new_blocks.append(
-        {
-            "type": "context",
-            "elements": [{"type": "mrkdwn", "text": f"승인자: *{approver_name}*"}],
-        }
+def build_approved_message(original_blocks: Blocks, approver_name: str) -> Blocks:
+    return _build_decision_message(
+        original_blocks=original_blocks,
+        header_text=HeaderText.APPROVED,
+        actor_label="승인자",
+        actor_name=approver_name,
     )
-    return new_blocks
 
 
-def build_rejected_message(
-    original_blocks: list[dict], rejecter_name: str
-) -> list[dict]:
+def build_rejected_message(original_blocks: Blocks, rejecter_name: str) -> Blocks:
+    return _build_decision_message(
+        original_blocks=original_blocks,
+        header_text=HeaderText.REJECTED,
+        actor_label="반려자",
+        actor_name=rejecter_name,
+    )
+
+
+def _build_decision_message(
+    *,
+    original_blocks: Blocks,
+    header_text: str,
+    actor_label: str,
+    actor_name: str,
+) -> Blocks:
     new_blocks = [b for b in original_blocks if b.get("type") != "actions"]
-    new_blocks[0] = {
+    header_block = {
         "type": "header",
-        "text": {"type": "plain_text", "text": HeaderText.REJECTED},
+        "text": {"type": "plain_text", "text": header_text},
     }
+    if new_blocks and new_blocks[0].get("type") == "header":
+        new_blocks[0] = header_block
+    else:
+        new_blocks.insert(0, header_block)
     new_blocks.append(
         {
             "type": "context",
-            "elements": [{"type": "mrkdwn", "text": f"반려자: *{rejecter_name}*"}],
+            "elements": [{"type": "mrkdwn", "text": f"{actor_label}: *{actor_name}*"}],
         }
     )
     return new_blocks

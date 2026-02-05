@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -67,9 +68,7 @@ class SlackChannelsConfig(BaseModel):
     transfer_reservation: str = ""
     error: str = ""  # 에러 모니터링 채널
 
-    class Config:
-        # 필드명을 snake_case에서 YAML 키로 매핑
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class SpreadsheetConfig(BaseModel):
@@ -100,3 +99,27 @@ slack = SlackProperties()
 spreadsheet = SpreadsheetProperties()
 database = DatabaseProperties()
 config = _load_app_config()
+
+
+@lru_cache
+def get_app_config() -> AppConfig:
+    """AppConfig 싱글톤 반환."""
+    return config
+
+
+@lru_cache
+def get_slack_settings() -> SlackProperties:
+    """SlackProperties 싱글톤 반환."""
+    return slack
+
+
+@lru_cache
+def get_spreadsheet_settings() -> SpreadsheetProperties:
+    """SpreadsheetProperties 싱글톤 반환."""
+    return spreadsheet
+
+
+@lru_cache
+def get_database_settings() -> DatabaseProperties:
+    """DatabaseProperties 싱글톤 반환."""
+    return database

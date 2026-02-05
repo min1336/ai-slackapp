@@ -1,9 +1,21 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import TypedDict
+
+
+class SlackText(TypedDict):
+    type: str
+    text: str
+
+
+class SlackOption(TypedDict):
+    text: SlackText
+    value: str
 
 
 class IssueType(str, Enum):
+    OTHER = "기타(직접입력)"
     IGNORE_SETTLEMENT = "정산제외"
     CANCEL_CHARGE_FEE = "취소수수료"
     COST_CHANGED = "금액변경"
@@ -13,7 +25,7 @@ class IssueType(str, Enum):
     EARLY_RETURN_AFTER = "조기반납(후)"
     ETC = "기타"
 
-    def to_slack_option(self) -> dict:
+    def to_slack_option(self) -> SlackOption:
         return {
             "text": {"type": "plain_text", "text": self.value},
             "value": self.name.lower(),
@@ -32,7 +44,7 @@ class SellerChannel(str, Enum):
     BIZ_PLAY = "비즈플레이"
     TRIP_DOT_COM = "트립닷컴"
 
-    def to_slack_option(self) -> dict:
+    def to_slack_option(self) -> SlackOption:
         return {
             "text": {"type": "plain_text", "text": self.value},
             "value": self.name.lower(),
@@ -40,6 +52,7 @@ class SellerChannel(str, Enum):
 
 
 class Description(str, Enum):
+    OTHER = "기타(직접입력)"
     EXCLUDE_UNABLE_DISPATCH = "배차불가로 인한 정산제외 (정산 100% 제외)"
     EXCLUDE_FLIGHT_CANCEL = "결항으로 인한 정산제외 (정산 100% 제외)"
     EXCLUDE_PARTNER = "파트너사 협의 후 정산제외 (정산 100% 제외)"
@@ -68,20 +81,29 @@ class Description(str, Enum):
     API_ERROR_CANCEL = "api 통신오류 건 수기 취소 (전액환불 구간)"
     MONTHLY_SUB_MANUAL = "월구독 수기결제 진행 된 건 정산 누락 방지 차 기재"
 
-    def to_slack_option(self) -> dict:
+    def to_slack_option(self) -> SlackOption:
         return {
             "text": {"type": "plain_text", "text": self.value},
             "value": self.name.lower(),
         }
 
 
-ISSUE_TYPE_OPTIONS: list[dict] = [x.to_slack_option() for x in IssueType]
-SELLER_CHANNEL_OPTIONS: list[dict] = [x.to_slack_option() for x in SellerChannel]
-DESCRIPTION_OPTIONS: list[dict] = [x.to_slack_option() for x in Description]
+ISSUE_TYPE_OPTIONS: list[SlackOption] = [x.to_slack_option() for x in IssueType]
+SELLER_CHANNEL_OPTIONS: list[SlackOption] = [x.to_slack_option() for x in SellerChannel]
+DESCRIPTION_OPTIONS: list[SlackOption] = [x.to_slack_option() for x in Description]
 
 
-def find_option_by_text(options: list[dict], text: str) -> dict | None:
-    for option in options:
-        if option["text"]["text"] == text:
-            return option
-    return None
+def find_option_by_text(options: list[SlackOption], text: str) -> SlackOption | None:
+    return next((option for option in options if option["text"]["text"] == text), None)
+
+
+TRANSFER_DESCRIPTIONS = frozenset(
+    {
+        Description.TRANSFER_UNABLE_DISPATCH.value,
+        Description.TRANSFER_RESERVATION.value,
+    }
+)
+
+
+def is_transfer_description(description: str) -> bool:
+    return description in TRANSFER_DESCRIPTIONS

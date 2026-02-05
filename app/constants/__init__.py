@@ -8,6 +8,7 @@ from app.constants.options import (
     IssueType,
     SellerChannel,
     find_option_by_text,
+    is_transfer_description,
 )
 from app.constants.parser_fields import (
     DateFormat,
@@ -40,6 +41,7 @@ __all__ = [
     "HeaderText",
     "Command",
     "find_option_by_text",
+    "is_transfer_description",
     "DateFormat",
     "TransferMessageField",
 ]

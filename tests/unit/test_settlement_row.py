@@ -23,11 +23,12 @@ class TestSettlementRow:
             approver_name="승인자",
             issue_type="이슈",
             sales_channel="채널",
+            note="비고",
         )
 
         result = row.to_row()
 
-        # 예상 컬럼 순서 확인
+        # 예상 컬럼 순서 확인 (note는 맨 마지막에 추가하여 기존 시트 호환성 유지)
         assert result[0] == "2025-01-28"  # 정산기준일
         assert result[1] == "작성자"  # 작성자
         assert result[2] == "이슈"  # 이슈사항
@@ -42,6 +43,8 @@ class TestSettlementRow:
         assert result[11] == "내용"  # 내용
         assert result[12] == "승인"  # 처리
         assert result[13] == "승인자"  # 승인자
+        # ... created_at, updated_at, thread_url 중간에 있음
+        assert result[17] == "비고"  # 비고 (맨 마지막)
 
     def test_created_at_자동_생성을_확인한다(self):
         """created_at, updated_at이 자동 생성되는지 확인"""
@@ -66,7 +69,7 @@ class TestSettlementRow:
         print(f"updated_at: {row.updated_at}")
 
     def test_to_row_길이를_확인한다(self):
-        """to_row()가 17개 컬럼을 반환하는지 확인"""
+        """to_row()가 18개 컬럼을 반환하는지 확인 (note 필드 추가됨)"""
         row = SettlementRow(
             settlement_day="2025-01-28",
             user_name="작성자",
@@ -83,4 +86,4 @@ class TestSettlementRow:
         )
 
         result = row.to_row()
-        assert len(result) == 17
+        assert len(result) == 18  # note 필드 추가로 17 → 18
