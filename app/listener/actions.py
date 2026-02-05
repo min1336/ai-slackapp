@@ -7,8 +7,9 @@ from slack_sdk.errors import SlackApiError
 from app.config import get_app_config
 from app.constants import ActionId, BlockId, IssueType
 from app.constants.options import Description
+from app.constants.ui_texts import HeaderText
 from app.core import get_logger
-from app.listener.payload import Blocks, MessageContext, action_value, message_context
+from app.listener.payload import MessageContext, action_value, message_context
 from app.models import (
     ModalMetadata,
     RejectionMetadata,
@@ -25,9 +26,10 @@ from app.services.slack_service import (
     get_user_name,
 )
 from app.views.blocks import (
+    build_approval_request_message,
     build_approved_message,
+    build_minimal_approved_message,
     build_registration_modal,
-    build_rejected_message,
     build_rejection_modal,
 )
 
@@ -51,19 +53,6 @@ def _has_permission(
         thread_ts=context.thread_ts_or_none,
     )
     return False
-
-
-def _build_decision_message(
-    *,
-    status: SettlementStatus,
-    original_blocks: Blocks,
-    approver_name: str,
-) -> tuple[str, Blocks]:
-    if status == SettlementStatus.APPROVED:
-        return "정산 이슈 승인됨", build_approved_message(
-            original_blocks, approver_name
-        )
-    return "정산 이슈 반려됨", build_rejected_message(original_blocks, approver_name)
 
 
 def _notify_processing_error(
@@ -158,34 +147,66 @@ def _handle_settlement_approve(
 
     try:
         approver_name = get_user_name(client, context.user_id)
-        thread_url = get_thread_url(client, context.channel_id, context.thread_ts)
         data = SettlementData.model_validate_json(action_value(body))
+
+        # 상세 메시지 URL (원본 스레드의 상세 메시지)
+        message_url = get_thread_url(
+            client, data.original_channel_id, data.original_message_ts
+        )
 
         save_settlement(
             data=data,
             status=SettlementStatus.APPROVED,
             approver_name=approver_name,
-            thread_url=thread_url,
+            thread_url=message_url,
         )
 
-        original_blocks = body.get("message", {}).get("blocks", [])
-        text, new_blocks = _build_decision_message(
-            status=SettlementStatus.APPROVED,
-            original_blocks=original_blocks,
+        # 1) 승인 채널 메시지 업데이트
+        requester_name = get_user_name(client, data.requester_id)
+        approval_blocks = build_minimal_approved_message(
+            requester_name=requester_name,
+            thread_url=message_url,
             approver_name=approver_name,
+            is_transfer=False,
         )
         client.chat_update(
             channel=context.channel_id,
             ts=context.message_ts,
-            text=text,
-            blocks=new_blocks,
+            text="정산 이슈 승인됨",
+            blocks=approval_blocks,
         )
 
-        # 원본 스레드에 요청자 멘션 메시지
+        # 2) 원본 스레드 상세 메시지 업데이트 (상세 정보 유지 + 승인 상태)
+        original_blocks = build_approval_request_message(
+            user_name=data.user_name,
+            booking_key=data.booking_key,
+            company_name=data.company_name,
+            customer_name=data.customer_name,
+            settlement_day=data.settlement_day,
+            issue_type=data.issue_type,
+            settlement_cost=data.settlement_cost,
+            company_sub_name=data.company_sub_name,
+            carmore_cost=data.carmore_cost,
+            user_refund_cost=data.user_refund_cost,
+            seller_channel=data.seller_channel,
+            description=data.description,
+            title=HeaderText.SETTLEMENT_ISSUE_REGISTER,
+            note=data.note,
+            include_buttons=False,
+        )
+        thread_blocks = build_approved_message(original_blocks, approver_name)
+        client.chat_update(
+            channel=data.original_channel_id,
+            ts=data.original_message_ts,
+            text="정산 이슈 승인됨",
+            blocks=thread_blocks,
+        )
+
+        # 3) 원본 스레드에 요청자 멘션
         if data.requester_id:
             client.chat_postMessage(
-                channel=context.channel_id,
-                thread_ts=context.thread_ts or None,
+                channel=data.original_channel_id,
+                thread_ts=data.original_thread_ts or None,
                 text=f"<@{data.requester_id}> 정산 이슈가 승인되었습니다.",
             )
     except (SlackApiError, ValidationError, KeyError):
@@ -222,6 +243,10 @@ def _open_rejection_modal(
         message_ts=context.message_ts,
         requester_id=data.requester_id,
         button_data=button_data,
+        # 원본 스레드 정보 (승인 채널 워크플로우용)
+        original_channel_id=data.original_channel_id,
+        original_thread_ts=data.original_thread_ts,
+        original_message_ts=data.original_message_ts,
     )
 
     modal = build_rejection_modal(metadata=metadata.model_dump_json())
@@ -249,37 +274,69 @@ def _handle_transfer_approve(
 
     try:
         approver_name = get_user_name(client, context.user_id)
-        thread_url = get_thread_url(client, context.channel_id, context.thread_ts)
         data = SettlementData.model_validate_json(action_value(body))
 
         logger.info("업체이관 승인 시작: %s", data.booking_key)
         logger.debug("데이터: %s", data.model_dump_json(indent=2))
 
+        # 상세 메시지 URL (원본 스레드의 상세 메시지)
+        message_url = get_thread_url(
+            client, data.original_channel_id, data.original_message_ts
+        )
+
         save_settlement(
             data=data,
             status=SettlementStatus.APPROVED,
             approver_name=approver_name,
-            thread_url=thread_url,
+            thread_url=message_url,
         )
 
-        original_blocks = body.get("message", {}).get("blocks", [])
-        text, new_blocks = _build_decision_message(
-            status=SettlementStatus.APPROVED,
-            original_blocks=original_blocks,
+        # 1) 승인 채널 메시지 업데이트
+        requester_name = get_user_name(client, data.requester_id)
+        approval_blocks = build_minimal_approved_message(
+            requester_name=requester_name,
+            thread_url=message_url,
             approver_name=approver_name,
+            is_transfer=True,
         )
         client.chat_update(
             channel=context.channel_id,
             ts=context.message_ts,
-            text=text,
-            blocks=new_blocks,
+            text="업체이관 승인됨",
+            blocks=approval_blocks,
         )
 
-        # 원본 스레드에 요청자 멘션 메시지
+        # 2) 원본 스레드 상세 메시지 업데이트 (상세 정보 유지 + 승인 상태)
+        original_blocks = build_approval_request_message(
+            user_name=data.user_name,
+            booking_key=data.booking_key,
+            company_name=data.company_name,
+            customer_name=data.customer_name,
+            settlement_day=data.settlement_day,
+            issue_type=data.issue_type,
+            settlement_cost=data.settlement_cost,
+            company_sub_name=data.company_sub_name,
+            carmore_cost=data.carmore_cost,
+            user_refund_cost=data.user_refund_cost,
+            seller_channel=data.seller_channel,
+            description=data.description,
+            title=HeaderText.TRANSFER_REGISTER,
+            note=data.note,
+            include_buttons=False,
+        )
+        thread_blocks = build_approved_message(original_blocks, approver_name)
+        client.chat_update(
+            channel=data.original_channel_id,
+            ts=data.original_message_ts,
+            text="업체이관 승인됨",
+            blocks=thread_blocks,
+        )
+
+        # 3) 원본 스레드에 요청자 멘션
         if data.requester_id:
             client.chat_postMessage(
-                channel=context.channel_id,
-                thread_ts=context.thread_ts or None,
+                channel=data.original_channel_id,
+                thread_ts=data.original_thread_ts or None,
                 text=f"<@{data.requester_id}> 업체이관이 승인되었습니다.",
             )
 
@@ -375,7 +432,6 @@ def _handle_dynamic_form_change(body: dict, client) -> None:
         seller_channel=state["seller_channel"],
         description="" if show_description_text else state["description"],
         note=state["note"],
-        is_edit=bool(metadata.message_ts),
         show_issue_type_text=show_issue_type_text,
         show_description_text=show_description_text,
         custom_issue_type=state["custom_issue_type"],

@@ -5,6 +5,9 @@ from app.constants.options import Description, IssueType
 from app.views.blocks import (
     build_approval_request_message,
     build_approved_message,
+    build_minimal_approval_message,
+    build_minimal_approved_message,
+    build_minimal_rejected_message,
     build_registration_modal,
     build_rejected_message,
     build_rejection_modal,
@@ -254,3 +257,230 @@ class TestRejectedMessageWithReason:
 
         # 반려자 context 확인
         assert result[-1]["elements"][0]["text"] == "반려자: *김반려*"
+
+
+# ============================================================================
+# 승인 채널 통합 기능용 블록 빌더 테스트
+# ============================================================================
+
+
+class TestMinimalApprovalMessage:
+    """승인 채널용 최소 정보 메시지 테스트"""
+
+    def test_정산이슈_승인요청은_settlement_action_id를_사용한다(self):
+        blocks = build_minimal_approval_message(
+            requester_name="홍길동",
+            thread_url="https://slack.com/archives/C123/p456",
+            button_data="{}",
+            is_transfer=False,
+        )
+
+        actions = blocks[-1]["elements"]
+        assert len(actions) == 2
+        assert actions[0]["action_id"] == ActionId.SETTLEMENT_APPROVE
+        assert actions[1]["action_id"] == ActionId.SETTLEMENT_REJECT
+
+    def test_업체이관_승인요청은_transfer_action_id를_사용한다(self):
+        blocks = build_minimal_approval_message(
+            requester_name="홍길동",
+            thread_url="https://slack.com/archives/C123/p456",
+            button_data="{}",
+            is_transfer=True,
+        )
+
+        actions = blocks[-1]["elements"]
+        assert len(actions) == 2
+        assert actions[0]["action_id"] == ActionId.TRANSFER_APPROVE
+        assert actions[1]["action_id"] == ActionId.TRANSFER_REJECT
+
+    def test_요청자_이름이_표시된다(self):
+        blocks = build_minimal_approval_message(
+            requester_name="김요청",
+            thread_url="https://slack.com/test",
+            button_data="{}",
+            is_transfer=False,
+        )
+
+        # 요청자 필드 확인
+        requester_section = blocks[1]
+        assert requester_section["fields"][0]["text"] == "*요청자*"
+        assert requester_section["fields"][1]["text"] == "김요청"
+
+    def test_스레드_링크가_표시된다(self):
+        thread_url = "https://slack.com/archives/C123/p456"
+        blocks = build_minimal_approval_message(
+            requester_name="홍길동",
+            thread_url=thread_url,
+            button_data="{}",
+            is_transfer=False,
+        )
+
+        link_section = blocks[2]
+        assert thread_url in link_section["text"]["text"]
+        assert "원본 스레드 바로가기" in link_section["text"]["text"]
+
+    def test_헤더에_요청_유형이_표시된다(self):
+        settlement_blocks = build_minimal_approval_message(
+            requester_name="홍길동",
+            thread_url="https://slack.com/test",
+            button_data="{}",
+            is_transfer=False,
+        )
+        assert "정산 이슈" in settlement_blocks[0]["text"]["text"]
+
+        transfer_blocks = build_minimal_approval_message(
+            requester_name="홍길동",
+            thread_url="https://slack.com/test",
+            button_data="{}",
+            is_transfer=True,
+        )
+        assert "업체 이관" in transfer_blocks[0]["text"]["text"]
+
+
+class TestMinimalApprovedMessage:
+    """승인 채널 승인 완료 메시지 테스트"""
+
+    def test_승인_완료_메시지에_취소선이_적용된다(self):
+        blocks = build_minimal_approved_message(
+            requester_name="홍길동",
+            thread_url="https://slack.com/test",
+            approver_name="김승인",
+            is_transfer=False,
+        )
+
+        # 첫 번째 섹션에 취소선 (mrkdwn ~text~)
+        header_section = blocks[0]
+        assert header_section["text"]["type"] == "mrkdwn"
+        assert "~*정산 이슈 승인 요청*~" in header_section["text"]["text"]
+
+    def test_승인자_이름이_표시된다(self):
+        blocks = build_minimal_approved_message(
+            requester_name="홍길동",
+            thread_url="https://slack.com/test",
+            approver_name="박승인자",
+            is_transfer=False,
+        )
+
+        # 승인됨 섹션 확인
+        approval_section = blocks[-1]
+        assert "✅" in approval_section["text"]["text"]
+        assert "승인됨" in approval_section["text"]["text"]
+        assert "박승인자" in approval_section["text"]["text"]
+
+    def test_버튼이_없다(self):
+        blocks = build_minimal_approved_message(
+            requester_name="홍길동",
+            thread_url="https://slack.com/test",
+            approver_name="김승인",
+            is_transfer=False,
+        )
+
+        assert all(block["type"] != "actions" for block in blocks)
+
+    def test_업체이관_승인_완료_메시지(self):
+        blocks = build_minimal_approved_message(
+            requester_name="홍길동",
+            thread_url="https://slack.com/test",
+            approver_name="김승인",
+            is_transfer=True,
+        )
+
+        header_section = blocks[0]
+        assert "~*업체 이관 승인 요청*~" in header_section["text"]["text"]
+
+
+class TestMinimalRejectedMessage:
+    """승인 채널 반려 완료 메시지 테스트"""
+
+    def test_반려_완료_메시지에_취소선이_적용된다(self):
+        blocks = build_minimal_rejected_message(
+            requester_name="홍길동",
+            thread_url="https://slack.com/test",
+            rejecter_name="김반려",
+            is_transfer=False,
+        )
+
+        # 첫 번째 섹션에 취소선 (mrkdwn ~text~)
+        header_section = blocks[0]
+        assert header_section["text"]["type"] == "mrkdwn"
+        assert "~*정산 이슈 승인 요청*~" in header_section["text"]["text"]
+
+    def test_반려자_이름이_표시된다(self):
+        blocks = build_minimal_rejected_message(
+            requester_name="홍길동",
+            thread_url="https://slack.com/test",
+            rejecter_name="박반려자",
+            is_transfer=False,
+        )
+
+        # 반려됨 섹션 확인
+        rejection_section = blocks[-1]
+        assert "❌" in rejection_section["text"]["text"]
+        assert "반려됨" in rejection_section["text"]["text"]
+        assert "박반려자" in rejection_section["text"]["text"]
+
+    def test_버튼이_없다(self):
+        blocks = build_minimal_rejected_message(
+            requester_name="홍길동",
+            thread_url="https://slack.com/test",
+            rejecter_name="김반려",
+            is_transfer=False,
+        )
+
+        assert all(block["type"] != "actions" for block in blocks)
+
+    def test_업체이관_반려_완료_메시지(self):
+        blocks = build_minimal_rejected_message(
+            requester_name="홍길동",
+            thread_url="https://slack.com/test",
+            rejecter_name="김반려",
+            is_transfer=True,
+        )
+
+        header_section = blocks[0]
+        assert "~*업체 이관 승인 요청*~" in header_section["text"]["text"]
+
+
+class TestApprovalRequestMessageIncludeButtons:
+    """include_buttons 파라미터 테스트"""
+
+    def test_include_buttons_false일때_버튼이_없다(self):
+        blocks = build_approval_request_message(
+            user_name="작성자",
+            booking_key="BK-1",
+            company_name="업체",
+            customer_name="고객",
+            settlement_day="2025-01-01",
+            issue_type="이슈",
+            settlement_cost="10000",
+            company_sub_name="",
+            carmore_cost="",
+            user_refund_cost="",
+            seller_channel="",
+            description="내용",
+            button_data="{}",
+            include_buttons=False,
+        )
+
+        assert all(block["type"] != "actions" for block in blocks)
+
+    def test_include_buttons_true일때_버튼이_있다(self):
+        blocks = build_approval_request_message(
+            user_name="작성자",
+            booking_key="BK-1",
+            company_name="업체",
+            customer_name="고객",
+            settlement_day="2025-01-01",
+            issue_type="이슈",
+            settlement_cost="10000",
+            company_sub_name="",
+            carmore_cost="",
+            user_refund_cost="",
+            seller_channel="",
+            description="내용",
+            button_data="{}",
+            include_buttons=True,
+        )
+
+        assert blocks[-1]["type"] == "actions"
+        assert len(blocks[-1]["elements"]) == 2

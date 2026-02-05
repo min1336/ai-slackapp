@@ -181,7 +181,6 @@ def build_registration_modal(
     seller_channel: str = "",
     description: str = "",
     note: str = "",
-    is_edit: bool = False,
     # 동적 폼 상태
     show_issue_type_text: bool = False,
     show_description_text: bool = False,
@@ -347,16 +346,8 @@ def build_registration_modal(
         "type": "modal",
         "callback_id": ActionId.REGISTRATION_SUBMIT,
         "private_metadata": metadata,
-        "title": {
-            "type": "plain_text",
-            "text": HeaderText.SETTLEMENT_ISSUE_EDIT
-            if is_edit
-            else HeaderText.SETTLEMENT_ISSUE_NEW,
-        },
-        "submit": {
-            "type": "plain_text",
-            "text": CommonText.MODIFIED if is_edit else CommonText.REGISTER,
-        },
+        "title": {"type": "plain_text", "text": HeaderText.SETTLEMENT_ISSUE_NEW},
+        "submit": {"type": "plain_text", "text": CommonText.REGISTER},
         "close": {"type": "plain_text", "text": CommonText.CANCEL},
         "blocks": blocks,
     }
@@ -375,22 +366,15 @@ def build_approval_request_message(
     user_refund_cost: str,
     seller_channel: str,
     description: str,
-    button_data: str,
+    button_data: str = "",
     title: str = HeaderText.SETTLEMENT_ISSUE_REGISTER,
     note: str = "",
+    include_buttons: bool = True,
 ) -> Blocks:
     # 업체이관인지 확인
     is_transfer = is_transfer_description(description)
 
-    # 액션 ID 동적 결정
-    approve_action = (
-        ActionId.TRANSFER_APPROVE if is_transfer else ActionId.SETTLEMENT_APPROVE
-    )
-    reject_action = (
-        ActionId.TRANSFER_REJECT if is_transfer else ActionId.SETTLEMENT_REJECT
-    )
-
-    return [
+    blocks: Blocks = [
         {
             "type": "header",
             "text": {
@@ -475,29 +459,41 @@ def build_approval_request_message(
                 ),
             },
         },
-        {
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "text": {
-                        "type": "plain_text",
-                        "text": CommonText.APPROVE,
-                    },
-                    "style": "primary",
-                    "action_id": approve_action,
-                    "value": button_data,
-                },
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": CommonText.REJECT},
-                    "style": "danger",
-                    "action_id": reject_action,
-                    "value": button_data,
-                },
-            ],
-        },
     ]
+
+    if include_buttons:
+        approve_action = (
+            ActionId.TRANSFER_APPROVE if is_transfer else ActionId.SETTLEMENT_APPROVE
+        )
+        reject_action = (
+            ActionId.TRANSFER_REJECT if is_transfer else ActionId.SETTLEMENT_REJECT
+        )
+        blocks.append(
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": CommonText.APPROVE,
+                        },
+                        "style": "primary",
+                        "action_id": approve_action,
+                        "value": button_data,
+                    },
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": CommonText.REJECT},
+                        "style": "danger",
+                        "action_id": reject_action,
+                        "value": button_data,
+                    },
+                ],
+            }
+        )
+
+    return blocks
 
 
 def _add_select_with_initial(
@@ -718,3 +714,138 @@ def build_rejection_modal(metadata: str) -> dict:
             }
         ],
     }
+
+
+# ============================================================================
+# 승인 채널 통합 기능용 블록 빌더
+# ============================================================================
+
+
+def build_minimal_approval_message(
+    requester_name: str,
+    thread_url: str,
+    button_data: str,
+    is_transfer: bool = False,
+) -> Blocks:
+    """승인 채널용 최소 정보 메시지 (스레드 링크 + 요청자 + 버튼)"""
+    request_type = "업체 이관" if is_transfer else "정산 이슈"
+    approve_action = (
+        ActionId.TRANSFER_APPROVE if is_transfer else ActionId.SETTLEMENT_APPROVE
+    )
+    reject_action = (
+        ActionId.TRANSFER_REJECT if is_transfer else ActionId.SETTLEMENT_REJECT
+    )
+
+    return [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"{request_type} 승인 요청"},
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": "*요청자*"},
+                {"type": "plain_text", "text": requester_name},
+            ],
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"<{thread_url}|📎 원본 스레드 바로가기>",
+            },
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": CommonText.APPROVE},
+                    "style": "primary",
+                    "action_id": approve_action,
+                    "value": button_data,
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": CommonText.REJECT},
+                    "style": "danger",
+                    "action_id": reject_action,
+                    "value": button_data,
+                },
+            ],
+        },
+    ]
+
+
+def build_minimal_approved_message(
+    requester_name: str,
+    thread_url: str,
+    approver_name: str,
+    is_transfer: bool = False,
+) -> Blocks:
+    """승인 채널 승인 완료 메시지 (버튼 제거, 승인됨 표시)"""
+    request_type = "업체 이관" if is_transfer else "정산 이슈"
+    return [
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"~*{request_type} 승인 요청*~"},
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": "*요청자*"},
+                {"type": "plain_text", "text": requester_name},
+            ],
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"<{thread_url}|📎 원본 스레드 바로가기>",
+            },
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"✅ *승인됨* | 승인자: {approver_name}",
+            },
+        },
+    ]
+
+
+def build_minimal_rejected_message(
+    requester_name: str,
+    thread_url: str,
+    rejecter_name: str,
+    is_transfer: bool = False,
+) -> Blocks:
+    """승인 채널 반려 완료 메시지 (버튼 제거, 반려됨 표시)"""
+    request_type = "업체 이관" if is_transfer else "정산 이슈"
+    return [
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"~*{request_type} 승인 요청*~"},
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": "*요청자*"},
+                {"type": "plain_text", "text": requester_name},
+            ],
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"<{thread_url}|📎 원본 스레드 바로가기>",
+            },
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"❌ *반려됨* | 반려자: {rejecter_name}",
+            },
+        },
+    ]

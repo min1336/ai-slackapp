@@ -52,6 +52,10 @@ class SettlementData(BaseModel):
     description: str = ""
     note: str = ""  # 비고 필드
     requester_id: str = ""  # 모달 제출자 Slack ID
+    # 원본 스레드 정보 (승인 채널에서 결과 알림 시 사용)
+    original_channel_id: str = ""
+    original_thread_ts: str = ""
+    original_message_ts: str = ""  # 대기중 메시지 ts (업데이트용)
 
 
 class ModalMetadata(BaseModel):
@@ -72,6 +76,10 @@ class RejectionMetadata(BaseModel):
     message_ts: str
     requester_id: str
     button_data: str  # SettlementData JSON
+    # 원본 스레드 정보 (승인 채널에서 반려 시 원본 스레드에 알림용)
+    original_channel_id: str = ""
+    original_thread_ts: str = ""
+    original_message_ts: str = ""
 
 
 @dataclass(slots=True)

@@ -4,7 +4,9 @@ from pydantic import ValidationError
 from slack_bolt import App
 from slack_sdk.errors import SlackApiError
 
-from app.constants import ActionId, BlockId, HeaderText, is_transfer_description
+from app.config import get_app_config
+from app.constants import ActionId, BlockId, is_transfer_description
+from app.constants.ui_texts import HeaderText
 from app.core import get_logger
 from app.models import (
     ModalMetadata,
@@ -20,7 +22,12 @@ from app.services.slack_service import (
     get_thread_url,
     get_user_name,
 )
-from app.views.blocks import build_approval_request_message, build_rejected_message
+from app.views.blocks import (
+    build_approval_request_message,
+    build_minimal_approval_message,
+    build_minimal_rejected_message,
+    build_rejected_message,
+)
 
 logger = get_logger(__name__)
 
@@ -96,45 +103,90 @@ def register_view_handlers(app: App) -> None:
             requester_id=requester_id,
         )
 
-        # description으로 업체이관 여부 판단하여 적절한 title 전달
+        # description으로 업체이관 여부 판단
+        is_transfer = is_transfer_description(data.description)
+        request_type = "업체 이관" if is_transfer else "정산 이슈"
         title = (
             HeaderText.TRANSFER_REGISTER
-            if is_transfer_description(data.description)
+            if is_transfer
             else HeaderText.SETTLEMENT_ISSUE_REGISTER
         )
 
-        blocks = build_approval_request_message(
-            user_name=data.user_name,
-            booking_key=data.booking_key,
-            company_name=data.company_name,
-            customer_name=data.customer_name,
-            settlement_day=data.settlement_day,
-            issue_type=data.issue_type,
-            settlement_cost=data.settlement_cost,
-            company_sub_name=data.company_sub_name,
-            carmore_cost=data.carmore_cost,
-            user_refund_cost=data.user_refund_cost,
-            seller_channel=data.seller_channel,
-            description=data.description,
-            button_data=data.model_dump_json(),
-            title=title,
-            note=data.note,
-        )
+        # 승인 채널 ID
+        approval_channel_id = get_app_config().approval_channel_id
 
-        if metadata.message_ts:
-            client.chat_update(
-                channel=metadata.channel_id,
-                ts=metadata.message_ts,
-                text="정산 이슈 수정됨",
-                blocks=blocks,
+        detail_message_ts = ""
+        try:
+            # 1. 원본 스레드에 상세 정보 메시지 게시 (버튼 없이)
+            detail_blocks = build_approval_request_message(
+                user_name=data.user_name,
+                booking_key=data.booking_key,
+                company_name=data.company_name,
+                customer_name=data.customer_name,
+                settlement_day=data.settlement_day,
+                issue_type=data.issue_type,
+                settlement_cost=data.settlement_cost,
+                company_sub_name=data.company_sub_name,
+                carmore_cost=data.carmore_cost,
+                user_refund_cost=data.user_refund_cost,
+                seller_channel=data.seller_channel,
+                description=data.description,
+                title=title,
+                note=data.note,
+                include_buttons=False,
             )
-        else:
-            client.chat_postMessage(
+            detail_response = client.chat_postMessage(
                 channel=metadata.channel_id,
                 thread_ts=metadata.thread_ts or None,
-                text="정산 이슈 승인 요청",
-                blocks=blocks,
+                text=f"{request_type} 승인 요청",
+                blocks=detail_blocks,
             )
+            detail_message_ts = detail_response.get("ts", "")
+
+            # 2. 상세 메시지의 permalink 생성
+            message_url = get_thread_url(client, metadata.channel_id, detail_message_ts)
+
+            # 3. SettlementData에 원본 스레드 정보 추가
+            data.original_channel_id = metadata.channel_id
+            data.original_thread_ts = metadata.thread_ts
+            data.original_message_ts = detail_message_ts
+
+            # 4. 요청자 이름 조회
+            requester_name = get_user_name(client, requester_id)
+
+            # 5. 승인 채널에 최소 정보 + 버튼 + 상세 메시지 링크 게시
+            approval_blocks = build_minimal_approval_message(
+                requester_name=requester_name,
+                thread_url=message_url,
+                button_data=data.model_dump_json(),
+                is_transfer=is_transfer,
+            )
+            client.chat_postMessage(
+                channel=approval_channel_id,
+                text=f"{request_type} 승인 요청",
+                blocks=approval_blocks,
+            )
+        except (SlackApiError, ValidationError, KeyError):
+            logger.exception("모달 제출 중 에러 발생")
+            # 부분 실패 시 상세 메시지 삭제 (rollback)
+            if detail_message_ts:
+                try:
+                    client.chat_delete(
+                        channel=metadata.channel_id,
+                        ts=detail_message_ts,
+                    )
+                except SlackApiError:
+                    logger.warning("상세 메시지 삭제 실패")
+            # 사용자에게 에러 알림
+            if requester_id:
+                try:
+                    client.chat_postMessage(
+                        channel=requester_id,
+                        text=f"⚠️ {request_type} 등록 중 오류가 발생했습니다. "
+                        "다시 시도해주세요.",
+                    )
+                except SlackApiError:
+                    logger.exception("에러 알림 전송 실패")
 
     @app.view(ActionId.REJECTION_SUBMIT)
     def handle_rejection_submit(ack, client, view, body):
@@ -160,24 +212,45 @@ def register_view_handlers(app: App) -> None:
             # 버튼 데이터에서 SettlementData 복원
             data = SettlementData.model_validate_json(metadata.button_data)
 
-            # 스레드 URL
-            thread_url = get_thread_url(client, metadata.channel_id, metadata.thread_ts)
+            # 업체이관 여부 판단
+            is_transfer = is_transfer_description(data.description)
+            request_type = "업체 이관" if is_transfer else "정산 이슈"
+            title = (
+                HeaderText.TRANSFER_REGISTER
+                if is_transfer
+                else HeaderText.SETTLEMENT_ISSUE_REGISTER
+            )
+
+            # 상세 메시지 URL (원본 스레드의 상세 메시지)
+            message_url = get_thread_url(
+                client, metadata.original_channel_id, metadata.original_message_ts
+            )
 
             # DB에 반려 저장
             save_settlement(
                 data=data,
                 status=SettlementStatus.REJECTED,
                 approver_name=rejecter_name,
-                thread_url=thread_url,
+                thread_url=message_url,
                 rejection_reason=rejection_reason,
             )
 
-            # SettlementData로 원본 형식의 블록 재생성 (스레드 메시지 조회 대신)
-            title = (
-                HeaderText.TRANSFER_REGISTER
-                if is_transfer_description(data.description)
-                else HeaderText.SETTLEMENT_ISSUE_REGISTER
+            # 1) 승인 채널 메시지 업데이트
+            requester_name = get_user_name(client, metadata.requester_id)
+            approval_blocks = build_minimal_rejected_message(
+                requester_name=requester_name,
+                thread_url=message_url,
+                rejecter_name=rejecter_name,
+                is_transfer=is_transfer,
             )
+            client.chat_update(
+                channel=metadata.channel_id,
+                ts=metadata.message_ts,
+                text=f"{request_type} 반려됨",
+                blocks=approval_blocks,
+            )
+
+            # 2) 원본 스레드 상세 메시지 업데이트 (상세 정보 유지 + 반려 상태)
             original_blocks = build_approval_request_message(
                 user_name=data.user_name,
                 booking_key=data.booking_key,
@@ -191,30 +264,27 @@ def register_view_handlers(app: App) -> None:
                 user_refund_cost=data.user_refund_cost,
                 seller_channel=data.seller_channel,
                 description=data.description,
-                button_data="",  # 반려 메시지에서는 버튼 제거됨
                 title=title,
                 note=data.note,
+                include_buttons=False,
             )
-
-            # 승인 요청 메시지 업데이트 (반려 사유는 멘션 메시지에서만 표시)
-            new_blocks = build_rejected_message(
-                original_blocks=original_blocks,
-                rejecter_name=rejecter_name,
+            thread_blocks = build_rejected_message(
+                original_blocks, rejecter_name, rejection_reason
             )
             client.chat_update(
-                channel=metadata.channel_id,
-                ts=metadata.message_ts,
-                text="정산 이슈 반려됨",
-                blocks=new_blocks,
+                channel=metadata.original_channel_id,
+                ts=metadata.original_message_ts,
+                text=f"{request_type} 반려됨",
+                blocks=thread_blocks,
             )
 
-            # 원본 스레드에 요청자 멘션 메시지
+            # 3) 원본 스레드에 요청자 멘션
             if metadata.requester_id:
                 client.chat_postMessage(
-                    channel=metadata.channel_id,
-                    thread_ts=metadata.thread_ts or None,
+                    channel=metadata.original_channel_id,
+                    thread_ts=metadata.original_thread_ts or None,
                     text=(
-                        f"<@{metadata.requester_id}> 정산 이슈가 반려되었습니다.\n"
+                        f"<@{metadata.requester_id}> {request_type}가 반려되었습니다.\n"
                         f"*반려 사유:* {rejection_reason}"
                     ),
                 )

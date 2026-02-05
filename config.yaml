@@ -6,6 +6,7 @@ approvers:
 slack_channels:
   transfer_reservation: "C0AANUJGPAB"
   error: "C0AANUJGPAB"
+  approval: "C0AANUJGPAB"  # 승인 전용 채널 (실제 채널 ID로 변경 필요)
 
 # Spread Sheet ID
 # 아래의 URL의 작업 할 시트의 id를 추출해서 작성한다

@@ -67,6 +67,7 @@ class SheetsConfig(BaseModel):
 class SlackChannelsConfig(BaseModel):
     transfer_reservation: str = ""
     error: str = ""  # 에러 모니터링 채널
+    approval: str = ""  # 승인 전용 채널
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -86,6 +87,11 @@ class AppConfig(BaseModel):
     def error_channel_id(self) -> str:
         """에러 모니터링 채널 ID."""
         return self.slack_channels.error
+
+    @property
+    def approval_channel_id(self) -> str:
+        """승인 전용 채널 ID."""
+        return self.slack_channels.approval
 
 
 def _load_app_config() -> AppConfig:

@@ -108,6 +108,11 @@ except (SlackApiError, ValidationError, KeyError):
 - Python 3.12+, line-length 88
 - 선택된 ruff 규칙: E, W, F, I, UP, B, SIM, C4, FA
 
+## Slack Block Kit 주의사항
+
+- `header` 블록은 `plain_text`만 지원 → mrkdwn 문법(`~취소선~`, `*볼드*`) 사용 불가
+- mrkdwn 필요시 `section` 블록 사용: `{"type": "section", "text": {"type": "mrkdwn", "text": "~취소선~"}}`
+
 ## 커밋 컨벤션
 
 - 형식: `TYPE: (TICKET) 설명` (예: `FEAT: (AI-98) 시트 동기화 추가`)
