@@ -27,7 +27,8 @@ dev = [
 testpaths = ["tests"]
 markers = [
     "unit: isolated unit tests",
-    "integration: tests requiring external services",
+    "integration: component integration tests with fakes",
+    "integration_real: real external integration tests (Google Sheets API)",
 ]
 pythonpath = ["."]
 

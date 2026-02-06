@@ -83,6 +83,19 @@ class TestColumnMapper:
         with pytest.raises(SpreadsheetError, match="필수 헤더 누락"):
             mapper.resolve(headers, REQUIRED)
 
+    def test_필수_필드가_config에_없으면_에러(self):
+        mapper = ColumnMapper(
+            {
+                "settlement_day": "정산기준일",
+                "user_name": "작성자",
+                "status": "처리",
+            }
+        )
+        headers = ["정산기준일", "작성자", "예약번호", "처리"]
+
+        with pytest.raises(SpreadsheetError, match="booking_key\\(config_missing\\)"):
+            mapper.resolve(headers, REQUIRED)
+
     def test_추가_헤더는_무시(self):
         mapper = ColumnMapper(SAMPLE_FIELD_TO_HEADER)
         headers = ["정산기준일", "작성자", "예약번호", "처리", "미지정컬럼"]

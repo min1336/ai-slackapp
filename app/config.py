@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -59,9 +60,56 @@ class DatabaseProperties(BaseSettings):
         return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.dbname}"
 
 
-class SheetsConfig(BaseModel):
-    settlement: str = "정산"
-    issue_log: str = "정산이슈로그"
+def _default_settlement_columns() -> dict[str, str]:
+    return {
+        "정산기준일": "settlement_day",
+        "작성자": "user_name",
+        "이슈사항": "issue_type",
+        "고객명": "customer_name",
+        "예약번호": "booking_key",
+        "업체명1": "company_name",
+        "업체명2(대신배차)": "company_sub_name",
+        "정산기준금액": "settlement_cost",
+        "카모아 부담비용": "carmore_cost",
+        "고객환불금액": "user_refund_cost",
+        "판매채널": "sales_channel",
+        "내용": "description",
+        "처리": "status",
+        "승인자": "approver_name",
+        "등록시간": "created_at",
+        "수정시간": "updated_at",
+        "스레드 링크": "thread_url",
+        "비고": "note",
+        "반려자": "reviewer_name",
+        "고객 정보 오류": "rejection_reason",
+        "정산완료": "settlement_completed",
+    }
+
+
+def _default_issue_log_columns() -> dict[str, str]:
+    return {
+        "정산기준일": "settlement_day",
+        "작성자": "user_name",
+        "이슈사항": "issue_type",
+        "고객명": "customer_name",
+        "예약번호": "booking_key",
+        "업체명1": "company_name",
+        "업체명2(대신배차)": "company_sub_name",
+        "정산기준금액": "settlement_cost",
+        "카모아 부담비용": "carmore_cost",
+        "고객환불금액": "user_refund_cost",
+        "판매채널": "sales_channel",
+        "내용": "description",
+        "처리": "status",
+        "승인자": "approver_name",
+        "등록시간": "created_at",
+        "수정시간": "updated_at",
+        "스레드 링크": "thread_url",
+        "비고": "note",
+        "반려자": "reviewer_name",
+        "고객 정보 오류": "rejection_reason",
+        "sync_key": "sync_key",
+    }
 
 
 class SlackChannelsConfig(BaseModel):
@@ -72,33 +120,40 @@ class SlackChannelsConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class SpreadsheetSheetConfig(BaseModel):
+    name: str
+    columns: dict[str, str] = Field(default_factory=dict)
+
+
+class SheetsConfig(BaseModel):
+    settlement: SpreadsheetSheetConfig = SpreadsheetSheetConfig(
+        name="정산",
+        columns=_default_settlement_columns(),
+    )
+    issue_log: SpreadsheetSheetConfig = SpreadsheetSheetConfig(
+        name="정산이슈로그",
+        columns=_default_issue_log_columns(),
+    )
+
+
 class SpreadsheetConfig(BaseModel):
     id: str
     sheets: SheetsConfig = SheetsConfig()
-    columns: dict[str, str] = {
-        "settlement_day": "정산기준일",
-        "user_name": "작성자",
-        "issue_type": "이슈사항",
-        "customer_name": "고객명",
-        "booking_key": "예약번호",
-        "company_name": "업체명1",
-        "company_sub_name": "업체명2(대신배차)",
-        "settlement_cost": "정산기준금액",
-        "carmore_cost": "카모아 부담비용",
-        "user_refund_cost": "고객환불금액",
-        "sales_channel": "판매채널",
-        "description": "내용",
-        "status": "처리",
-        "approver_name": "승인자",
-        "created_at": "등록시간",
-        "updated_at": "수정시간",
-        "thread_url": "스레드 링크",
-        "note": "비고",
-        "reviewer_name": "반려자",
-        "rejection_reason": "고객 정보 오류",
-        "settlement_completed": "정산완료",
-        "sync_key": "sync_key",
-    }
+
+    def _sheet_config(self, sheet_type: str) -> SpreadsheetSheetConfig:
+        if sheet_type == "settlement":
+            return self.sheets.settlement
+        if sheet_type == "issue_log":
+            return self.sheets.issue_log
+        raise ValueError(f"Unknown sheet_type: {sheet_type}")
+
+    def sheet_name(self, sheet_type: str) -> str:
+        return self._sheet_config(sheet_type).name
+
+    def field_to_header(self, sheet_type: str) -> dict[str, str]:
+        """내부용: sheet_type별 field_name → header_name 매핑."""
+        columns = self._sheet_config(sheet_type).columns
+        return {v: k for k, v in columns.items()}
 
 
 class AppConfig(BaseModel):
@@ -119,7 +174,12 @@ class AppConfig(BaseModel):
 
 
 def _load_app_config() -> AppConfig:
-    config_path = Path(__file__).parent.parent / "config.yaml"
+    project_root = Path(__file__).parent.parent
+    config_file = os.getenv("APP_CONFIG_FILE", "config.yaml")
+    config_path = Path(config_file)
+    if not config_path.is_absolute():
+        config_path = project_root / config_path
+
     with open(config_path) as f:
         data = yaml.safe_load(f)
     return AppConfig.model_validate(data)

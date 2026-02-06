@@ -70,13 +70,30 @@ class ColumnMapper:
 
         field_to_index: dict[str, int] = {}
         missing: list[str] = []
+        configured_headers: set[str] = set()
 
-        for field_name, header_name in self._field_to_header.items():
-            idx = header_to_index.get(header_name)
+        for field_name in required_fields:
+            header_name = self._field_to_header.get(field_name)
+            if not header_name:
+                missing.append(f"{field_name}(config_missing)")
+                continue
+
+            normalized_header = header_name.strip()
+            configured_headers.add(normalized_header)
+            idx = header_to_index.get(normalized_header)
             if idx is not None:
                 field_to_index[field_name] = idx
-            elif field_name in required_fields:
+            else:
                 missing.append(f"{field_name}({header_name})")
+
+        for field_name, header_name in self._field_to_header.items():
+            if field_name in field_to_index:
+                continue
+            normalized_header = header_name.strip()
+            configured_headers.add(normalized_header)
+            idx = header_to_index.get(normalized_header)
+            if idx is not None:
+                field_to_index[field_name] = idx
 
         if missing:
             raise SpreadsheetError(
@@ -84,7 +101,11 @@ class ColumnMapper:
                 details={"missing": missing},
             )
 
-        unmapped = set(actual_headers) - set(self._field_to_header.values())
+        unmapped = {
+            header.strip()
+            for header in actual_headers
+            if header.strip() and header.strip() not in configured_headers
+        }
         if unmapped:
             logger.debug(
                 "unmapped_headers_found",

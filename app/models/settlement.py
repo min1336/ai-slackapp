@@ -7,29 +7,6 @@ from enum import Enum
 
 from pydantic import BaseModel, field_validator
 
-SETTLEMENT_FIELDS: tuple[str, ...] = (
-    "settlement_day",
-    "user_name",
-    "issue_type",
-    "customer_name",
-    "booking_key",
-    "company_name",
-    "company_sub_name",
-    "settlement_cost",
-    "carmore_cost",
-    "user_refund_cost",
-    "sales_channel",
-    "description",
-    "status",
-    "approver_name",
-    "created_at",
-    "updated_at",
-    "thread_url",
-    "note",
-    "reviewer_name",
-    "rejection_reason",
-)
-
 
 class SettlementStatus(str, Enum):
     REQUESTED = "요청"
@@ -175,3 +152,8 @@ class SettlementRow:
             for f in fields(self)
             if f.name != "settlement_completed"
         }
+
+
+SETTLEMENT_FIELDS: tuple[str, ...] = tuple(
+    f.name for f in fields(SettlementRow) if f.name != "settlement_completed"
+)

@@ -68,8 +68,18 @@ slack_channels:
 spreadsheet:
   id: "your_spreadsheet_id"
   sheets:
-    settlement: "정산"
-    approval_log: "승인로그"
+    settlement:
+      name: "정산"
+      columns:
+        "예약번호": booking_key
+        "정산완료": settlement_completed
+        # ... 생략
+    issue_log:
+      name: "정산이슈로그"
+      columns:
+        "예약번호": booking_key
+        "sync_key": sync_key
+        # ... 생략
 ```
 
 ### 5. Google Sheets 서비스 계정 설정
@@ -84,16 +94,17 @@ spreadsheet:
 
 #### 정산 시트
 
-| 필수 설정 | 위치 | 설명 |
-|-----------|------|------|
-| 정산완료 체크박스 | **U열 (21번째 컬럼)** | 데이터 > 데이터 확인 > 체크박스. 코드가 `TRUE`/`FALSE`로 읽고 씀 |
+| 필수 설정 | 설명 |
+|-----------|------|
+| `정산완료` 헤더 + 체크박스 | 헤더명은 `config.yaml > spreadsheet.sheets.settlement.columns`와 일치해야 하며 값은 `TRUE/FALSE` 체크박스여야 함 |
 
-- 컬럼 A~T는 코드가 자동으로 데이터를 채움 (헤더만 맞으면 됨)
-- U열 체크박스를 운영팀이 `TRUE`로 체크하면 해당 건은 "정산완료" 처리되어, 동일 예약번호로 새 이슈 등록 시 기존 행을 덮어쓰지 않고 새 행이 생성됨
+- 컬럼 순서는 자유롭게 변경 가능 (헤더 기반 매핑)
+- 운영팀이 `정산완료=TRUE`로 체크하면, 동일 예약번호 신규 등록 시 기존 행을 덮어쓰지 않고 새 행이 생성됨
 
 #### 이슈 로그 시트
 
-별도 필수 설정 없음. 코드가 자동으로 행을 추가/갱신합니다.
+- `sync_key` 헤더는 필수이며, 헤더명은 `config.yaml > spreadsheet.sheets.issue_log.columns`와 일치해야 합니다.
+- 컬럼 순서는 자유롭게 변경 가능 (헤더 기반 매핑)
 
 ### 7. 실행
 
@@ -114,9 +125,11 @@ pytest tests -v
 # 유닛 테스트만 (빠름)
 pytest tests/unit -v
 
-# 통합 테스트만 (Google Sheets 연동 테스트)
-# 실제로 구글시트에 추가되니 주의해야 할 필요가 있음
+# 통합 테스트만 (Fake Worksheet 기반 모듈 통합)
 pytest tests/integration -v
+
+# 실제 Google Sheets API 통합 테스트 (테스트 전용 시트 권장)
+RUN_REAL_INTEGRATION=1 pytest -m integration_real -v
 ```
 ---
 
