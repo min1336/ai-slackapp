@@ -36,6 +36,9 @@ def _sync_after_commit(settlement_id: int, log_id: int, row: SettlementRow) -> N
         logger.warning("sheets_sync_failed", booking_key=row.booking_key, error=str(e))
 
 
+# TODO: 승인/반려 처리 중 Sheets에서 정산완료가 동시 변경되는 edge case 존재.
+# 현재는 무시 — 발생 확률 낮음 (승인 전 정산완료 체크는 운영상 없음).
+# 향후 필요시 Sheets 조회 + 경고 메시지 추가 검토.
 def save_settlement(
     data: SettlementData,
     status: SettlementStatus,

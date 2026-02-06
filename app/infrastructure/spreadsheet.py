@@ -21,6 +21,10 @@ SCOPES = [
 ISSUE_LOG_SYNC_KEY_COLUMN = SettlementColumnIndex.SYNC_KEY + 1
 # 1-based column number for created_at
 CREATED_AT_COLUMN = SettlementColumnIndex.CREATED_AT + 1
+# 1-based column number for 정산완료 (21번째 컬럼, to_row() 20컬럼 뒤)
+SETTLEMENT_COMPLETED_COLUMN = 21
+# 1-based column number for booking_key
+BOOKING_KEY_COLUMN = SettlementColumnIndex.BOOKING_KEY + 1
 
 _spreadsheet_client: gspread.Spreadsheet | None = None
 _client_lock = Lock()
@@ -71,7 +75,7 @@ def save_settlement_row(row: SettlementRow, sheet_name: str | None = None) -> No
         else:
             spreadsheet_client = get_spreadsheet_client()
             worksheet = spreadsheet_client.worksheet(sheet_name)
-            worksheet.append_row(row.to_row())
+            worksheet.append_row(row.to_row() + ["FALSE"])
     except SpreadsheetError:
         raise
     except Exception as e:
@@ -118,12 +122,26 @@ def append_issue_log_row(row: SettlementRow, sync_key: str) -> None:
 
 
 def find_row_by_booking_key(booking_key: str, sheet_name: str) -> int | None:
+    """booking_key로 활성(정산완료=FALSE) 행 번호를 찾는다.
+
+    정산완료된 행은 무시하고, 활성 행만 반환한다.
+    활성 행이 없으면 None (= 새 행 INSERT 필요).
+    """
     try:
         spreadsheet_client = get_spreadsheet_client()
         worksheet = spreadsheet_client.worksheet(sheet_name)
-        cell = worksheet.find(booking_key)
-        if cell:
-            return cell.row
+        matches = worksheet.findall(booking_key)
+
+        for cell in matches:
+            if cell.col != BOOKING_KEY_COLUMN:
+                continue
+            completed = _get_cell(
+                worksheet.row_values(cell.row),
+                SETTLEMENT_COMPLETED_COLUMN - 1,
+            )
+            if completed != "TRUE":
+                return cell.row
+
         return None
     except Exception as e:
         if _is_cell_not_found(e):
@@ -157,6 +175,11 @@ def update_settlement_row(
 
         row_data = row.to_row()
         row_data[SettlementColumnIndex.CREATED_AT] = existing_created_at
+
+        # 기존 정산완료 값 보존
+        completed_cell = worksheet.cell(row_number, SETTLEMENT_COMPLETED_COLUMN)
+        settlement_completed = completed_cell.value or "FALSE"
+        row_data = row_data + [settlement_completed]
 
         cell_list = worksheet.range(row_number, 1, row_number, len(row_data))
         for i, cell in enumerate(cell_list):

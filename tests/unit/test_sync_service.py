@@ -10,7 +10,7 @@ from app.infrastructure.database.repository import (
     SettlementRepository,
 )
 from app.models import SettlementRow, SettlementStatus
-from app.services.sync_service import sync_pending_records
+from app.services.sync_service import _entity_to_row, sync_pending_records
 from tests.fakes.fake_database import FakeDatabase
 from tests.fakes.fake_spreadsheet import FakeSpreadsheet
 
@@ -131,3 +131,26 @@ def test_sync_pending_records_settlement_only_failure(
         assert settlement.sheets_sync_error
         assert log.sheets_synced is True
         assert log.sync_status == "completed"
+
+
+def test_entity_to_row_settlement_completed_변환(fake_db, sample_settlement_data):
+    """_entity_to_row가 settlement_completed를 올바르게 변환하는지 확인."""
+    row = SettlementRow.from_settlement_data(
+        data=sample_settlement_data,
+        status=SettlementStatus.APPROVED,
+        approver_name="승인자",
+        thread_url="http://example.com/thread",
+    )
+
+    with fake_db.get_session() as session:
+        repo = SettlementRepository(session)
+        settlement = repo.save(row)
+
+        # 기본값: settlement_completed=False → "FALSE"
+        converted = _entity_to_row(settlement)
+        assert converted.settlement_completed == "FALSE"
+
+        # settlement_completed=True → "TRUE"
+        settlement.settlement_completed = True
+        converted = _entity_to_row(settlement)
+        assert converted.settlement_completed == "TRUE"

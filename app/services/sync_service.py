@@ -199,6 +199,9 @@ def _entity_to_row(
         updated_at=updated_at,
         reviewer_name=entity.reviewer_name,
         rejection_reason=entity.rejection_reason,
+        settlement_completed=(
+            "TRUE" if getattr(entity, "settlement_completed", False) else "FALSE"
+        ),
     )
 
 
