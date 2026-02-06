@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -12,9 +20,13 @@ class Base(DeclarativeBase):
 
 class Settlement(Base):
     __tablename__ = "settlements"
+    __table_args__ = (
+        # 문서화 목적: 실제 제약은 migration에서 partial unique index로 생성
+        Index("ix_settlements_booking_key", "booking_key"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    booking_key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    booking_key: Mapped[str] = mapped_column(String(100), nullable=False)
     settlement_day: Mapped[str] = mapped_column(String(20), nullable=False)
     user_name: Mapped[str] = mapped_column(String(100), nullable=False)
     customer_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -43,6 +55,7 @@ class Settlement(Base):
 
     reviewer_name: Mapped[str] = mapped_column(String(100), default="")
     rejection_reason: Mapped[str] = mapped_column(Text, default="")
+    settlement_completed: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationship
     issue_logs: Mapped[list[IssueLog]] = relationship(back_populates="settlement")

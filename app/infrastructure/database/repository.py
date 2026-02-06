@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 
 from app.infrastructure.database.models import IssueLog, Settlement
 
@@ -43,7 +42,31 @@ class SettlementRepository:
         self.session = session
 
     def save(self, row: SettlementRow) -> Settlement:
-        stmt = insert(Settlement).values(
+        existing = self.get_active_by_booking_key(row.booking_key)
+        if existing:
+            existing.settlement_day = row.settlement_day
+            existing.user_name = row.user_name
+            existing.customer_name = row.customer_name
+            existing.company_name = row.company_name
+            existing.company_sub_name = row.company_sub_name
+            existing.settlement_cost = _parse_cost(row.settlement_cost)
+            existing.carmore_cost = _parse_cost(row.carmore_cost)
+            existing.user_refund_cost = _parse_cost(row.user_refund_cost)
+            existing.issue_type = row.issue_type
+            existing.sales_channel = row.sales_channel
+            existing.description = row.description
+            existing.status = row.status
+            existing.approver_name = row.approver_name
+            existing.thread_url = row.thread_url
+            existing.note = row.note
+            existing.reviewer_name = row.reviewer_name
+            existing.rejection_reason = row.rejection_reason
+            existing.updated_at = datetime.now()
+            existing.sheets_synced = False
+            self.session.flush()
+            return existing
+
+        settlement = Settlement(
             booking_key=row.booking_key,
             settlement_day=row.settlement_day,
             user_name=row.user_name,
@@ -62,35 +85,11 @@ class SettlementRepository:
             note=row.note,
             reviewer_name=row.reviewer_name,
             rejection_reason=row.rejection_reason,
+            settlement_completed=False,
         )
-
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["booking_key"],
-            set_={
-                "settlement_day": row.settlement_day,
-                "user_name": row.user_name,
-                "customer_name": row.customer_name,
-                "company_name": row.company_name,
-                "company_sub_name": row.company_sub_name,
-                "settlement_cost": _parse_cost(row.settlement_cost),
-                "carmore_cost": _parse_cost(row.carmore_cost),
-                "user_refund_cost": _parse_cost(row.user_refund_cost),
-                "issue_type": row.issue_type,
-                "sales_channel": row.sales_channel,
-                "description": row.description,
-                "status": row.status,
-                "approver_name": row.approver_name,
-                "thread_url": row.thread_url,
-                "note": row.note,
-                "reviewer_name": row.reviewer_name,
-                "rejection_reason": row.rejection_reason,
-                "updated_at": datetime.now(),
-                "sheets_synced": False,
-            },
-        ).returning(Settlement)
-
-        result = self.session.execute(stmt)
-        return result.scalar_one()
+        self.session.add(settlement)
+        self.session.flush()
+        return settlement
 
     def add_log(self, row: SettlementRow, settlement_id: int | None = None) -> IssueLog:
         log = IssueLog(
@@ -123,6 +122,14 @@ class SettlementRepository:
 
     def get_by_booking_key(self, booking_key: str) -> Settlement | None:
         stmt = select(Settlement).where(Settlement.booking_key == booking_key)
+        result = self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    def get_active_by_booking_key(self, booking_key: str) -> Settlement | None:
+        stmt = select(Settlement).where(
+            Settlement.booking_key == booking_key,
+            Settlement.settlement_completed == False,  # noqa: E712
+        )
         result = self.session.execute(stmt)
         return result.scalar_one_or_none()
 

@@ -200,3 +200,45 @@ class TestSettlementRepository:
         # Then
         assert found is not None
         assert found.user_name == "홍길동"
+
+    def test_save_정산완료된_booking_key는_새행을_생성한다(self, fake_db, sample_row):
+        # Given - 먼저 저장 후 정산완료 처리
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            first = repo.save(sample_row)
+            first_id = first.id
+            first.settlement_completed = True
+
+        # When - 같은 booking_key로 다시 저장
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            second = repo.save(sample_row)
+
+        # Then - 새로운 행이 생성됨
+        assert second.id != first_id
+        with fake_db.get_session() as session:
+            all_settlements = session.execute(select(Settlement)).scalars().all()
+            assert len(all_settlements) == 2
+
+    def test_get_active_by_booking_key_활성건만_조회한다(self, fake_db, sample_row):
+        # Given - 정산완료된 건 + 활성 건
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            completed = repo.save(sample_row)
+            completed.settlement_completed = True
+
+        sample_row.approver_name = "새승인자"
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            active = repo.save(sample_row)
+            active_id = active.id
+
+        # When
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            found = repo.get_active_by_booking_key("BK-001")
+
+        # Then - 활성 건만 반환
+        assert found is not None
+        assert found.id == active_id
+        assert found.settlement_completed is False
