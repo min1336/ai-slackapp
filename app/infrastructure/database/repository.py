@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
-from app.infrastructure.database.models import ApprovalLog, Settlement
+from app.infrastructure.database.models import IssueLog, Settlement
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -60,6 +60,8 @@ class SettlementRepository:
             approver_name=row.approver_name,
             thread_url=row.thread_url,
             note=row.note,
+            reviewer_name=row.reviewer_name,
+            rejection_reason=row.rejection_reason,
         )
 
         stmt = stmt.on_conflict_do_update(
@@ -80,6 +82,8 @@ class SettlementRepository:
                 "approver_name": row.approver_name,
                 "thread_url": row.thread_url,
                 "note": row.note,
+                "reviewer_name": row.reviewer_name,
+                "rejection_reason": row.rejection_reason,
                 "updated_at": datetime.now(),
                 "sheets_synced": False,
             },
@@ -88,10 +92,8 @@ class SettlementRepository:
         result = self.session.execute(stmt)
         return result.scalar_one()
 
-    def add_log(
-        self, row: SettlementRow, settlement_id: int | None = None
-    ) -> ApprovalLog:
-        log = ApprovalLog(
+    def add_log(self, row: SettlementRow, settlement_id: int | None = None) -> IssueLog:
+        log = IssueLog(
             settlement_id=settlement_id,
             booking_key=row.booking_key,
             settlement_day=row.settlement_day,
@@ -109,6 +111,8 @@ class SettlementRepository:
             approver_name=row.approver_name,
             thread_url=row.thread_url,
             note=row.note,
+            reviewer_name=row.reviewer_name,
+            rejection_reason=row.rejection_reason,
         )
         self.session.add(log)
         self.session.flush()
@@ -178,31 +182,29 @@ class SettlementRepository:
         return len(records)
 
 
-class ApprovalLogRepository:
+class IssueLogRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def get(self, log_id: int) -> ApprovalLog | None:
-        return self.session.get(ApprovalLog, log_id)
+    def get(self, log_id: int) -> IssueLog | None:
+        return self.session.get(IssueLog, log_id)
 
-    def list_unsynced(self, limit: int = 100) -> list[ApprovalLog]:
+    def list_unsynced(self, limit: int = 100) -> list[IssueLog]:
         """동기화 안 된 로그 목록 조회. (하위 호환용, claim_unsynced 사용 권장)"""
         stmt = (
-            select(ApprovalLog)
-            .where(ApprovalLog.sheets_synced == False)  # noqa: E712
+            select(IssueLog)
+            .where(IssueLog.sheets_synced == False)  # noqa: E712
             .limit(limit)
         )
         result = self.session.execute(stmt)
         return list(result.scalars().all())
 
-    def claim_unsynced(self, limit: int = 100) -> list[ApprovalLog]:
+    def claim_unsynced(self, limit: int = 100) -> list[IssueLog]:
         """미동기화 레코드 조회 및 in_progress로 변경.
 
         조회와 상태 변경이 같은 트랜잭션에서 수행되어 중복 처리 방지.
         """
-        stmt = (
-            select(ApprovalLog).where(ApprovalLog.sync_status == "pending").limit(limit)
-        )
+        stmt = select(IssueLog).where(IssueLog.sync_status == "pending").limit(limit)
         records = list(self.session.execute(stmt).scalars().all())
 
         for record in records:
@@ -232,7 +234,7 @@ class ApprovalLogRepository:
         Returns:
             복구된 레코드 수
         """
-        stmt = select(ApprovalLog).where(ApprovalLog.sync_status == "in_progress")
+        stmt = select(IssueLog).where(IssueLog.sync_status == "in_progress")
         records = list(self.session.execute(stmt).scalars().all())
 
         for record in records:

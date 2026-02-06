@@ -16,15 +16,14 @@ uv sync
 uv run python -m app.main
 
 # 테스트
-pytest tests -v                    # 전체 테스트
-pytest tests/unit -v               # 유닛 테스트만
-pytest tests/integration -v        # 통합 테스트 (실제 구글시트에 기록됨)
+uv run pytest tests/unit -v                                # 유닛 테스트
+uv run pytest tests/unit -v --cov=app --cov-report=term-missing  # 커버리지 포함
 
 # 린팅
 uv run ruff check --fix            # 자동 수정
 uv run ruff format                 # 포매팅
 
-# 커밋 전 검증 (린트 + 테스트)
+# 커밋 전 검증 (pre-commit이 ruff + ruff-format + pytest-unit 자동 실행)
 uv run ruff check && uv run pytest tests/unit -q
 
 # Pre-commit 설정
@@ -42,15 +41,19 @@ listener/ (Controller)     ← Slack 이벤트 수신, services/views 호출
 services/                  ← 비즈니스 로직, infrastructure 호출
     ↓
 infrastructure/            ← 외부 시스템 통신 (Slack API, Google Sheets)
+    ├── protocols.py       ← Protocol 인터페이스 (DI용)
     ↓
 models/                    ← 모든 레이어에서 import 가능
 views/                     ← Slack Block Kit JSON 생성 (데이터 가공 금지)
+core/                      ← 공통 유틸 (logger.py: structlog 설정)
 ```
 
 **경계 규칙:**
 - `listener/` → `infrastructure/` 직접 호출 금지
 - `services/` → `listener/` 호출 금지
 - `views/`는 순수하게 Block Kit JSON만 생성
+
+**DI 패턴:** `infrastructure/protocols.py`에 Protocol 인터페이스 정의. 서비스는 Protocol 타입으로 의존성을 받고, 기본값은 실제 구현체. 테스트에서 Fake 주입 (`tests/fakes/`).
 
 ## 설정 구조
 
@@ -71,7 +74,7 @@ psql -d <database_name> -f migrations/001_add_sync_status.sql
 
 **Alembic 미사용**: Supabase 마이그레이션 시스템으로 충분. 별도 설정 불필요.
 
-## 데이터 모델 선택
+## 데이터 모델
 
 | 용도 | 모델 타입 |
 |------|-----------|
@@ -79,6 +82,8 @@ psql -d <database_name> -f migrations/001_add_sync_status.sql
 | 단순 데이터 홀더 (스프레드시트 행 등) | `@dataclass` |
 
 예: `SettlementData`(Pydantic)는 버튼 value로 전달, `SettlementRow`(dataclass)는 시트 행 변환용.
+
+**금액 필드:** `int | None` (모델 내부), Slack UI 경계에서만 `str` 변환. `parse_cost` validator가 `"1,000,000원"` → `1000000` 자동 변환.
 
 **새 필드 추가 시 체크리스트:**
 1. `models/settlement.py` - Pydantic/dataclass 필드
@@ -92,6 +97,15 @@ psql -d <database_name> -f migrations/001_add_sync_status.sql
 1. **정산 이슈**: 스레드에서 `!정산` 명령 → 원본 메시지 파싱 → 모달 → 승인 요청 → 시트 저장
 2. **이관 예약**: 특정 채널에 메시지 작성 시 자동 감지 → 파싱 → 모달 → 승인/반려
 
+## 로깅 (structlog)
+
+- `from app.core import get_logger` → `logger = get_logger(__name__)`
+- 이벤트명: 영어 snake_case (예: `settlement_approve_failed`, `sync_completed`)
+- 컨텍스트: 키워드 인자 (`logger.info("event", booking_key=key, error=str(e))`)
+- `logger.exception()` 자동으로 traceback 포함 — `exc_info=True` 불필요
+- 환경별 출력: dev=컬러 콘솔(`ConsoleRenderer`), prod=JSON(`JSONRenderer`)
+- **주의:** `structlog.stdlib.add_logger_name`은 `PrintLoggerFactory`와 호환 불가
+
 ## 에러 핸들링 패턴
 
 `listener/` 핸들러에서 Slack API 호출 시 표준 예외 처리:
@@ -99,14 +113,27 @@ psql -d <database_name> -f migrations/001_add_sync_status.sql
 try:
     # 핸들러 로직
 except (SlackApiError, ValidationError, KeyError):
-    logger.exception("처리 중 에러 발생")
+    logger.exception("settlement_approve_failed")
 ```
+
+글로벌 에러 핸들러(`error_handler.py`)에서 사용자/시스템 에러 분류, 모니터링 알림 전송.
+Slack Bolt의 `@app.error` 핸들러가 주입하는 `logger` 파라미터는 `**_kwargs`로 무시 (모듈 레벨 structlog 사용).
+
+**예외 계층** (`app/exceptions.py`): `AppError(message, user_message, details)` → `SpreadsheetError` | `SlackError` | `ValidationError`. `user_message`는 사용자에게 표시, `details`는 모니터링 알림에 포함.
+
+## 테스트
+
+- `tests/factories.py`의 `SettlementDataFactory.create(**overrides)` 사용하여 테스트 데이터 생성
+- `tests/fakes/` — Protocol 기반 Fake 구현체 (외부 의존성 없이 테스트)
+- `tests/conftest.py` — 공유 픽스처 (팩토리 기반)
+- Pre-commit 훅: ruff + ruff-format + pytest-unit (3개 모두 커밋 시 자동 실행)
 
 ## 코드 스타일
 
 - `from __future__ import annotations` 필수 (ruff isort 설정)
 - Python 3.12+, line-length 88
 - 선택된 ruff 규칙: E, W, F, I, UP, B, SIM, C4, FA
+- 상수(`ActionId`, `BlockId`): `StrEnum` 사용, `app/constants/slack_ids.py`에 정의
 
 ## Slack Block Kit 주의사항
 

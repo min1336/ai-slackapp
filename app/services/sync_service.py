@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from app.constants import DateFormat
 from app.core import get_logger
 from app.infrastructure.database import (
-    ApprovalLogRepository,
+    IssueLogRepository,
     SettlementRepository,
     get_session,
 )
@@ -46,7 +46,7 @@ def recover_stale_sync_records(
 
     with _session() as session:
         settlements = SettlementRepository(session).recover_stale_records()
-        logs = ApprovalLogRepository(session).recover_stale_records()
+        logs = IssueLogRepository(session).recover_stale_records()
 
     if settlements or logs:
         logger.info("recovered_stale_records", settlements=settlements, logs=logs)
@@ -62,14 +62,14 @@ def sync_to_sheets(
 ) -> bool:
     """정산 데이터를 Google Sheets로 동기화.
 
-    정산 시트 (upsert) + 승인 로그 시트 (append) 모두 저장.
+    정산 시트 (upsert) + 정산이슈로그 시트 (append) 모두 저장.
     예외 발생 시 실패로 처리.
     """
     _sheets = sheets or _get_sheets()
 
     try:
         _sheets.save_settlement_row(row)
-        _sheets.append_approval_log_row(row, str(log_id))
+        _sheets.append_issue_log_row(row, str(log_id))
         return True
 
     except Exception as e:
@@ -100,7 +100,7 @@ def sync_pending_records(
 
     with _session() as session:
         settlements = SettlementRepository(session).claim_unsynced(limit=100)
-        logs = ApprovalLogRepository(session).claim_unsynced(limit=100)
+        logs = IssueLogRepository(session).claim_unsynced(limit=100)
 
     for settlement in settlements:
         try:
@@ -122,19 +122,19 @@ def sync_pending_records(
     for log in logs:
         try:
             row = _entity_to_row(log, include_updated_at=False)
-            _sheets.append_approval_log_row(row, str(log.id))
+            _sheets.append_issue_log_row(row, str(log.id))
             with _session() as session:
-                ApprovalLogRepository(session).mark_synced(log.id)
+                IssueLogRepository(session).mark_synced(log.id)
             synced_logs += 1
         except Exception as e:
             logger.warning(
                 "retry_sync_failed",
-                record_type="approval_log",
+                record_type="issue_log",
                 booking_key=log.booking_key,
                 error=str(e),
             )
             with _session() as session:
-                ApprovalLogRepository(session).mark_sync_failed(log.id, str(e))
+                IssueLogRepository(session).mark_sync_failed(log.id, str(e))
 
     if synced_settlements or synced_logs:
         logger.info(
@@ -165,6 +165,8 @@ class RowConvertible(Protocol):
     status: str
     approver_name: str
     thread_url: str
+    reviewer_name: str
+    rejection_reason: str
     created_at: datetime
 
 
@@ -195,6 +197,8 @@ def _entity_to_row(
         thread_url=entity.thread_url,
         created_at=entity.created_at.strftime(DateFormat.DATETIME),
         updated_at=updated_at,
+        reviewer_name=entity.reviewer_name,
+        rejection_reason=entity.rejection_reason,
     )
 
 

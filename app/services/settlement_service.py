@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from app.config import database
 from app.core import get_logger
 from app.infrastructure.database import (
-    ApprovalLogRepository,
+    IssueLogRepository,
     SettlementRepository,
     get_session,
     transactional,
@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 @transactional
 def _mark_synced(session, settlement_id: int, log_id: int) -> None:
     SettlementRepository(session).mark_synced(settlement_id)
-    ApprovalLogRepository(session).mark_synced(log_id)
+    IssueLogRepository(session).mark_synced(log_id)
 
 
 def _sync_after_commit(settlement_id: int, log_id: int, row: SettlementRow) -> None:
@@ -53,6 +53,7 @@ def save_settlement(
         status=status,
         approver_name=approver_name,
         thread_url=thread_url,
+        rejection_reason=rejection_reason,
     )
 
     if rejection_reason:
@@ -67,6 +68,5 @@ def save_settlement(
         settlement_id = settlement.id
         log_id = log.id
 
-        # 승인만 Sheets 동기화 (반려는 DB 저장만)
-        if status == SettlementStatus.APPROVED:
-            session.after_commit(lambda: _sync_after_commit(settlement_id, log_id, row))
+        # 모든 상태(요청/승인/반려)에서 Sheets 동기화 실행
+        session.after_commit(lambda: _sync_after_commit(settlement_id, log_id, row))

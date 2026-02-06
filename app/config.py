@@ -61,7 +61,7 @@ class DatabaseProperties(BaseSettings):
 
 class SheetsConfig(BaseModel):
     settlement: str = "정산"
-    approval_log: str = "승인로그"
+    issue_log: str = "정산이슈로그"
 
 
 class SlackChannelsConfig(BaseModel):

@@ -139,6 +139,17 @@ def register_view_handlers(app: App) -> None:
             data.original_thread_ts = metadata.thread_ts
             data.original_message_ts = detail_message_ts
 
+            # 3.5 요청 시점에 DB + 시트 기록
+            try:
+                save_settlement(
+                    data=data,
+                    status=SettlementStatus.REQUESTED,
+                    approver_name="",
+                    thread_url=message_url,
+                )
+            except Exception:
+                logger.warning("request_save_failed", booking_key=data.booking_key)
+
             # 4. 요청자 이름 조회
             requester_name = get_user_name(client, requester_id)
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import func, select
 
-from app.infrastructure.database.models import ApprovalLog, Settlement
+from app.infrastructure.database.models import IssueLog, Settlement
 from app.infrastructure.database.repository import SettlementRepository
 from app.models.settlement import SettlementStatus
 from app.services.settlement_service import save_settlement
@@ -79,7 +79,7 @@ class TestSaveSettlement:
                 thread_url="http://example.com/thread",
             )
 
-    def test_승인시_settlement과_approval_log_모두_저장한다(
+    def test_승인시_settlement과_issue_log_모두_저장한다(
         self, monkeypatch, fake_db, sample_settlement_data
     ):
         # Given
@@ -101,7 +101,7 @@ class TestSaveSettlement:
                 select(func.count()).select_from(Settlement)
             ).scalar()
             log_count = session.execute(
-                select(func.count()).select_from(ApprovalLog)
+                select(func.count()).select_from(IssueLog)
             ).scalar()
 
             assert settlement_count == 1
@@ -190,3 +190,150 @@ class TestSaveSettlement:
             repo = SettlementRepository(session)
             found = repo.get_by_booking_key(sample_settlement_data.booking_key)
             assert found.sheets_synced is False
+
+    def test_요청시_DB에_저장한다(self, monkeypatch, fake_db, sample_settlement_data):
+        # Given
+        monkeypatch.setattr("app.config.database.host", "test-host")
+        monkeypatch.setattr("app.config.database.password", "test-password")
+
+        # When
+        save_settlement(
+            data=sample_settlement_data,
+            status=SettlementStatus.REQUESTED,
+            approver_name="",
+            thread_url="http://example.com/thread",
+            session_factory=fake_db.get_session,
+        )
+
+        # Then
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            found = repo.get_by_booking_key(sample_settlement_data.booking_key)
+            assert found is not None
+            assert found.status == SettlementStatus.REQUESTED.value
+
+    def test_요청시_sheets_동기화_실행된다(
+        self, monkeypatch, fake_db, sample_settlement_data
+    ):
+        # Given
+        monkeypatch.setattr("app.config.database.host", "test-host")
+        monkeypatch.setattr("app.config.database.password", "test-password")
+        monkeypatch.setattr(
+            "app.infrastructure.database.connection.get_session",
+            fake_db.get_session,
+        )
+        monkeypatch.setattr(
+            "app.services.sync_service.sync_to_sheets",
+            lambda row, log_id: True,
+        )
+
+        # When
+        save_settlement(
+            data=sample_settlement_data,
+            status=SettlementStatus.REQUESTED,
+            approver_name="",
+            thread_url="http://example.com/thread",
+            session_factory=fake_db.get_session,
+        )
+
+        # Then - REQUESTED도 sheets_synced=True
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            found = repo.get_by_booking_key(sample_settlement_data.booking_key)
+            assert found.sheets_synced is True
+
+    def test_반려시_sheets_동기화_실행된다(
+        self, monkeypatch, fake_db, sample_settlement_data
+    ):
+        # Given
+        monkeypatch.setattr("app.config.database.host", "test-host")
+        monkeypatch.setattr("app.config.database.password", "test-password")
+        monkeypatch.setattr(
+            "app.infrastructure.database.connection.get_session",
+            fake_db.get_session,
+        )
+        monkeypatch.setattr(
+            "app.services.sync_service.sync_to_sheets",
+            lambda row, log_id: True,
+        )
+
+        # When
+        save_settlement(
+            data=sample_settlement_data,
+            status=SettlementStatus.REJECTED,
+            approver_name="반려자",
+            thread_url="http://example.com/thread",
+            rejection_reason="테스트 사유",
+            session_factory=fake_db.get_session,
+        )
+
+        # Then - REJECTED도 sheets_synced=True
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            found = repo.get_by_booking_key(sample_settlement_data.booking_key)
+            assert found.sheets_synced is True
+
+    def test_rejection_reason_저장된다(
+        self, monkeypatch, fake_db, sample_settlement_data
+    ):
+        # Given
+        monkeypatch.setattr("app.config.database.host", "test-host")
+        monkeypatch.setattr("app.config.database.password", "test-password")
+
+        # When
+        save_settlement(
+            data=sample_settlement_data,
+            status=SettlementStatus.REJECTED,
+            approver_name="반려자",
+            thread_url="http://example.com/thread",
+            rejection_reason="고객 정보 오류",
+            session_factory=fake_db.get_session,
+        )
+
+        # Then
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            found = repo.get_by_booking_key(sample_settlement_data.booking_key)
+            assert found.rejection_reason == "고객 정보 오류"
+
+    def test_reviewer_name_저장된다(self, monkeypatch, fake_db, sample_settlement_data):
+        # Given
+        monkeypatch.setattr("app.config.database.host", "test-host")
+        monkeypatch.setattr("app.config.database.password", "test-password")
+
+        # When - 승인 시 reviewer_name = approver_name
+        save_settlement(
+            data=sample_settlement_data,
+            status=SettlementStatus.APPROVED,
+            approver_name="김검토",
+            thread_url="http://example.com/thread",
+            session_factory=fake_db.get_session,
+        )
+
+        # Then - reviewer_name = approver_name (검토자)
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            found = repo.get_by_booking_key(sample_settlement_data.booking_key)
+            assert found.reviewer_name == "김검토"
+
+    def test_요청시_reviewer_name_비어있다(
+        self, monkeypatch, fake_db, sample_settlement_data
+    ):
+        # Given
+        monkeypatch.setattr("app.config.database.host", "test-host")
+        monkeypatch.setattr("app.config.database.password", "test-password")
+
+        # When - 요청 시 아직 검토자 없음
+        save_settlement(
+            data=sample_settlement_data,
+            status=SettlementStatus.REQUESTED,
+            approver_name="",
+            thread_url="http://example.com/thread",
+            session_factory=fake_db.get_session,
+        )
+
+        # Then - reviewer_name = "" (빈 문자열)
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            found = repo.get_by_booking_key(sample_settlement_data.booking_key)
+            assert found.reviewer_name == ""

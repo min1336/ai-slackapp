@@ -18,7 +18,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
 ]
 # 1-based column number for spreadsheet API
-APPROVAL_LOG_SYNC_KEY_COLUMN = SettlementColumnIndex.SYNC_KEY + 1
+ISSUE_LOG_SYNC_KEY_COLUMN = SettlementColumnIndex.SYNC_KEY + 1
 # 1-based column number for created_at
 CREATED_AT_COLUMN = SettlementColumnIndex.CREATED_AT + 1
 
@@ -87,30 +87,28 @@ def save_settlement_row(row: SettlementRow, sheet_name: str | None = None) -> No
         ) from e
 
 
-def append_approval_log_row(row: SettlementRow, sync_key: str) -> None:
-    sheet_name = config.spreadsheet.sheets.approval_log
+def append_issue_log_row(row: SettlementRow, sync_key: str) -> None:
+    sheet_name = config.spreadsheet.sheets.issue_log
 
     try:
         spreadsheet_client = get_spreadsheet_client()
         worksheet = spreadsheet_client.worksheet(sheet_name)
         existing_row_number = find_row_by_sync_key(worksheet, sync_key)
         if existing_row_number:
-            update_approval_log_row(row, existing_row_number, sync_key)
+            update_issue_log_row(row, existing_row_number, sync_key)
             return
         legacy_row_number = find_row_by_legacy_fingerprint(worksheet, row)
         if legacy_row_number:
-            update_approval_log_row(row, legacy_row_number, sync_key)
+            update_issue_log_row(row, legacy_row_number, sync_key)
             return
-        worksheet.append_row(_to_approval_log_row(row, sync_key))
+        worksheet.append_row(_to_issue_log_row(row, sync_key))
     except SpreadsheetError:
         raise
     except Exception as e:
-        logger.exception(
-            "approval_log_append_failed", sheet_name=sheet_name, error=str(e)
-        )
-        logger.debug("failed_row_data", row_data=_to_approval_log_row(row, sync_key))
+        logger.exception("issue_log_append_failed", sheet_name=sheet_name, error=str(e))
+        logger.debug("failed_row_data", row_data=_to_issue_log_row(row, sync_key))
         raise SpreadsheetError(
-            message=f"Failed to append approval log: {e}",
+            message=f"Failed to append issue log: {e}",
             details={
                 "sheet_name": sheet_name,
                 "booking_key": row.booking_key,
@@ -184,13 +182,13 @@ def update_settlement_row(
         ) from e
 
 
-def update_approval_log_row(row: SettlementRow, row_number: int, sync_key: str) -> None:
-    sheet_name = config.spreadsheet.sheets.approval_log
+def update_issue_log_row(row: SettlementRow, row_number: int, sync_key: str) -> None:
+    sheet_name = config.spreadsheet.sheets.issue_log
     try:
         spreadsheet_client = get_spreadsheet_client()
         worksheet = spreadsheet_client.worksheet(sheet_name)
 
-        row_data = _to_approval_log_row(row, sync_key)
+        row_data = _to_issue_log_row(row, sync_key)
         cell_list = worksheet.range(row_number, 1, row_number, len(row_data))
         for i, cell in enumerate(cell_list):
             cell.value = row_data[i]
@@ -198,14 +196,14 @@ def update_approval_log_row(row: SettlementRow, row_number: int, sync_key: str) 
         worksheet.update_cells(cell_list)
     except Exception as e:
         logger.exception(
-            "approval_log_row_update_failed",
+            "issue_log_row_update_failed",
             sheet_name=sheet_name,
             row_number=row_number,
             error=str(e),
         )
-        logger.debug("failed_row_data", row_data=_to_approval_log_row(row, sync_key))
+        logger.debug("failed_row_data", row_data=_to_issue_log_row(row, sync_key))
         raise SpreadsheetError(
-            message=f"Failed to update approval log row: {e}",
+            message=f"Failed to update issue log row: {e}",
             details={
                 "sheet_name": sheet_name,
                 "row_number": row_number,
@@ -237,10 +235,10 @@ def find_row_by_sync_key(worksheet: Worksheet, sync_key: str) -> int | None:
         ) from e
 
     for cell in matches:
-        if cell.col == APPROVAL_LOG_SYNC_KEY_COLUMN:
+        if cell.col == ISSUE_LOG_SYNC_KEY_COLUMN:
             return cell.row
         values = worksheet.row_values(cell.row)
-        if _get_cell(values, APPROVAL_LOG_SYNC_KEY_COLUMN - 1) == sync_key:
+        if _get_cell(values, ISSUE_LOG_SYNC_KEY_COLUMN - 1) == sync_key:
             return cell.row
     return None
 
@@ -270,16 +268,16 @@ def find_row_by_legacy_fingerprint(
 
     for cell in matches:
         values = worksheet.row_values(cell.row)
-        if _is_same_approval_log(values, row):
+        if _is_same_issue_log(values, row):
             return cell.row
     return None
 
 
-def _to_approval_log_row(row: SettlementRow, sync_key: str) -> list[str]:
+def _to_issue_log_row(row: SettlementRow, sync_key: str) -> list[str]:
     return row.to_row() + [sync_key]
 
 
-def _is_same_approval_log(values: list[str], row: SettlementRow) -> bool:
+def _is_same_issue_log(values: list[str], row: SettlementRow) -> bool:
     # 레거시 중복 방지용 핑거프린트 비교
     return (
         _get_cell(values, SettlementColumnIndex.BOOKING_KEY) == row.booking_key
@@ -311,5 +309,5 @@ class DefaultSpreadsheetGateway:
     ) -> None:
         save_settlement_row(row, sheet_name)
 
-    def append_approval_log_row(self, row: SettlementRow, sync_key: str) -> None:
-        append_approval_log_row(row, sync_key)
+    def append_issue_log_row(self, row: SettlementRow, sync_key: str) -> None:
+        append_issue_log_row(row, sync_key)

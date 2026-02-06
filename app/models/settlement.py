@@ -29,11 +29,14 @@ class SettlementColumnIndex(IntEnum):
     UPDATED_AT = 15
     THREAD_URL = 16
     NOTE = 17  # 비고 필드 인덱스
-    # 승인로그 시트 전용 (to_row() + sync_key)
-    SYNC_KEY = 18
+    REVIEWER_NAME = 18
+    REJECTION_REASON = 19
+    # 정산이슈로그 시트 전용 (to_row() + sync_key)
+    SYNC_KEY = 20
 
 
 class SettlementStatus(str, Enum):
+    REQUESTED = "요청"
     APPROVED = "승인"
     REJECTED = "반려"
 
@@ -129,6 +132,8 @@ class SettlementRow:
     updated_at: str = ""
     thread_url: str = ""
     note: str = ""  # 비고 필드
+    reviewer_name: str = ""
+    rejection_reason: str = ""
 
     def __post_init__(self) -> None:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -144,6 +149,7 @@ class SettlementRow:
         status: SettlementStatus,
         approver_name: str,
         thread_url: str = "",
+        rejection_reason: str = "",
     ) -> SettlementRow:
         return cls(
             settlement_day=data.settlement_day,
@@ -162,6 +168,8 @@ class SettlementRow:
             approver_name=approver_name,
             thread_url=thread_url,
             note=data.note or "",
+            reviewer_name=approver_name,
+            rejection_reason=rejection_reason,
         )
 
     def to_row(self) -> list[str]:
@@ -183,5 +191,7 @@ class SettlementRow:
             self.created_at,
             self.updated_at,
             self.thread_url,
-            self.note,  # 맨 마지막에 추가하여 기존 시트와 호환성 유지
+            self.note,
+            self.reviewer_name,
+            self.rejection_reason,
         ]

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import select
 
-from app.infrastructure.database.models import ApprovalLog, Settlement
+from app.infrastructure.database.models import IssueLog, Settlement
 from app.infrastructure.database.repository import SettlementRepository
 from app.models.settlement import SettlementRow
 from tests.fakes.fake_database import FakeDatabase
@@ -110,7 +110,7 @@ class TestSettlementRepository:
         # Then - 두 개의 서로 다른 로그
         assert log1.id != log2.id
         with fake_db.get_session() as session:
-            logs = session.execute(select(ApprovalLog)).scalars().all()
+            logs = session.execute(select(IssueLog)).scalars().all()
             assert len(logs) == 2
 
     def test_트랜잭션_롤백_테스트(self, fake_db, sample_row):

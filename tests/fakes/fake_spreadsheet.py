@@ -15,7 +15,7 @@ class FakeSpreadsheet:
 
     def __init__(self):
         self.settlement_rows: dict[str, list[str]] = {}
-        self.approval_logs: dict[str, list[str]] = {}
+        self.issue_logs: dict[str, list[str]] = {}
         self.should_fail: bool = False
 
     def save_settlement_row(
@@ -33,8 +33,8 @@ class FakeSpreadsheet:
             )
         self.settlement_rows[row.booking_key] = row.to_row()
 
-    def append_approval_log_row(self, row: SettlementRow, sync_key: str) -> None:
-        """승인 로그는 sync_key 기준으로 upsert
+    def append_issue_log_row(self, row: SettlementRow, sync_key: str) -> None:
+        """이슈 로그는 sync_key 기준으로 upsert
 
         Raises:
             SpreadsheetError: If should_fail is True
@@ -44,7 +44,7 @@ class FakeSpreadsheet:
                 message="Fake spreadsheet failure",
                 details={"booking_key": row.booking_key},
             )
-        self.approval_logs[sync_key] = row.to_row() + [sync_key]
+        self.issue_logs[sync_key] = row.to_row() + [sync_key]
 
     def find_row_by_booking_key(
         self, booking_key: str, sheet_name: str | None = None
@@ -55,5 +55,5 @@ class FakeSpreadsheet:
     def clear(self):
         """테스트 간 상태 초기화"""
         self.settlement_rows.clear()
-        self.approval_logs.clear()
+        self.issue_logs.clear()
         self.should_fail = False

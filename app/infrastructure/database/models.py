@@ -41,12 +41,15 @@ class Settlement(Base):
     sheets_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     sync_status: Mapped[str] = mapped_column(String(20), default="pending")
 
+    reviewer_name: Mapped[str] = mapped_column(String(100), default="")
+    rejection_reason: Mapped[str] = mapped_column(Text, default="")
+
     # Relationship
-    approval_logs: Mapped[list[ApprovalLog]] = relationship(back_populates="settlement")
+    issue_logs: Mapped[list[IssueLog]] = relationship(back_populates="settlement")
 
 
-class ApprovalLog(Base):
-    __tablename__ = "approval_logs"
+class IssueLog(Base):
+    __tablename__ = "issue_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     settlement_id: Mapped[int | None] = mapped_column(
@@ -68,6 +71,8 @@ class ApprovalLog(Base):
     approver_name: Mapped[str] = mapped_column(String(100), nullable=False)
     thread_url: Mapped[str] = mapped_column(Text, default="")
     note: Mapped[str] = mapped_column(Text, default="")  # 비고 필드
+    reviewer_name: Mapped[str] = mapped_column(String(100), default="")
+    rejection_reason: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     # Sync metadata
@@ -77,4 +82,4 @@ class ApprovalLog(Base):
     sync_status: Mapped[str] = mapped_column(String(20), default="pending")
 
     # Relationship
-    settlement: Mapped[Settlement | None] = relationship(back_populates="approval_logs")
+    settlement: Mapped[Settlement | None] = relationship(back_populates="issue_logs")

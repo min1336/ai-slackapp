@@ -15,4 +15,4 @@ spreadsheet:
   id: "1AS3uLh8rKgHPsjKO_gy6sg1erNjVm_1fOOCPWr458bY"
   sheets:
     settlement: "정산"
-    approval_log: "승인로그"
+    issue_log: "정산이슈로그"

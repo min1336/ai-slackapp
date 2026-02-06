@@ -6,7 +6,7 @@ import pytest
 
 from app.exceptions import SpreadsheetError
 from app.infrastructure.database.repository import (
-    ApprovalLogRepository,
+    IssueLogRepository,
     SettlementRepository,
 )
 from app.models import SettlementRow, SettlementStatus
@@ -51,7 +51,7 @@ def test_sync_pending_records_success(fake_db, fake_sheets, sample_settlement_da
     assert synced_logs == 1
     with fake_db.get_session() as session:
         settlement = SettlementRepository(session).get(settlement_id)
-        log = ApprovalLogRepository(session).get(log_id)
+        log = IssueLogRepository(session).get(log_id)
         assert settlement is not None
         assert log is not None
         assert settlement.sheets_synced is True
@@ -81,7 +81,7 @@ def test_sync_pending_records_all_failure(fake_db, fake_sheets, sample_settlemen
     assert synced_logs == 0
     with fake_db.get_session() as session:
         settlement = SettlementRepository(session).get(settlement_id)
-        log = ApprovalLogRepository(session).get(log_id)
+        log = IssueLogRepository(session).get(log_id)
         assert settlement is not None
         assert log is not None
         assert settlement.sheets_synced is False
@@ -125,7 +125,7 @@ def test_sync_pending_records_settlement_only_failure(
     assert synced_logs == 1
     with fake_db.get_session() as session:
         settlement = SettlementRepository(session).get(settlement_id)
-        log = ApprovalLogRepository(session).get(log_id)
+        log = IssueLogRepository(session).get(log_id)
         assert settlement.sheets_synced is False
         assert settlement.sync_status == "pending"
         assert settlement.sheets_sync_error
