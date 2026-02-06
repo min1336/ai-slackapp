@@ -12,25 +12,18 @@ from app.views.blocks import (
     build_rejected_message,
     build_rejection_modal,
 )
+from tests.factories import SettlementDataFactory
+
+_make_data = SettlementDataFactory.create
 
 
 class TestApprovalRequestMessage:
     def test_이관_설명일_때_transfer_action_id를_사용한다(self):
-        blocks = build_approval_request_message(
-            user_name="작성자",
-            booking_key="BK-1",
-            company_name="업체",
-            customer_name="고객",
-            settlement_day="2025-01-01",
-            issue_type="이슈",
-            settlement_cost="10000",
-            company_sub_name="",
-            carmore_cost="",
-            user_refund_cost="",
-            seller_channel="",
+        data = _make_data(
+            settlement_cost=10000,
             description=Description.TRANSFER_RESERVATION.value,
-            button_data="{}",
         )
+        blocks = build_approval_request_message(data, button_data="{}")
 
         actions = blocks[-1]["elements"]
         assert len(actions) == 2  # 승인/반려 버튼만 존재
@@ -38,21 +31,15 @@ class TestApprovalRequestMessage:
         assert actions[1]["action_id"] == ActionId.TRANSFER_REJECT
 
     def test_빈_필드는_none_text로_표시한다(self):
-        blocks = build_approval_request_message(
+        data = _make_data(
             user_name="",
             booking_key="",
             company_name="",
             customer_name="",
             settlement_day="",
             issue_type="",
-            settlement_cost="",
-            company_sub_name="",
-            carmore_cost="",
-            user_refund_cost="",
-            seller_channel="",
-            description="",
-            button_data="{}",
         )
+        blocks = build_approval_request_message(data, button_data="{}")
 
         first_section_fields = blocks[1]["fields"]
         assert first_section_fields[1]["text"] == CommonText.NONE
@@ -189,22 +176,12 @@ class TestModalBuilders:
 
 class TestApprovalRequestMessageWithNote:
     def test_비고_필드가_표시된다(self):
-        blocks = build_approval_request_message(
-            user_name="작성자",
-            booking_key="BK-1",
-            company_name="업체",
-            customer_name="고객",
-            settlement_day="2025-01-01",
-            issue_type="이슈",
-            settlement_cost="10000",
-            company_sub_name="",
-            carmore_cost="",
-            user_refund_cost="",
-            seller_channel="",
+        data = _make_data(
+            settlement_cost=10000,
             description="내용",
-            button_data="{}",
             note="테스트 비고 내용",
         )
+        blocks = build_approval_request_message(data, button_data="{}")
 
         # 마지막 섹션에 비고가 포함되어야 함
         text_section = next(
@@ -445,41 +422,17 @@ class TestApprovalRequestMessageIncludeButtons:
     """include_buttons 파라미터 테스트"""
 
     def test_include_buttons_false일때_버튼이_없다(self):
+        data = _make_data(settlement_cost=10000, description="내용")
         blocks = build_approval_request_message(
-            user_name="작성자",
-            booking_key="BK-1",
-            company_name="업체",
-            customer_name="고객",
-            settlement_day="2025-01-01",
-            issue_type="이슈",
-            settlement_cost="10000",
-            company_sub_name="",
-            carmore_cost="",
-            user_refund_cost="",
-            seller_channel="",
-            description="내용",
-            button_data="{}",
-            include_buttons=False,
+            data, button_data="{}", include_buttons=False
         )
 
         assert all(block["type"] != "actions" for block in blocks)
 
     def test_include_buttons_true일때_버튼이_있다(self):
+        data = _make_data(settlement_cost=10000, description="내용")
         blocks = build_approval_request_message(
-            user_name="작성자",
-            booking_key="BK-1",
-            company_name="업체",
-            customer_name="고객",
-            settlement_day="2025-01-01",
-            issue_type="이슈",
-            settlement_cost="10000",
-            company_sub_name="",
-            carmore_cost="",
-            user_refund_cost="",
-            seller_channel="",
-            description="내용",
-            button_data="{}",
-            include_buttons=True,
+            data, button_data="{}", include_buttons=True
         )
 
         assert blocks[-1]["type"] == "actions"

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, IntEnum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class SettlementColumnIndex(IntEnum):
@@ -38,24 +39,43 @@ class SettlementStatus(str, Enum):
 
 
 class SettlementData(BaseModel):
-    user_name: str = ""
-    booking_key: str = ""
-    company_name: str = ""
-    customer_name: str = ""
-    settlement_day: str = ""
-    issue_type: str = ""
-    settlement_cost: str = ""
-    company_sub_name: str = ""
-    carmore_cost: str = ""
-    user_refund_cost: str = ""
-    seller_channel: str = ""
-    description: str = ""
-    note: str = ""  # 비고 필드
-    requester_id: str = ""  # 모달 제출자 Slack ID
-    # 원본 스레드 정보 (승인 채널에서 결과 알림 시 사용)
-    original_channel_id: str = ""
-    original_thread_ts: str = ""
-    original_message_ts: str = ""  # 대기중 메시지 ts (업데이트용)
+    # ── 예약 정보 (필수) ──
+    user_name: str
+    booking_key: str
+    company_name: str
+    customer_name: str
+
+    # ── 금액 정보 ──
+    settlement_cost: int | None = None
+    carmore_cost: int | None = None
+    user_refund_cost: int | None = None
+
+    # ── 이슈 정보 ──
+    issue_type: str
+    settlement_day: str
+    company_sub_name: str | None = None
+    seller_channel: str | None = None
+    description: str | None = None
+    note: str | None = None
+
+    # ── 워크플로우 컨텍스트 ──
+    requester_id: str
+    original_channel_id: str | None = None
+    original_thread_ts: str | None = None
+    original_message_ts: str | None = None  # 대기중 메시지 ts (업데이트용)
+
+    @field_validator(
+        "settlement_cost", "carmore_cost", "user_refund_cost", mode="before"
+    )
+    @classmethod
+    def parse_cost(cls, v: str | int | None) -> int | None:
+        if v is None or v == "":
+            return None
+        if isinstance(v, int):
+            return v
+        # "1,000,000원" → 1000000
+        cleaned = re.sub(r"[^\d]", "", str(v))
+        return int(cleaned) if cleaned else None
 
 
 class ModalMetadata(BaseModel):
@@ -80,6 +100,13 @@ class RejectionMetadata(BaseModel):
     original_channel_id: str = ""
     original_thread_ts: str = ""
     original_message_ts: str = ""
+
+
+def format_cost(value: int | None) -> str:
+    """int 금액을 시트 저장용 str로 변환."""
+    if value is None:
+        return ""
+    return str(value)
 
 
 @dataclass(slots=True)
@@ -124,17 +151,17 @@ class SettlementRow:
             customer_name=data.customer_name,
             booking_key=data.booking_key,
             company_name=data.company_name,
-            company_sub_name=data.company_sub_name,
-            settlement_cost=data.settlement_cost,
-            carmore_cost=data.carmore_cost,
-            user_refund_cost=data.user_refund_cost,
+            company_sub_name=data.company_sub_name or "",
+            settlement_cost=format_cost(data.settlement_cost),
+            carmore_cost=format_cost(data.carmore_cost),
+            user_refund_cost=format_cost(data.user_refund_cost),
             issue_type=data.issue_type,
-            sales_channel=data.seller_channel,
-            description=data.description,
+            sales_channel=data.seller_channel or "",
+            description=data.description or "",
             status=status.value,
             approver_name=approver_name,
             thread_url=thread_url,
-            note=data.note,
+            note=data.note or "",
         )
 
     def to_row(self) -> list[str]:

@@ -16,7 +16,7 @@ from app.models import (
     SettlementData,
     SettlementStatus,
 )
-from app.services.message_parser import ParsedTransferReservation
+from app.services.message_parser import ParsedSettlement, ParsedTransferReservation
 from app.services.settlement_service import save_settlement
 from app.services.slack_service import (
     extract_date_value,
@@ -70,7 +70,7 @@ def _notify_processing_error(
 
 
 def _open_registration_modal(body: dict, client) -> None:
-    parsed = SettlementData.model_validate_json(action_value(body))
+    parsed = ParsedSettlement.model_validate_json(action_value(body))
     context = message_context(body)
     user_name = get_user_name(client, context.user_id)
 
@@ -178,21 +178,7 @@ def _handle_settlement_approve(
 
         # 2) 원본 스레드 상세 메시지 업데이트 (상세 정보 유지 + 승인 상태)
         original_blocks = build_approval_request_message(
-            user_name=data.user_name,
-            booking_key=data.booking_key,
-            company_name=data.company_name,
-            customer_name=data.customer_name,
-            settlement_day=data.settlement_day,
-            issue_type=data.issue_type,
-            settlement_cost=data.settlement_cost,
-            company_sub_name=data.company_sub_name,
-            carmore_cost=data.carmore_cost,
-            user_refund_cost=data.user_refund_cost,
-            seller_channel=data.seller_channel,
-            description=data.description,
-            title=HeaderText.SETTLEMENT_ISSUE_REGISTER,
-            note=data.note,
-            include_buttons=False,
+            data, title=HeaderText.SETTLEMENT_ISSUE_REGISTER, include_buttons=False
         )
         thread_blocks = build_approved_message(original_blocks, approver_name)
         client.chat_update(
@@ -244,9 +230,9 @@ def _open_rejection_modal(
         requester_id=data.requester_id,
         button_data=button_data,
         # 원본 스레드 정보 (승인 채널 워크플로우용)
-        original_channel_id=data.original_channel_id,
-        original_thread_ts=data.original_thread_ts,
-        original_message_ts=data.original_message_ts,
+        original_channel_id=data.original_channel_id or "",
+        original_thread_ts=data.original_thread_ts or "",
+        original_message_ts=data.original_message_ts or "",
     )
 
     modal = build_rejection_modal(metadata=metadata.model_dump_json())
@@ -308,21 +294,7 @@ def _handle_transfer_approve(
 
         # 2) 원본 스레드 상세 메시지 업데이트 (상세 정보 유지 + 승인 상태)
         original_blocks = build_approval_request_message(
-            user_name=data.user_name,
-            booking_key=data.booking_key,
-            company_name=data.company_name,
-            customer_name=data.customer_name,
-            settlement_day=data.settlement_day,
-            issue_type=data.issue_type,
-            settlement_cost=data.settlement_cost,
-            company_sub_name=data.company_sub_name,
-            carmore_cost=data.carmore_cost,
-            user_refund_cost=data.user_refund_cost,
-            seller_channel=data.seller_channel,
-            description=data.description,
-            title=HeaderText.TRANSFER_REGISTER,
-            note=data.note,
-            include_buttons=False,
+            data, title=HeaderText.TRANSFER_REGISTER, include_buttons=False
         )
         thread_blocks = build_approved_message(original_blocks, approver_name)
         client.chat_update(

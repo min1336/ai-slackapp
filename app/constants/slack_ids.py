@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from enum import StrEnum
 
-class ActionId:
+
+class ActionId(StrEnum):
     OPEN_REGISTRATION_MODAL = "open_registration_modal"
     OPEN_TRANSFER_MODAL = "open_transfer_modal"  # 통합된 Transfer 모달 열기
     SETTLEMENT_APPROVE = "settlement_approve"
@@ -35,7 +37,7 @@ class ActionId:
     NOTE_INPUT = "note_input"
 
 
-class BlockId:
+class BlockId(StrEnum):
     USER_NAME_BLOCK = "user_name_block"
     BOOKING_KEY_BLOCK = "booking_key_block"
     COMPANY_NAME_BLOCK = "company_name_block"
@@ -60,5 +62,5 @@ class BlockId:
     REJECTION_REASON_BLOCK = "rejection_reason_block"
 
 
-class CallbackId:
+class CallbackId(StrEnum):
     REGISTRATION_SUBMIT = "registration_submit"

@@ -13,14 +13,22 @@ from app.constants import (
     is_transfer_description,
 )
 from app.constants.options import SlackOption
+from app.models import SettlementData
 
 Block = dict[str, object]
 Blocks = list[Block]
 TextInputConfig = tuple[str, str, str, str | None, bool]
 
 
-def _display_text(value: str) -> str:
+def _display_text(value: str | None) -> str:
     return value or CommonText.NONE
+
+
+def _display_cost(value: int | None) -> str:
+    """int 금액을 표시용 문자열로 변환."""
+    if value is None:
+        return CommonText.NONE
+    return str(value)
 
 
 def _add_text_inputs(blocks: Blocks, configs: list[TextInputConfig]) -> None:
@@ -354,25 +362,21 @@ def build_registration_modal(
 
 
 def build_approval_request_message(
-    user_name: str,
-    booking_key: str,
-    company_name: str,
-    customer_name: str,
-    settlement_day: str,
-    issue_type: str,
-    settlement_cost: str,
-    company_sub_name: str,
-    carmore_cost: str,
-    user_refund_cost: str,
-    seller_channel: str,
-    description: str,
+    data: SettlementData,
+    *,
     button_data: str = "",
     title: str = HeaderText.SETTLEMENT_ISSUE_REGISTER,
-    note: str = "",
     include_buttons: bool = True,
 ) -> Blocks:
-    # 업체이관인지 확인
-    is_transfer = is_transfer_description(description)
+    """승인 요청 상세 메시지 빌더.
+
+    Args:
+        data: 정산 데이터 (SettlementData).
+        button_data: 승인/반려 버튼에 전달할 JSON 문자열.
+        title: 메시지 헤더 텍스트.
+        include_buttons: 승인/반려 버튼 포함 여부.
+    """
+    is_transfer = is_transfer_description(data.description or "")
 
     blocks: Blocks = [
         {
@@ -386,26 +390,26 @@ def build_approval_request_message(
             "type": "section",
             "fields": [
                 {"type": "mrkdwn", "text": f"*{LabelText.USER_NAME}*"},
-                {"type": "plain_text", "text": _display_text(user_name)},
+                {"type": "plain_text", "text": _display_text(data.user_name)},
                 {"type": "mrkdwn", "text": f"*{LabelText.BOOKING_KEY}*"},
                 {
                     "type": "plain_text",
-                    "text": _display_text(booking_key),
+                    "text": _display_text(data.booking_key),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.COMPANY_NAME}*"},
                 {
                     "type": "plain_text",
-                    "text": _display_text(company_name),
+                    "text": _display_text(data.company_name),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.CUSTOMER_NAME}*"},
                 {
                     "type": "plain_text",
-                    "text": _display_text(customer_name),
+                    "text": _display_text(data.customer_name),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.SETTLEMENT_DAY}*"},
                 {
                     "type": "plain_text",
-                    "text": _display_text(settlement_day),
+                    "text": _display_text(data.settlement_day),
                 },
             ],
         },
@@ -418,7 +422,7 @@ def build_approval_request_message(
                 },
                 {
                     "type": "plain_text",
-                    "text": _display_text(settlement_cost),
+                    "text": _display_cost(data.settlement_cost),
                 },
                 {
                     "type": "mrkdwn",
@@ -426,12 +430,12 @@ def build_approval_request_message(
                 },
                 {
                     "type": "plain_text",
-                    "text": _display_text(company_sub_name),
+                    "text": _display_text(data.company_sub_name),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.CARMORE_COST}*"},
                 {
                     "type": "plain_text",
-                    "text": _display_text(carmore_cost),
+                    "text": _display_cost(data.carmore_cost),
                 },
                 {
                     "type": "mrkdwn",
@@ -439,12 +443,12 @@ def build_approval_request_message(
                 },
                 {
                     "type": "plain_text",
-                    "text": _display_text(user_refund_cost),
+                    "text": _display_cost(data.user_refund_cost),
                 },
                 {"type": "mrkdwn", "text": f"*{LabelText.SELLER_CHANNEL}*"},
                 {
                     "type": "plain_text",
-                    "text": _display_text(seller_channel),
+                    "text": _display_text(data.seller_channel),
                 },
             ],
         },
@@ -453,9 +457,12 @@ def build_approval_request_message(
             "text": {
                 "type": "mrkdwn",
                 "text": (
-                    f"*{LabelText.ISSUE_TYPE}*\n{issue_type or CommonText.NONE}\n\n"
-                    f"*{LabelText.DESCRIPTION}*\n{description or CommonText.NONE}\n\n"
-                    f"*{LabelText.NOTE}*\n{note or CommonText.NONE}"
+                    f"*{LabelText.ISSUE_TYPE}*\n"
+                    f"{data.issue_type or CommonText.NONE}\n\n"
+                    f"*{LabelText.DESCRIPTION}*\n"
+                    f"{data.description or CommonText.NONE}\n\n"
+                    f"*{LabelText.NOTE}*\n"
+                    f"{data.note or CommonText.NONE}"
                 ),
             },
         },
@@ -721,6 +728,47 @@ def build_rejection_modal(metadata: str) -> dict:
 # ============================================================================
 
 
+def _build_minimal_base_blocks(
+    requester_name: str,
+    thread_url: str,
+    request_type: str,
+    *,
+    is_pending: bool = False,
+) -> Blocks:
+    """승인 채널 메시지의 공통 블록 (요청자 + 스레드 링크).
+
+    is_pending=True → header 블록 (대기 중), False → 취소선 section (완료).
+    """
+    if is_pending:
+        header_block: Block = {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"{request_type} 승인 요청"},
+        }
+    else:
+        header_block = {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"~*{request_type} 승인 요청*~"},
+        }
+
+    return [
+        header_block,
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": "*요청자*"},
+                {"type": "plain_text", "text": requester_name},
+            ],
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"<{thread_url}|📎 원본 스레드 바로가기>",
+            },
+        },
+    ]
+
+
 def build_minimal_approval_message(
     requester_name: str,
     thread_url: str,
@@ -736,25 +784,10 @@ def build_minimal_approval_message(
         ActionId.TRANSFER_REJECT if is_transfer else ActionId.SETTLEMENT_REJECT
     )
 
-    return [
-        {
-            "type": "header",
-            "text": {"type": "plain_text", "text": f"{request_type} 승인 요청"},
-        },
-        {
-            "type": "section",
-            "fields": [
-                {"type": "mrkdwn", "text": "*요청자*"},
-                {"type": "plain_text", "text": requester_name},
-            ],
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"<{thread_url}|📎 원본 스레드 바로가기>",
-            },
-        },
+    blocks = _build_minimal_base_blocks(
+        requester_name, thread_url, request_type, is_pending=True
+    )
+    blocks.append(
         {
             "type": "actions",
             "elements": [
@@ -773,8 +806,9 @@ def build_minimal_approval_message(
                     "value": button_data,
                 },
             ],
-        },
-    ]
+        }
+    )
+    return blocks
 
 
 def build_minimal_approved_message(
@@ -785,33 +819,17 @@ def build_minimal_approved_message(
 ) -> Blocks:
     """승인 채널 승인 완료 메시지 (버튼 제거, 승인됨 표시)"""
     request_type = "업체 이관" if is_transfer else "정산 이슈"
-    return [
-        {
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": f"~*{request_type} 승인 요청*~"},
-        },
-        {
-            "type": "section",
-            "fields": [
-                {"type": "mrkdwn", "text": "*요청자*"},
-                {"type": "plain_text", "text": requester_name},
-            ],
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"<{thread_url}|📎 원본 스레드 바로가기>",
-            },
-        },
+    blocks = _build_minimal_base_blocks(requester_name, thread_url, request_type)
+    blocks.append(
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
                 "text": f"✅ *승인됨* | 승인자: {approver_name}",
             },
-        },
-    ]
+        }
+    )
+    return blocks
 
 
 def build_minimal_rejected_message(
@@ -822,30 +840,14 @@ def build_minimal_rejected_message(
 ) -> Blocks:
     """승인 채널 반려 완료 메시지 (버튼 제거, 반려됨 표시)"""
     request_type = "업체 이관" if is_transfer else "정산 이슈"
-    return [
-        {
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": f"~*{request_type} 승인 요청*~"},
-        },
-        {
-            "type": "section",
-            "fields": [
-                {"type": "mrkdwn", "text": "*요청자*"},
-                {"type": "plain_text", "text": requester_name},
-            ],
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"<{thread_url}|📎 원본 스레드 바로가기>",
-            },
-        },
+    blocks = _build_minimal_base_blocks(requester_name, thread_url, request_type)
+    blocks.append(
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
                 "text": f"❌ *반려됨* | 반려자: {rejecter_name}",
             },
-        },
-    ]
+        }
+    )
+    return blocks

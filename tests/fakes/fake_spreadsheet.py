@@ -7,10 +7,10 @@ from app.models.settlement import SettlementRow
 
 
 class FakeSpreadsheet:
-    """Google Sheets 대신 사용할 인메모리 Fake
+    """Google Sheets 대신 사용할 인메모리 Fake (SpreadsheetGateway 호환).
 
-    실제 spreadsheet 모듈의 함수들과 동일한 시그니처를 가진 메서드를 제공합니다.
-    테스트에서 monkeypatch로 실제 함수를 이 Fake의 메서드로 교체하여 사용합니다.
+    Protocol 기반 의존성 주입으로 서비스 함수에 직접 전달하거나,
+    monkeypatch로 모듈-레벨 함수를 교체하여 사용합니다.
     """
 
     def __init__(self):

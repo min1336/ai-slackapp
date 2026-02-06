@@ -18,12 +18,7 @@ def sample_settlement_data() -> SettlementData:
         customer_name="홍길동",
         settlement_day="2024-01-15",
         issue_type="결제 오류",
-        settlement_cost="100000",
-        company_sub_name="",
-        carmore_cost="",
-        user_refund_cost="",
-        seller_channel="",
-        description="",
+        settlement_cost=100000,
         requester_id="U12345678",
     )
 

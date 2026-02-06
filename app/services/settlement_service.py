@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from app.config import database
 from app.core import get_logger
 from app.infrastructure.database import (
@@ -9,6 +11,9 @@ from app.infrastructure.database import (
     transactional,
 )
 from app.models import SettlementData, SettlementRow, SettlementStatus
+
+if TYPE_CHECKING:
+    from app.services.sync_service import SessionFactory
 
 logger = get_logger(__name__)
 
@@ -37,6 +42,8 @@ def save_settlement(
     approver_name: str,
     thread_url: str,
     rejection_reason: str = "",
+    *,
+    session_factory: SessionFactory | None = None,
 ) -> None:
     if not database.is_configured:
         raise ValueError("DATABASE_URL is not configured")
@@ -51,7 +58,9 @@ def save_settlement(
     if rejection_reason:
         logger.info(f"반려 사유: {rejection_reason}")
 
-    with get_session() as session:
+    _session = session_factory or get_session
+
+    with _session() as session:
         repo = SettlementRepository(session)
         settlement = repo.save(row)
         log = repo.add_log(row, settlement_id=settlement.id)

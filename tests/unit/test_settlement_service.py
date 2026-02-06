@@ -25,10 +25,6 @@ class TestSaveSettlement:
         # Given
         monkeypatch.setattr("app.config.database.host", "test-host")
         monkeypatch.setattr("app.config.database.password", "test-password")
-        monkeypatch.setattr(
-            "app.services.settlement_service.get_session",
-            fake_db.get_session,
-        )
 
         # When - no exception means success
         save_settlement(
@@ -36,6 +32,7 @@ class TestSaveSettlement:
             status=SettlementStatus.APPROVED,
             approver_name="승인자",
             thread_url="http://example.com/thread",
+            session_factory=fake_db.get_session,
         )
 
         # Then
@@ -49,10 +46,6 @@ class TestSaveSettlement:
         # Given
         monkeypatch.setattr("app.config.database.host", "test-host")
         monkeypatch.setattr("app.config.database.password", "test-password")
-        monkeypatch.setattr(
-            "app.services.settlement_service.get_session",
-            fake_db.get_session,
-        )
 
         # When
         save_settlement(
@@ -61,6 +54,7 @@ class TestSaveSettlement:
             approver_name="반려자",
             thread_url="http://example.com/thread",
             rejection_reason="테스트 반려 사유",
+            session_factory=fake_db.get_session,
         )
 
         # Then - 반려도 DB에 저장됨
@@ -91,10 +85,6 @@ class TestSaveSettlement:
         # Given
         monkeypatch.setattr("app.config.database.host", "test-host")
         monkeypatch.setattr("app.config.database.password", "test-password")
-        monkeypatch.setattr(
-            "app.services.settlement_service.get_session",
-            fake_db.get_session,
-        )
 
         # When
         save_settlement(
@@ -102,6 +92,7 @@ class TestSaveSettlement:
             status=SettlementStatus.APPROVED,
             approver_name="승인자",
             thread_url="http://example.com/thread",
+            session_factory=fake_db.get_session,
         )
 
         # Then - 두 테이블 모두에 저장됨
@@ -123,10 +114,6 @@ class TestSaveSettlement:
         approver = "김승인"
         monkeypatch.setattr("app.config.database.host", "test-host")
         monkeypatch.setattr("app.config.database.password", "test-password")
-        monkeypatch.setattr(
-            "app.services.settlement_service.get_session",
-            fake_db.get_session,
-        )
 
         # When
         save_settlement(
@@ -134,6 +121,7 @@ class TestSaveSettlement:
             status=SettlementStatus.APPROVED,
             approver_name=approver,
             thread_url="http://example.com/thread",
+            session_factory=fake_db.get_session,
         )
 
         # Then
@@ -148,11 +136,7 @@ class TestSaveSettlement:
         # Given - after_commit 훅으로 Sheets 동기화 성공 시
         monkeypatch.setattr("app.config.database.host", "test-host")
         monkeypatch.setattr("app.config.database.password", "test-password")
-        # 모든 get_session 호출을 fake_db로 대체 (save + _mark_synced 모두)
-        monkeypatch.setattr(
-            "app.services.settlement_service.get_session",
-            fake_db.get_session,
-        )
+        # _mark_synced는 @transactional 데코레이터를 사용하므로 connection 모듈도 패치
         monkeypatch.setattr(
             "app.infrastructure.database.connection.get_session",
             fake_db.get_session,
@@ -168,6 +152,7 @@ class TestSaveSettlement:
             status=SettlementStatus.APPROVED,
             approver_name="승인자",
             thread_url="http://example.com/thread",
+            session_factory=fake_db.get_session,
         )
 
         # Then - after_commit 훅에서 동기화 성공 → sheets_synced=True
@@ -182,10 +167,6 @@ class TestSaveSettlement:
         # Given - after_commit 훅에서 Sheets 동기화 실패 시
         monkeypatch.setattr("app.config.database.host", "test-host")
         monkeypatch.setattr("app.config.database.password", "test-password")
-        monkeypatch.setattr(
-            "app.services.settlement_service.get_session",
-            fake_db.get_session,
-        )
 
         def fail_sync(row, log_id):
             raise ConnectionError("Sheets API unavailable")
@@ -201,6 +182,7 @@ class TestSaveSettlement:
             status=SettlementStatus.APPROVED,
             approver_name="승인자",
             thread_url="http://example.com/thread",
+            session_factory=fake_db.get_session,
         )
 
         # Then - 동기화 실패 → sheets_synced=False, Background worker가 재시도

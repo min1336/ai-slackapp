@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.exceptions import SpreadsheetError
 from app.infrastructure.database.repository import (
     ApprovalLogRepository,
     SettlementRepository,
@@ -11,11 +12,17 @@ from app.infrastructure.database.repository import (
 from app.models import SettlementRow, SettlementStatus
 from app.services.sync_service import sync_pending_records
 from tests.fakes.fake_database import FakeDatabase
+from tests.fakes.fake_spreadsheet import FakeSpreadsheet
 
 
 @pytest.fixture
 def fake_db():
     return FakeDatabase()
+
+
+@pytest.fixture
+def fake_sheets():
+    return FakeSpreadsheet()
 
 
 def _create_records(fake_db: FakeDatabase, row: SettlementRow) -> tuple[int, int]:
@@ -26,17 +33,7 @@ def _create_records(fake_db: FakeDatabase, row: SettlementRow) -> tuple[int, int
         return settlement.id, log.id
 
 
-def test_sync_pending_records_success(monkeypatch, fake_db, sample_settlement_data):
-    monkeypatch.setattr("app.services.sync_service.get_session", fake_db.get_session)
-    monkeypatch.setattr(
-        "app.services.sync_service.sheets_save_settlement",
-        lambda row: None,  # 성공 시 예외 없음
-    )
-    monkeypatch.setattr(
-        "app.services.sync_service.sheets_append_log",
-        lambda row, sync_key: None,  # 성공 시 예외 없음
-    )
-
+def test_sync_pending_records_success(fake_db, fake_sheets, sample_settlement_data):
     row = SettlementRow.from_settlement_data(
         data=sample_settlement_data,
         status=SettlementStatus.APPROVED,
@@ -45,7 +42,10 @@ def test_sync_pending_records_success(monkeypatch, fake_db, sample_settlement_da
     )
     settlement_id, log_id = _create_records(fake_db, row)
 
-    synced_settlements, synced_logs = sync_pending_records()
+    synced_settlements, synced_logs = sync_pending_records(
+        sheets=fake_sheets,
+        session_factory=fake_db.get_session,
+    )
 
     assert synced_settlements == 1
     assert synced_logs == 1
@@ -60,22 +60,9 @@ def test_sync_pending_records_success(monkeypatch, fake_db, sample_settlement_da
         assert log.sync_status == "completed"
 
 
-def _raise_error(row):
-    raise Exception("Sheets API error")
-
-
-def test_sync_pending_records_settlement_failure(
-    monkeypatch, fake_db, sample_settlement_data
-):
-    monkeypatch.setattr("app.services.sync_service.get_session", fake_db.get_session)
-    monkeypatch.setattr(
-        "app.services.sync_service.sheets_save_settlement",
-        _raise_error,  # 실패 시 예외 발생
-    )
-    monkeypatch.setattr(
-        "app.services.sync_service.sheets_append_log",
-        lambda row, sync_key: None,  # 성공
-    )
+def test_sync_pending_records_all_failure(fake_db, fake_sheets, sample_settlement_data):
+    """모든 시트 동기화가 실패하면 모든 레코드가 pending 상태로 유지된다."""
+    fake_sheets.should_fail = True
 
     row = SettlementRow.from_settlement_data(
         data=sample_settlement_data,
@@ -85,17 +72,62 @@ def test_sync_pending_records_settlement_failure(
     )
     settlement_id, log_id = _create_records(fake_db, row)
 
-    synced_settlements, synced_logs = sync_pending_records()
+    synced_settlements, synced_logs = sync_pending_records(
+        sheets=fake_sheets,
+        session_factory=fake_db.get_session,
+    )
 
     assert synced_settlements == 0
-    assert synced_logs == 1
+    assert synced_logs == 0
     with fake_db.get_session() as session:
         settlement = SettlementRepository(session).get(settlement_id)
         log = ApprovalLogRepository(session).get(log_id)
         assert settlement is not None
         assert log is not None
         assert settlement.sheets_synced is False
-        assert settlement.sync_status == "pending"  # 실패 시 재시도 가능하도록 pending
+        assert settlement.sync_status == "pending"
+        assert settlement.sheets_sync_error
+        assert log.sheets_synced is False
+        assert log.sync_status == "pending"
+
+
+def test_sync_pending_records_settlement_only_failure(
+    fake_db, fake_sheets, sample_settlement_data
+):
+    """정산 시트 실패 시에도 승인 로그는 독립적으로 동기화된다."""
+
+    class SettlementOnlyFailSheet(FakeSpreadsheet):
+        """save_settlement_row만 실패하는 Fake."""
+
+        def save_settlement_row(self, row, sheet_name=None):
+            raise SpreadsheetError(
+                message="Settlement sheet failure",
+                details={"booking_key": row.booking_key},
+            )
+
+    failing_sheets = SettlementOnlyFailSheet()
+
+    row = SettlementRow.from_settlement_data(
+        data=sample_settlement_data,
+        status=SettlementStatus.APPROVED,
+        approver_name="승인자",
+        thread_url="http://example.com/thread",
+    )
+    settlement_id, log_id = _create_records(fake_db, row)
+
+    synced_settlements, synced_logs = sync_pending_records(
+        sheets=failing_sheets,
+        session_factory=fake_db.get_session,
+    )
+
+    # 정산은 실패, 로그는 성공
+    assert synced_settlements == 0
+    assert synced_logs == 1
+    with fake_db.get_session() as session:
+        settlement = SettlementRepository(session).get(settlement_id)
+        log = ApprovalLogRepository(session).get(log_id)
+        assert settlement.sheets_synced is False
+        assert settlement.sync_status == "pending"
         assert settlement.sheets_sync_error
         assert log.sheets_synced is True
         assert log.sync_status == "completed"

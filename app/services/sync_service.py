@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from app.constants import DateFormat
 from app.core import get_logger
@@ -12,20 +13,27 @@ from app.infrastructure.database import (
     SettlementRepository,
     get_session,
 )
-from app.infrastructure.spreadsheet import (
-    append_approval_log_row as sheets_append_log,
-)
-from app.infrastructure.spreadsheet import (
-    save_settlement_row as sheets_save_settlement,
-)
+from app.infrastructure.protocols import SpreadsheetGateway
+from app.infrastructure.spreadsheet import DefaultSpreadsheetGateway
+from app.models.settlement import format_cost
 
 if TYPE_CHECKING:
     from app.models import SettlementRow
 
 logger = get_logger(__name__)
 
+# get_session()과 동일한 시그니처의 콜러블 (contextmanager 반환)
+SessionFactory = Callable[..., Any]
 
-def recover_stale_sync_records() -> tuple[int, int]:
+
+def _get_sheets() -> SpreadsheetGateway:
+    return DefaultSpreadsheetGateway()
+
+
+def recover_stale_sync_records(
+    *,
+    session_factory: SessionFactory | None = None,
+) -> tuple[int, int]:
     """앱 시작 시 중단된 동기화 레코드 복구.
 
     이전 실행에서 in_progress 상태로 남은 레코드를 pending으로 되돌림.
@@ -34,7 +42,9 @@ def recover_stale_sync_records() -> tuple[int, int]:
     Returns:
         (복구된 정산 수, 복구된 로그 수)
     """
-    with get_session() as session:
+    _session = session_factory or get_session
+
+    with _session() as session:
         settlements = SettlementRepository(session).recover_stale_records()
         logs = ApprovalLogRepository(session).recover_stale_records()
 
@@ -44,15 +54,22 @@ def recover_stale_sync_records() -> tuple[int, int]:
     return settlements, logs
 
 
-def sync_to_sheets(row: SettlementRow, log_id: int) -> bool:
+def sync_to_sheets(
+    row: SettlementRow,
+    log_id: int,
+    *,
+    sheets: SpreadsheetGateway | None = None,
+) -> bool:
     """정산 데이터를 Google Sheets로 동기화.
 
     정산 시트 (upsert) + 승인 로그 시트 (append) 모두 저장.
     예외 발생 시 실패로 처리.
     """
+    _sheets = sheets or _get_sheets()
+
     try:
-        sheets_save_settlement(row)
-        sheets_append_log(row, str(log_id))
+        _sheets.save_settlement_row(row)
+        _sheets.append_approval_log_row(row, str(log_id))
         return True
 
     except Exception as e:
@@ -60,7 +77,11 @@ def sync_to_sheets(row: SettlementRow, log_id: int) -> bool:
         raise
 
 
-def sync_pending_records() -> tuple[int, int]:
+def sync_pending_records(
+    *,
+    sheets: SpreadsheetGateway | None = None,
+    session_factory: SessionFactory | None = None,
+) -> tuple[int, int]:
     """미동기화 레코드 일괄 동기화 (배치 작업용).
 
     처리 흐름:
@@ -71,37 +92,40 @@ def sync_pending_records() -> tuple[int, int]:
     Returns:
         (동기화된 정산 수, 동기화된 로그 수)
     """
+    _sheets = sheets or _get_sheets()
+    _session = session_factory or get_session
+
     synced_settlements = 0
     synced_logs = 0
 
-    with get_session() as session:
+    with _session() as session:
         settlements = SettlementRepository(session).claim_unsynced(limit=100)
         logs = ApprovalLogRepository(session).claim_unsynced(limit=100)
 
     for settlement in settlements:
         try:
             row = _entity_to_row(settlement, include_updated_at=True)
-            sheets_save_settlement(row)  # 실패 시 예외 발생
-            with get_session() as session:
+            _sheets.save_settlement_row(row)
+            with _session() as session:
                 SettlementRepository(session).mark_synced(settlement.id)
             synced_settlements += 1
         except Exception as e:
             logger.warning(
                 f"Retry sync failed for settlement {settlement.booking_key}: {e}"
             )
-            with get_session() as session:
+            with _session() as session:
                 SettlementRepository(session).mark_sync_failed(settlement.id, str(e))
 
     for log in logs:
         try:
             row = _entity_to_row(log, include_updated_at=False)
-            sheets_append_log(row, str(log.id))  # 실패 시 예외 발생
-            with get_session() as session:
+            _sheets.append_approval_log_row(row, str(log.id))
+            with _session() as session:
                 ApprovalLogRepository(session).mark_synced(log.id)
             synced_logs += 1
         except Exception as e:
             logger.warning(f"Retry sync failed for approval log {log.booking_key}: {e}")
-            with get_session() as session:
+            with _session() as session:
                 ApprovalLogRepository(session).mark_sync_failed(log.id, str(e))
 
     if synced_settlements or synced_logs:
@@ -150,9 +174,9 @@ def _entity_to_row(
         booking_key=entity.booking_key,
         company_name=entity.company_name,
         company_sub_name=entity.company_sub_name,
-        settlement_cost=_format_cost(entity.settlement_cost),
-        carmore_cost=_format_cost(entity.carmore_cost),
-        user_refund_cost=_format_cost(entity.user_refund_cost),
+        settlement_cost=format_cost(entity.settlement_cost),
+        carmore_cost=format_cost(entity.carmore_cost),
+        user_refund_cost=format_cost(entity.user_refund_cost),
         issue_type=entity.issue_type,
         sales_channel=entity.sales_channel,
         description=entity.description,
@@ -162,12 +186,6 @@ def _entity_to_row(
         created_at=entity.created_at.strftime(DateFormat.DATETIME),
         updated_at=updated_at,
     )
-
-
-def _format_cost(value: int | None) -> str:
-    if value is None:
-        return ""
-    return str(value)
 
 
 class SyncError(Exception):

@@ -286,3 +286,18 @@ def _get_cell(values: list[str], index: int) -> str:
 
 def _is_cell_not_found(error: Exception) -> bool:
     return error.__class__.__name__ == "CellNotFound"
+
+
+class DefaultSpreadsheetGateway:
+    """SpreadsheetGateway Protocol의 기본 구현체.
+
+    기존 모듈-레벨 함수에 위임합니다.
+    """
+
+    def save_settlement_row(
+        self, row: SettlementRow, sheet_name: str | None = None
+    ) -> None:
+        save_settlement_row(row, sheet_name)
+
+    def append_approval_log_row(self, row: SettlementRow, sync_key: str) -> None:
+        append_approval_log_row(row, sync_key)

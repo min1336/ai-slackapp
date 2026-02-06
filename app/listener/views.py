@@ -59,7 +59,7 @@ def register_view_handlers(app: App) -> None:
         ) or select_value(values, BlockId.DESCRIPTION_BLOCK, ActionId.DESCRIPTION_INPUT)
 
         # 비고 필드
-        note = text_value(values, BlockId.NOTE_BLOCK, ActionId.NOTE_INPUT)
+        note = text_value(values, BlockId.NOTE_BLOCK, ActionId.NOTE_INPUT) or None
 
         # 모달 제출자 ID 저장
         requester_id = body.get("user", {}).get("id", "")
@@ -86,7 +86,8 @@ def register_view_handlers(app: App) -> None:
                 values,
                 BlockId.COMPANY_SUB_NAME_BLOCK,
                 ActionId.COMPANY_SUB_NAME_INPUT,
-            ),
+            )
+            or None,
             carmore_cost=text_value(
                 values, BlockId.CARMORE_COST_BLOCK, ActionId.CARMORE_COST_INPUT
             ),
@@ -97,14 +98,15 @@ def register_view_handlers(app: App) -> None:
             ),
             seller_channel=select_value(
                 values, BlockId.SELLER_CHANNEL_BLOCK, ActionId.SELLER_CHANNEL_INPUT
-            ),
-            description=description,
+            )
+            or None,
+            description=description or None,
             note=note,
             requester_id=requester_id,
         )
 
         # description으로 업체이관 여부 판단
-        is_transfer = is_transfer_description(data.description)
+        is_transfer = is_transfer_description(data.description or "")
         request_type = "업체 이관" if is_transfer else "정산 이슈"
         title = (
             HeaderText.TRANSFER_REGISTER
@@ -119,21 +121,7 @@ def register_view_handlers(app: App) -> None:
         try:
             # 1. 원본 스레드에 상세 정보 메시지 게시 (버튼 없이)
             detail_blocks = build_approval_request_message(
-                user_name=data.user_name,
-                booking_key=data.booking_key,
-                company_name=data.company_name,
-                customer_name=data.customer_name,
-                settlement_day=data.settlement_day,
-                issue_type=data.issue_type,
-                settlement_cost=data.settlement_cost,
-                company_sub_name=data.company_sub_name,
-                carmore_cost=data.carmore_cost,
-                user_refund_cost=data.user_refund_cost,
-                seller_channel=data.seller_channel,
-                description=data.description,
-                title=title,
-                note=data.note,
-                include_buttons=False,
+                data, title=title, include_buttons=False
             )
             detail_response = client.chat_postMessage(
                 channel=metadata.channel_id,
@@ -213,7 +201,7 @@ def register_view_handlers(app: App) -> None:
             data = SettlementData.model_validate_json(metadata.button_data)
 
             # 업체이관 여부 판단
-            is_transfer = is_transfer_description(data.description)
+            is_transfer = is_transfer_description(data.description or "")
             request_type = "업체 이관" if is_transfer else "정산 이슈"
             title = (
                 HeaderText.TRANSFER_REGISTER
@@ -252,21 +240,7 @@ def register_view_handlers(app: App) -> None:
 
             # 2) 원본 스레드 상세 메시지 업데이트 (상세 정보 유지 + 반려 상태)
             original_blocks = build_approval_request_message(
-                user_name=data.user_name,
-                booking_key=data.booking_key,
-                company_name=data.company_name,
-                customer_name=data.customer_name,
-                settlement_day=data.settlement_day,
-                issue_type=data.issue_type,
-                settlement_cost=data.settlement_cost,
-                company_sub_name=data.company_sub_name,
-                carmore_cost=data.carmore_cost,
-                user_refund_cost=data.user_refund_cost,
-                seller_channel=data.seller_channel,
-                description=data.description,
-                title=title,
-                note=data.note,
-                include_buttons=False,
+                data, title=title, include_buttons=False
             )
             thread_blocks = build_rejected_message(
                 original_blocks, rejecter_name, rejection_reason
