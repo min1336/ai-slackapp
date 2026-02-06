@@ -75,6 +75,30 @@ class SlackChannelsConfig(BaseModel):
 class SpreadsheetConfig(BaseModel):
     id: str
     sheets: SheetsConfig = SheetsConfig()
+    columns: dict[str, str] = {
+        "settlement_day": "정산기준일",
+        "user_name": "작성자",
+        "issue_type": "이슈사항",
+        "customer_name": "고객명",
+        "booking_key": "예약번호",
+        "company_name": "업체명1",
+        "company_sub_name": "업체명2(대신배차)",
+        "settlement_cost": "정산기준금액",
+        "carmore_cost": "카모아 부담비용",
+        "user_refund_cost": "고객환불금액",
+        "sales_channel": "판매채널",
+        "description": "내용",
+        "status": "처리",
+        "approver_name": "승인자",
+        "created_at": "등록시간",
+        "updated_at": "수정시간",
+        "thread_url": "스레드 링크",
+        "note": "비고",
+        "reviewer_name": "반려자",
+        "rejection_reason": "고객 정보 오류",
+        "settlement_completed": "정산완료",
+        "sync_key": "sync_key",
+    }
 
 
 class AppConfig(BaseModel):

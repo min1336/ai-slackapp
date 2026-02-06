@@ -1,38 +1,34 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import datetime
-from enum import Enum, IntEnum
+from enum import Enum
 
 from pydantic import BaseModel, field_validator
 
-
-class SettlementColumnIndex(IntEnum):
-    """SettlementRow.to_row()의 컬럼 인덱스 (0-based)."""
-
-    SETTLEMENT_DAY = 0
-    USER_NAME = 1
-    ISSUE_TYPE = 2
-    CUSTOMER_NAME = 3
-    BOOKING_KEY = 4
-    COMPANY_NAME = 5
-    COMPANY_SUB_NAME = 6
-    SETTLEMENT_COST = 7
-    CARMORE_COST = 8
-    USER_REFUND_COST = 9
-    SALES_CHANNEL = 10
-    DESCRIPTION = 11
-    STATUS = 12
-    APPROVER_NAME = 13
-    CREATED_AT = 14
-    UPDATED_AT = 15
-    THREAD_URL = 16
-    NOTE = 17  # 비고 필드 인덱스
-    REVIEWER_NAME = 18
-    REJECTION_REASON = 19
-    # 정산이슈로그 시트 전용 (to_row() + sync_key)
-    SYNC_KEY = 20
+SETTLEMENT_FIELDS: tuple[str, ...] = (
+    "settlement_day",
+    "user_name",
+    "issue_type",
+    "customer_name",
+    "booking_key",
+    "company_name",
+    "company_sub_name",
+    "settlement_cost",
+    "carmore_cost",
+    "user_refund_cost",
+    "sales_channel",
+    "description",
+    "status",
+    "approver_name",
+    "created_at",
+    "updated_at",
+    "thread_url",
+    "note",
+    "reviewer_name",
+    "rejection_reason",
+)
 
 
 class SettlementStatus(str, Enum):
@@ -134,7 +130,7 @@ class SettlementRow:
     note: str = ""  # 비고 필드
     reviewer_name: str = ""
     rejection_reason: str = ""
-    settlement_completed: str = "FALSE"  # 정산 시트 전용, to_row()에 미포함
+    settlement_completed: str = "FALSE"  # 정산 시트 전용, to_dict()에 미포함
 
     def __post_init__(self) -> None:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -173,26 +169,9 @@ class SettlementRow:
             rejection_reason=rejection_reason,
         )
 
-    def to_row(self) -> list[str]:
-        return [
-            self.settlement_day,
-            self.user_name,
-            self.issue_type,
-            self.customer_name,
-            self.booking_key,
-            self.company_name,
-            self.company_sub_name,
-            self.settlement_cost,
-            self.carmore_cost,
-            self.user_refund_cost,
-            self.sales_channel,
-            self.description,
-            self.status,
-            self.approver_name,
-            self.created_at,
-            self.updated_at,
-            self.thread_url,
-            self.note,
-            self.reviewer_name,
-            self.rejection_reason,
-        ]
+    def to_dict(self) -> dict[str, str]:
+        return {
+            f.name: getattr(self, f.name)
+            for f in fields(self)
+            if f.name != "settlement_completed"
+        }

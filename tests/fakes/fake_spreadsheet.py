@@ -14,8 +14,8 @@ class FakeSpreadsheet:
     """
 
     def __init__(self):
-        self.settlement_rows: dict[str, list[str]] = {}
-        self.issue_logs: dict[str, list[str]] = {}
+        self.settlement_rows: dict[str, dict[str, str]] = {}
+        self.issue_logs: dict[str, dict[str, str]] = {}
         self.completed_keys: set[str] = set()
         self.should_fail: bool = False
 
@@ -32,7 +32,7 @@ class FakeSpreadsheet:
                 message="Fake spreadsheet failure",
                 details={"booking_key": row.booking_key},
             )
-        self.settlement_rows[row.booking_key] = row.to_row()
+        self.settlement_rows[row.booking_key] = row.to_dict()
 
     def append_issue_log_row(self, row: SettlementRow, sync_key: str) -> None:
         """이슈 로그는 sync_key 기준으로 upsert
@@ -45,7 +45,9 @@ class FakeSpreadsheet:
                 message="Fake spreadsheet failure",
                 details={"booking_key": row.booking_key},
             )
-        self.issue_logs[sync_key] = row.to_row() + [sync_key]
+        data = row.to_dict()
+        data["sync_key"] = sync_key
+        self.issue_logs[sync_key] = data
 
     def find_row_by_booking_key(
         self, booking_key: str, sheet_name: str | None = None

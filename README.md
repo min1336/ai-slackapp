@@ -182,7 +182,7 @@ button_value = data.model_dump_json()
 
 # dataclass - 내부 데이터 변환만 (스프레드시트 행 등)
 row = SettlementRow(...)
-row.to_row()  # → ["2025-01-28", "작성자", ...]
+row.to_dict()  # → {"settlement_day": "2025-01-28", "user_name": "작성자", ...}
 ```
 
 ## Slack App 설정
