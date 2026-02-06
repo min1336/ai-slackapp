@@ -334,3 +334,10 @@ class DefaultSpreadsheetGateway:
 
     def append_issue_log_row(self, row: SettlementRow, sync_key: str) -> None:
         append_issue_log_row(row, sync_key)
+
+    def find_row_by_booking_key(
+        self, booking_key: str, sheet_name: str | None = None
+    ) -> int | None:
+        if sheet_name is None:
+            sheet_name = config.spreadsheet.sheets.settlement
+        return find_row_by_booking_key(booking_key, sheet_name)

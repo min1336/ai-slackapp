@@ -8,8 +8,12 @@ from sqlalchemy import func, select
 from app.infrastructure.database.models import IssueLog, Settlement
 from app.infrastructure.database.repository import SettlementRepository
 from app.models.settlement import SettlementStatus
-from app.services.settlement_service import save_settlement
+from app.services.settlement_service import (
+    _lazy_sync_settlement_completed,
+    save_settlement,
+)
 from tests.fakes.fake_database import FakeDatabase
+from tests.fakes.fake_spreadsheet import FakeSpreadsheet
 
 
 @pytest.fixture
@@ -337,3 +341,80 @@ class TestSaveSettlement:
             repo = SettlementRepository(session)
             found = repo.get_by_booking_key(sample_settlement_data.booking_key)
             assert found.reviewer_name == ""
+
+
+class TestLazySyncSettlementCompleted:
+    """_lazy_sync_settlement_completed() 함수 테스트"""
+
+    def _save_and_mark_synced(self, fake_db, sample_settlement_data) -> str:
+        """헬퍼: DB에 정산 저장 후 sheets_synced=True로 표시"""
+        from app.models import SettlementRow
+
+        row = SettlementRow.from_settlement_data(
+            data=sample_settlement_data,
+            status=SettlementStatus.APPROVED,
+            approver_name="승인자",
+            thread_url="http://example.com/thread",
+        )
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            settlement = repo.save(row)
+            settlement.sheets_synced = True
+            session.commit()
+
+        return sample_settlement_data.booking_key
+
+    def test_정산완료된_건은_DB_completed_처리(self, fake_db, sample_settlement_data):
+        # Given - DB에 정산 저장 + sheets_synced=True
+        booking_key = self._save_and_mark_synced(fake_db, sample_settlement_data)
+
+        # Sheets에서 정산완료 처리됨 (활성 행 없음)
+        fake_sheets = FakeSpreadsheet()
+        fake_sheets.settlement_rows[booking_key] = ["row"]
+        fake_sheets.completed_keys.add(booking_key)
+
+        # When
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            result = _lazy_sync_settlement_completed(booking_key, repo, fake_sheets)
+            session.commit()
+
+        # Then - settlement_completed=True로 갱신됨
+        assert result is True
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            found = repo.get_by_booking_key(booking_key)
+            assert found.settlement_completed is True
+
+    def test_동기화_안된_건은_건너뜀(self, fake_db, sample_settlement_data):
+        # Given - DB에 정산 저장, sheets_synced=False (기본값)
+        from app.models import SettlementRow
+
+        row = SettlementRow.from_settlement_data(
+            data=sample_settlement_data,
+            status=SettlementStatus.APPROVED,
+            approver_name="승인자",
+            thread_url="http://example.com/thread",
+        )
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            repo.save(row)
+            session.commit()
+
+        booking_key = sample_settlement_data.booking_key
+
+        # Sheets에서 정산완료 처리됨 (하지만 DB 동기화 안 됨)
+        fake_sheets = FakeSpreadsheet()
+        fake_sheets.completed_keys.add(booking_key)
+
+        # When
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            result = _lazy_sync_settlement_completed(booking_key, repo, fake_sheets)
+
+        # Then - sheets_synced=False이므로 Sheets 조회 안 함
+        assert result is False
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            found = repo.get_by_booking_key(booking_key)
+            assert found.settlement_completed is False

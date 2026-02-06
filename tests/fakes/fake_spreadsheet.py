@@ -16,6 +16,7 @@ class FakeSpreadsheet:
     def __init__(self):
         self.settlement_rows: dict[str, list[str]] = {}
         self.issue_logs: dict[str, list[str]] = {}
+        self.completed_keys: set[str] = set()
         self.should_fail: bool = False
 
     def save_settlement_row(
@@ -49,11 +50,14 @@ class FakeSpreadsheet:
     def find_row_by_booking_key(
         self, booking_key: str, sheet_name: str | None = None
     ) -> int | None:
-        """booking_key로 행 번호 찾기"""
+        """booking_key로 활성 행 번호 찾기 (정산완료 행은 제외)"""
+        if booking_key in self.completed_keys:
+            return None
         return 1 if booking_key in self.settlement_rows else None
 
     def clear(self):
         """테스트 간 상태 초기화"""
         self.settlement_rows.clear()
         self.issue_logs.clear()
+        self.completed_keys.clear()
         self.should_fail = False

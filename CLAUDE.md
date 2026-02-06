@@ -64,6 +64,10 @@ core/                      ← 공통 유틸 (logger.py: structlog 설정)
 
 Supabase (PostgreSQL)를 캐시 레이어로 사용. Google Sheets가 primary storage.
 
+**동기화 방향:**
+- DB → Sheets: `save_settlement()` → `after_commit` → `sync_to_sheets()` (활성)
+- Sheets → DB: `_lazy_sync_settlement_completed()` — Sheets 정산완료를 DB에 반영 (구현됨, 미활성. `save_settlement()`에서 `repo.save()` 전에 호출하여 활성화)
+
 ```bash
 # 마이그레이션 적용 (Supabase MCP 플러그인 사용)
 # migrations/ 폴더의 SQL 파일을 Supabase apply_migration으로 실행
@@ -125,6 +129,7 @@ Slack Bolt의 `@app.error` 핸들러가 주입하는 `logger` 파라미터는 `*
 
 - `tests/factories.py`의 `SettlementDataFactory.create(**overrides)` 사용하여 테스트 데이터 생성
 - `tests/fakes/` — Protocol 기반 Fake 구현체 (외부 의존성 없이 테스트)
+- `FakeSpreadsheet.completed_keys: set[str]` — 정산완료 시뮬레이션용 (`find_row_by_booking_key`가 None 반환)
 - `tests/conftest.py` — 공유 픽스처 (팩토리 기반)
 - Pre-commit 훅: ruff + ruff-format + pytest-unit (3개 모두 커밋 시 자동 실행)
 
