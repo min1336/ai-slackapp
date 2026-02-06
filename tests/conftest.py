@@ -5,13 +5,14 @@ from __future__ import annotations
 import pytest
 
 from app.models.settlement import SettlementData
+from tests.factories import SettlementDataFactory
 from tests.fakes.fake_spreadsheet import FakeSpreadsheet
 
 
 @pytest.fixture
 def sample_settlement_data() -> SettlementData:
-    """테스트용 SettlementData 샘플"""
-    return SettlementData(
+    """테스트용 SettlementData 샘플 (팩토리 기반)"""
+    return SettlementDataFactory.create(
         user_name="테스터",
         booking_key="TEST-001",
         company_name="테스트업체",

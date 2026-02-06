@@ -155,7 +155,7 @@ def register_view_handlers(app: App) -> None:
                 blocks=approval_blocks,
             )
         except (SlackApiError, ValidationError, KeyError):
-            logger.exception("모달 제출 중 에러 발생")
+            logger.exception("registration_submit_failed")
             # 부분 실패 시 상세 메시지 삭제 (rollback)
             if detail_message_ts:
                 try:
@@ -164,7 +164,7 @@ def register_view_handlers(app: App) -> None:
                         ts=detail_message_ts,
                     )
                 except SlackApiError:
-                    logger.warning("상세 메시지 삭제 실패")
+                    logger.warning("detail_message_delete_failed")
             # 사용자에게 에러 알림
             if requester_id:
                 try:
@@ -174,7 +174,7 @@ def register_view_handlers(app: App) -> None:
                         "다시 시도해주세요.",
                     )
                 except SlackApiError:
-                    logger.exception("에러 알림 전송 실패")
+                    logger.exception("error_notification_failed")
 
     @app.view(ActionId.REJECTION_SUBMIT)
     def handle_rejection_submit(ack, client, view, body):
@@ -263,9 +263,9 @@ def register_view_handlers(app: App) -> None:
                     ),
                 )
 
-            logger.info("반려 처리 완료: %s", data.booking_key)
+            logger.info("rejection_completed", booking_key=data.booking_key)
         except (SlackApiError, ValidationError, KeyError):
-            logger.exception("반려 처리 중 에러 발생")
+            logger.exception("rejection_submit_failed")
             # 사용자에게 에러 알림 (ephemeral 메시지는 view에서 불가, DM으로 전송)
             rejecter_id = body.get("user", {}).get("id", "")
             if rejecter_id:
@@ -275,4 +275,4 @@ def register_view_handlers(app: App) -> None:
                         text="⚠️ 반려 처리 중 오류가 발생했습니다. 다시 시도해주세요.",
                     )
                 except SlackApiError:
-                    logger.exception("에러 알림 전송 실패")
+                    logger.exception("error_notification_failed")

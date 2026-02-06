@@ -30,10 +30,10 @@ def _sync_after_commit(settlement_id: int, log_id: int, row: SettlementRow) -> N
     try:
         sync_to_sheets(row, log_id)
         _mark_synced(settlement_id, log_id)
-        logger.info(f"Sheets sync completed for {row.booking_key}")
+        logger.info("sheets_sync_completed", booking_key=row.booking_key)
 
     except Exception as e:
-        logger.warning(f"Sheets sync failed for {row.booking_key}, will retry: {e}")
+        logger.warning("sheets_sync_failed", booking_key=row.booking_key, error=str(e))
 
 
 def save_settlement(
@@ -56,7 +56,7 @@ def save_settlement(
     )
 
     if rejection_reason:
-        logger.info(f"반려 사유: {rejection_reason}")
+        logger.info("rejection_saved", rejection_reason=rejection_reason)
 
     _session = session_factory or get_session
 

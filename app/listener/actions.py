@@ -196,7 +196,7 @@ def _handle_settlement_approve(
                 text=f"<@{data.requester_id}> 정산 이슈가 승인되었습니다.",
             )
     except (SlackApiError, ValidationError, KeyError):
-        logger.exception("정산 이슈 승인 중 에러 발생")
+        logger.exception("settlement_approve_failed")
         _notify_processing_error(
             client=client,
             context=context,
@@ -262,8 +262,8 @@ def _handle_transfer_approve(
         approver_name = get_user_name(client, context.user_id)
         data = SettlementData.model_validate_json(action_value(body))
 
-        logger.info("업체이관 승인 시작: %s", data.booking_key)
-        logger.debug("데이터: %s", data.model_dump_json(indent=2))
+        logger.info("transfer_approve_started", booking_key=data.booking_key)
+        logger.debug("transfer_approve_data", data=data.model_dump())
 
         # 상세 메시지 URL (원본 스레드의 상세 메시지)
         message_url = get_thread_url(
@@ -312,9 +312,9 @@ def _handle_transfer_approve(
                 text=f"<@{data.requester_id}> 업체이관이 승인되었습니다.",
             )
 
-        logger.info("업체이관 승인 완료: %s", data.booking_key)
+        logger.info("transfer_approve_completed", booking_key=data.booking_key)
     except (SlackApiError, ValidationError, KeyError):
-        logger.exception("업체이관 승인 중 에러 발생")
+        logger.exception("transfer_approve_failed")
         _notify_processing_error(
             client=client,
             context=context,

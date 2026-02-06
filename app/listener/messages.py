@@ -50,7 +50,7 @@ def register_message_handlers(app: App) -> None:
 
         parsed = parse_settlement_message(parent_text)
 
-        logger.info(f"정산 파싱 요청: {parsed.booking_key}")
+        logger.info("settlement_parse_requested", booking_key=parsed.booking_key)
 
         say(
             text="예약 정보를 확인해주세요 📋",
@@ -71,7 +71,7 @@ def register_message_handlers(app: App) -> None:
         # 이관 예약 채널에서만 처리
         transfer_channel = config.slack_channels.transfer_reservation
         if not transfer_channel:
-            logger.warning("이관 예약 채널이 설정되지 않음")
+            logger.warning("transfer_channel_not_configured")
             return
 
         if channel_id != transfer_channel:
@@ -85,13 +85,16 @@ def register_message_handlers(app: App) -> None:
         if not is_transfer_reservation_message(text):
             return
 
-        logger.info(f"이관 예약 메시지 감지: {text[:50]}...")
+        logger.info("transfer_message_detected", text_preview=text[:50])
         parsed = parse_transfer_reservation_message(text)
 
         logger.info(
-            f"이관 예약 파싱 완료 - 예약번호: {parsed.booking_key}, "
-            f"예약자: {parsed.customer_name}, 업체: {parsed.company_sub_name}, "
-            f"원금: {parsed.settlement_cost}, 카모아 부담금: {parsed.carmore_cost}"
+            "transfer_parsed",
+            booking_key=parsed.booking_key,
+            customer_name=parsed.customer_name,
+            company_sub_name=parsed.company_sub_name,
+            settlement_cost=parsed.settlement_cost,
+            carmore_cost=parsed.carmore_cost,
         )
 
         message_ts = message.get("ts")

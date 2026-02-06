@@ -49,7 +49,7 @@ def recover_stale_sync_records(
         logs = ApprovalLogRepository(session).recover_stale_records()
 
     if settlements or logs:
-        logger.info(f"Recovered stale records: {settlements} settlements, {logs} logs")
+        logger.info("recovered_stale_records", settlements=settlements, logs=logs)
 
     return settlements, logs
 
@@ -73,7 +73,7 @@ def sync_to_sheets(
         return True
 
     except Exception as e:
-        logger.error(f"Sheets sync failed for {row.booking_key}: {e}")
+        logger.error("sheets_sync_failed", booking_key=row.booking_key, error=str(e))
         raise
 
 
@@ -111,7 +111,10 @@ def sync_pending_records(
             synced_settlements += 1
         except Exception as e:
             logger.warning(
-                f"Retry sync failed for settlement {settlement.booking_key}: {e}"
+                "retry_sync_failed",
+                record_type="settlement",
+                booking_key=settlement.booking_key,
+                error=str(e),
             )
             with _session() as session:
                 SettlementRepository(session).mark_sync_failed(settlement.id, str(e))
@@ -124,13 +127,20 @@ def sync_pending_records(
                 ApprovalLogRepository(session).mark_synced(log.id)
             synced_logs += 1
         except Exception as e:
-            logger.warning(f"Retry sync failed for approval log {log.booking_key}: {e}")
+            logger.warning(
+                "retry_sync_failed",
+                record_type="approval_log",
+                booking_key=log.booking_key,
+                error=str(e),
+            )
             with _session() as session:
                 ApprovalLogRepository(session).mark_sync_failed(log.id, str(e))
 
     if synced_settlements or synced_logs:
         logger.info(
-            f"Sync completed: {synced_settlements} settlements, {synced_logs} logs"
+            "sync_completed",
+            settlements=synced_settlements,
+            logs=synced_logs,
         )
 
     return synced_settlements, synced_logs

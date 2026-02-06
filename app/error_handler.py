@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from slack_bolt import App
@@ -68,7 +67,10 @@ def send_monitoring_alert(
 ) -> None:
     error_channel_id = config.error_channel_id
     if not error_channel_id:
-        logger.debug("error_channel_id not configured, skipping monitoring alert")
+        logger.debug(
+            "monitoring_alert_skipped",
+            reason="error_channel_id_not_configured",
+        )
         return
 
     emoji, error_type = get_error_emoji_and_type(error)
@@ -129,7 +131,7 @@ def send_monitoring_alert(
             blocks=blocks,
         )
     except Exception as e:
-        logger.error(f"Failed to send monitoring alert: {e}")
+        logger.error("monitoring_alert_failed", error=str(e))
 
 
 def register_error_handler(app: App) -> None:
@@ -138,29 +140,27 @@ def register_error_handler(app: App) -> None:
         error: Exception,
         body: dict[str, Any],
         client: WebClient,
-        logger: logging.Logger,
+        **_kwargs,
     ) -> None:
         channel_id, user_id, thread_ts = extract_context_from_body(body)
 
         if is_user_error(error):
             # 400대 에러: 사용자 실수이므로 info 로그만, 모니터링 알림 불필요
             logger.info(
-                f"User error: {error}",
-                extra={
-                    "error_type": type(error).__name__,
-                    "channel_id": channel_id,
-                    "user_id": user_id,
-                },
+                "user_error",
+                error_type=type(error).__name__,
+                error=str(error),
+                channel_id=channel_id,
+                user_id=user_id,
             )
         else:
             # 500대 에러: 시스템 에러이므로 exception 로그 + 모니터링 알림
             logger.exception(
-                f"System error: {error}",
-                extra={
-                    "error_type": type(error).__name__,
-                    "channel_id": channel_id,
-                    "user_id": user_id,
-                },
+                "system_error",
+                error_type=type(error).__name__,
+                error=str(error),
+                channel_id=channel_id,
+                user_id=user_id,
             )
             send_monitoring_alert(client, error, body, channel_id, user_id)
 
@@ -180,4 +180,4 @@ def register_error_handler(app: App) -> None:
                     thread_ts=thread_ts,
                 )
             except Exception as e:
-                logger.error(f"Failed to send ephemeral error message: {e}")
+                logger.error("ephemeral_error_message_failed", error=str(e))

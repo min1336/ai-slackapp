@@ -48,7 +48,7 @@ def get_spreadsheet_client() -> gspread.Spreadsheet:
             gc = gspread.authorize(credentials)
             _spreadsheet_client = gc.open_by_key(config.spreadsheet.id)
             _client_created_at = now
-            logger.debug("Spreadsheet client refreshed")
+            logger.debug("spreadsheet_client_refreshed")
 
         return _spreadsheet_client
 
@@ -75,8 +75,8 @@ def save_settlement_row(row: SettlementRow, sheet_name: str | None = None) -> No
     except SpreadsheetError:
         raise
     except Exception as e:
-        logger.exception(f"스프레드시트 저장 실패 (sheet: {sheet_name}): {str(e)}")
-        logger.debug(f"실패한 행 데이터: {row.to_row()}")
+        logger.exception("spreadsheet_save_failed", sheet_name=sheet_name, error=str(e))
+        logger.debug("failed_row_data", row_data=row.to_row())
         raise SpreadsheetError(
             message=f"Failed to save settlement row: {e}",
             details={
@@ -105,8 +105,10 @@ def append_approval_log_row(row: SettlementRow, sync_key: str) -> None:
     except SpreadsheetError:
         raise
     except Exception as e:
-        logger.exception(f"승인로그 시트 행 추가 실패 (sheet: {sheet_name}): {str(e)}")
-        logger.debug(f"실패한 행 데이터: {_to_approval_log_row(row, sync_key)}")
+        logger.exception(
+            "approval_log_append_failed", sheet_name=sheet_name, error=str(e)
+        )
+        logger.debug("failed_row_data", row_data=_to_approval_log_row(row, sync_key))
         raise SpreadsheetError(
             message=f"Failed to append approval log: {e}",
             details={
@@ -129,8 +131,10 @@ def find_row_by_booking_key(booking_key: str, sheet_name: str) -> int | None:
         if _is_cell_not_found(e):
             return None
         logger.exception(
-            f"booking_key 검색 실패: {e}",
-            extra={"booking_key": booking_key, "sheet": sheet_name},
+            "booking_key_search_failed",
+            booking_key=booking_key,
+            sheet_name=sheet_name,
+            error=str(e),
         )
         raise SpreadsheetError(
             message=f"Failed to find row by booking key: {e}",
@@ -163,10 +167,12 @@ def update_settlement_row(
         worksheet.update_cells(cell_list)
     except Exception as e:
         logger.exception(
-            f"스프레드시트 행 업데이트 실패: {e}",
-            extra={"sheet": sheet_name, "row": row_number},
+            "spreadsheet_row_update_failed",
+            sheet_name=sheet_name,
+            row_number=row_number,
+            error=str(e),
         )
-        logger.debug(f"실패한 행 데이터: {row.to_row()}")
+        logger.debug("failed_row_data", row_data=row.to_row())
         raise SpreadsheetError(
             message=f"Failed to update settlement row: {e}",
             details={
@@ -192,10 +198,12 @@ def update_approval_log_row(row: SettlementRow, row_number: int, sync_key: str) 
         worksheet.update_cells(cell_list)
     except Exception as e:
         logger.exception(
-            f"승인로그 시트 행 업데이트 실패: {e}",
-            extra={"sheet": sheet_name, "row": row_number},
+            "approval_log_row_update_failed",
+            sheet_name=sheet_name,
+            row_number=row_number,
+            error=str(e),
         )
-        logger.debug(f"실패한 행 데이터: {_to_approval_log_row(row, sync_key)}")
+        logger.debug("failed_row_data", row_data=_to_approval_log_row(row, sync_key))
         raise SpreadsheetError(
             message=f"Failed to update approval log row: {e}",
             details={
@@ -214,8 +222,10 @@ def find_row_by_sync_key(worksheet: Worksheet, sync_key: str) -> int | None:
         if _is_cell_not_found(e):
             return None
         logger.exception(
-            f"sync_key 검색 실패: {e}",
-            extra={"sync_key": sync_key, "sheet": worksheet.title},
+            "sync_key_search_failed",
+            sync_key=sync_key,
+            sheet_name=worksheet.title,
+            error=str(e),
         )
         raise SpreadsheetError(
             message=f"Failed to find row by sync key: {e}",
@@ -244,8 +254,10 @@ def find_row_by_legacy_fingerprint(
         if _is_cell_not_found(e):
             return None
         logger.exception(
-            f"legacy fingerprint 검색 실패: {e}",
-            extra={"booking_key": row.booking_key, "sheet": worksheet.title},
+            "legacy_fingerprint_search_failed",
+            booking_key=row.booking_key,
+            sheet_name=worksheet.title,
+            error=str(e),
         )
         raise SpreadsheetError(
             message=f"Failed to find row by legacy fingerprint: {e}",

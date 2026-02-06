@@ -63,7 +63,7 @@ class SessionWithAfterCommit(Session):
             try:
                 hook()
             except Exception as e:
-                logger.warning(f"after_commit hook failed: {e}")
+                logger.warning("after_commit_hook_failed", error=str(e))
         self._after_commit_hooks.clear()
 
 

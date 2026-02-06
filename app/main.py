@@ -35,22 +35,23 @@ register_view_handlers(app)
 
 def _start_sync_worker(interval_seconds: int) -> None:
     def run() -> None:
-        logger.info(f"Sync worker started (interval={interval_seconds}s)")
+        logger.info("sync_worker_started", interval_seconds=interval_seconds)
         while not _stop_event.is_set():
             try:
                 synced_settlements, synced_logs = sync_pending_records()
                 if synced_settlements or synced_logs:
                     logger.info(
-                        "Background sync completed: "
-                        f"settlements={synced_settlements}, logs={synced_logs}"
+                        "background_sync_completed",
+                        settlements=synced_settlements,
+                        logs=synced_logs,
                     )
             except Exception as e:
-                logger.warning(f"Background sync failed: {e}")
+                logger.warning("background_sync_failed", error=str(e))
 
             # sleep 대신 Event.wait() 사용 - 종료 신호 시 즉시 응답
             _stop_event.wait(timeout=interval_seconds)
 
-        logger.info("Sync worker stopped")
+        logger.info("sync_worker_stopped")
 
     Thread(target=run, daemon=True).start()
 
@@ -58,7 +59,7 @@ def _start_sync_worker(interval_seconds: int) -> None:
 def _handle_shutdown(signum: int, frame) -> None:
     """SIGTERM/SIGINT 핸들러 - graceful shutdown 시작."""
     sig_name = signal.Signals(signum).name
-    logger.info(f"Received {sig_name}, initiating graceful shutdown...")
+    logger.info("graceful_shutdown", signal=sig_name)
     _stop_event.set()
 
 
@@ -67,12 +68,15 @@ def main():
     signal.signal(signal.SIGTERM, _handle_shutdown)
     signal.signal(signal.SIGINT, _handle_shutdown)
 
-    logger.info("애플리케이션 시작")
+    logger.info("app_started")
     if database.is_configured:
         recover_stale_sync_records()
         _start_sync_worker(config.sync_interval_seconds)
     else:
-        logger.warning("DATABASE_URL is not configured; sync worker disabled")
+        logger.warning(
+            "database_not_configured",
+            consequence="sync_worker_disabled",
+        )
     SocketModeHandler(app, slack.app_token).start()
 
 
