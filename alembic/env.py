@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
+from sqlalchemy.types import BIGINT, BigInteger
 
 from alembic import context
-from app.config import database
 from app.infrastructure.database.models import Base
 
 config = context.config
@@ -13,10 +14,28 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# .env의 DATABASE_* 환경변수로 구성된 URL 사용
-config.set_main_option("sqlalchemy.url", database.url)
+# CI에서 SQLite 사용: ALEMBIC_DATABASE_URL 우선, 없으면 .env 기반 PG URL
+db_url = os.getenv("ALEMBIC_DATABASE_URL")
+if not db_url:
+    from app.config import database
+
+    db_url = database.url
+config.set_main_option("sqlalchemy.url", db_url)
 
 target_metadata = Base.metadata
+
+# SQLite reflects BigInteger as BIGINT — ignore this false positive
+_BIGINT_TYPES = (BIGINT, BigInteger)
+
+
+def _compare_type(
+    context, inspected_column, metadata_column, inspected_type, metadata_type
+):
+    if isinstance(inspected_type, _BIGINT_TYPES) and isinstance(
+        metadata_type, _BIGINT_TYPES
+    ):
+        return False
+    return None
 
 
 def run_migrations_offline() -> None:
@@ -27,6 +46,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        compare_type=_compare_type,
     )
 
     with context.begin_transaction():
@@ -45,6 +65,7 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
+            compare_type=_compare_type,
         )
 
         with context.begin_transaction():

@@ -9,5 +9,9 @@ RUN uv sync --frozen --no-dev
 
 COPY config.yaml ./
 COPY app ./app
+COPY alembic.ini ./
+COPY alembic ./alembic
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
 
-CMD ["uv", "run", "python", "-m", "app.main"]
+CMD ["./entrypoint.sh"]

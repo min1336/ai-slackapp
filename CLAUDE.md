@@ -69,14 +69,22 @@ Supabase (PostgreSQL)를 캐시 레이어로 사용. Google Sheets가 primary st
 - Sheets → DB: `_lazy_sync_settlement_completed()` — Sheets 정산완료를 DB에 반영 (구현됨, 미활성. `save_settlement()`에서 `repo.save()` 전에 호출하여 활성화)
 
 ```bash
-# 마이그레이션 적용 (Supabase MCP 플러그인 사용)
-# migrations/ 폴더의 SQL 파일을 Supabase apply_migration으로 실행
+# 마이그레이션 상태 확인
+uv run alembic current
 
-# 또는 직접 실행
-psql -d <database_name> -f migrations/001_add_sync_status.sql
+# 자동 마이그레이션 생성 (모델 변경 감지)
+uv run alembic revision --autogenerate -m "설명"
+
+# 마이그레이션 적용
+uv run alembic upgrade head
+
+# 모델-DB 드리프트 확인
+uv run alembic check
 ```
 
-**Alembic 미사용**: Supabase 마이그레이션 시스템으로 충분. 별도 설정 불필요.
+**Alembic 설정:** `env.py`에서 `app.config.database.url`을 읽어 DB 연결. `alembic.ini`에 ruff post-write 훅 설정.
+**모델-DB 호환:** `_BigIntPK = BigInteger().with_variant(Integer, "sqlite")` — PostgreSQL bigint + SQLite autoincrement 호환. 부분 인덱스는 `postgresql_where` + `sqlite_where` 병행.
+**새 부분 인덱스 추가 시:** `postgresql_where`만 쓰면 SQLite 테스트가 깨짐. 반드시 `sqlite_where` 동시 지정 (boolean: PG `false` → SQLite `0`).
 
 ## 데이터 모델
 
@@ -93,8 +101,9 @@ psql -d <database_name> -f migrations/001_add_sync_status.sql
 1. `models/settlement.py` - Pydantic/dataclass 필드
 2. `models/__init__.py` - 새 모델 export 추가 (누락 시 런타임 ImportError)
 3. `infrastructure/database/repository.py` - INSERT/UPDATE 쿼리
-4. `migrations/` - DB 마이그레이션 SQL
-5. `infrastructure/database/models.py` - SQLAlchemy 컬럼 (DB 저장 필요시)
+4. `infrastructure/database/models.py` - SQLAlchemy 컬럼 (DB 저장 필요시)
+5. `uv run alembic revision --autogenerate -m "설명"` - 마이그레이션 생성 후 확인
+6. `config.yaml` `spreadsheet.columns` - 시트 컬럼 매핑 추가 (시트 표시 필요시)
 
 ## 핵심 흐름
 
@@ -144,6 +153,17 @@ Slack Bolt의 `@app.error` 핸들러가 주입하는 `logger` 파라미터는 `*
 
 - `header` 블록은 `plain_text`만 지원 → mrkdwn 문법(`~취소선~`, `*볼드*`) 사용 불가
 - mrkdwn 필요시 `section` 블록 사용: `{"type": "section", "text": {"type": "mrkdwn", "text": "~취소선~"}}`
+
+## CI/CD
+
+**CI (`ci.yml`):** PR → main 시 3개 job 병렬 실행:
+- `lint`: `ruff check` + `ruff format --check`
+- `test`: `pytest tests/unit -v`
+- `alembic`: fresh SQLite에서 `alembic heads` (단일 head 확인) → `upgrade head` → `check`
+
+**배포 (`deploy.yml`):** main push 시 Docker 빌드 → 프로덕션 배포. `entrypoint.sh`가 `alembic upgrade head` 실행 후 앱 시작.
+
+**`ALEMBIC_DATABASE_URL`:** 이 환경변수가 설정되면 `.env` 기반 PG URL 대신 사용. CI에서 `sqlite:///test.db`로 설정하여 PG 없이 마이그레이션 검증.
 
 ## 커밋 컨벤션
 
