@@ -1,0 +1,44 @@
+name: Migration Check
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: "ci-migration-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  alembic:
+    runs-on: ubuntu-latest
+    env:
+      ALEMBIC_DATABASE_URL: "sqlite:///test.db"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: uv sync --frozen
+
+      - name: Check single migration head
+        run: |
+          heads=$(uv run alembic heads | wc -l)
+          echo "Migration heads: $heads"
+          if [ "$heads" -ne 1 ]; then
+            echo "ERROR: Multiple migration heads detected!"
+            uv run alembic heads
+            exit 1
+          fi
+
+      - name: Run migrations on fresh DB
+        run: uv run alembic upgrade head
+
+      - name: Check model-migration consistency
+        run: uv run alembic check

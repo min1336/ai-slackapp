@@ -156,9 +156,11 @@ Slack Bolt의 `@app.error` 핸들러가 주입하는 `logger` 파라미터는 `*
 
 ## CI/CD
 
-**CI (`ci.yml`):** PR → main 시 3개 job 병렬 실행:
+**CI (`ci.yml`):** 모든 PR에서 2개 job 병렬 실행:
 - `lint`: `ruff check` + `ruff format --check`
 - `test`: `pytest tests/unit -v`
+
+**Migration Check (`ci-migration.yml`):** PR → main 시에만 실행:
 - `alembic`: fresh SQLite에서 `alembic heads` (단일 head 확인) → `upgrade head` → `check`
 
 **배포 (`deploy.yml`):** main push 시 Docker 빌드 → 프로덕션 배포. `entrypoint.sh`가 `alembic upgrade head` 실행 후 앱 시작.
