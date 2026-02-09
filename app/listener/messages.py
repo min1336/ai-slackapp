@@ -4,7 +4,7 @@ import re
 
 from slack_bolt import App
 
-from app.config import config
+from app.config import get_app_config
 from app.constants import Command
 from app.core import get_logger
 from app.services.message_parser import (
@@ -69,7 +69,7 @@ def register_message_handlers(app: App) -> None:
         channel_id = message.get("channel")
 
         # 이관 예약 채널에서만 처리
-        transfer_channel = config.slack_channels.transfer_reservation
+        transfer_channel = get_app_config().slack_channels.transfer_reservation
         if not transfer_channel:
             logger.warning("transfer_channel_not_configured")
             return

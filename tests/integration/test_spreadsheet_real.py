@@ -12,7 +12,7 @@ import gspread
 import pytest
 from google.oauth2.service_account import Credentials
 
-from app.config import config, spreadsheet
+from app.config import get_app_config, get_spreadsheet_settings
 from app.exceptions import SpreadsheetError
 from app.infrastructure import spreadsheet as spreadsheet_module
 from app.models import SETTLEMENT_FIELDS, SettlementRow
@@ -80,7 +80,7 @@ def _sample_row(
 
 
 def _headers_for_settlement(extra_header: str | None = None) -> list[str]:
-    field_to_header = config.spreadsheet.field_to_header("settlement")
+    field_to_header = get_app_config().spreadsheet.field_to_header("settlement")
     fields = [*SETTLEMENT_FIELDS, "settlement_completed"]
     base_headers = [field_to_header[field] for field in fields]
 
@@ -96,7 +96,7 @@ def _headers_for_settlement(extra_header: str | None = None) -> list[str]:
 
 
 def _headers_for_issue_log(extra_header: str | None = None) -> list[str]:
-    field_to_header = config.spreadsheet.field_to_header("issue_log")
+    field_to_header = get_app_config().spreadsheet.field_to_header("issue_log")
     fields = [*SETTLEMENT_FIELDS, "sync_key"]
     base_headers = [field_to_header[field] for field in fields]
 
@@ -118,7 +118,7 @@ def _row_values_from_fields(
     field_values: dict[str, str],
     extra_values: dict[str, str] | None = None,
 ) -> list[str]:
-    field_to_header = config.spreadsheet.field_to_header(sheet_type)
+    field_to_header = get_app_config().spreadsheet.field_to_header(sheet_type)
     by_header = {
         field_to_header[field_name]: value
         for field_name, value in field_values.items()
@@ -154,18 +154,19 @@ def real_spreadsheet():
     if selected_config_path == default_config_path:
         pytest.skip("운영/기본 config.yaml 대신 테스트 설정 파일을 사용하세요.")
 
-    if config.spreadsheet.id.startswith("REPLACE_WITH_TEST_"):
+    if get_app_config().spreadsheet.id.startswith("REPLACE_WITH_TEST_"):
         pytest.skip("config.test.yaml의 spreadsheet.id를 테스트 시트 ID로 교체하세요.")
 
-    if not os.path.exists(spreadsheet.credentials_file):
-        pytest.skip(f"credentials 파일이 없습니다: {spreadsheet.credentials_file}")
+    creds_file = get_spreadsheet_settings().credentials_file
+    if not os.path.exists(creds_file):
+        pytest.skip(f"credentials 파일이 없습니다: {creds_file}")
 
     credentials = Credentials.from_service_account_file(
-        spreadsheet.credentials_file,
+        get_spreadsheet_settings().credentials_file,
         scopes=SCOPES,
     )
     client = gspread.authorize(credentials)
-    return _call_with_retry(client.open_by_key, config.spreadsheet.id)
+    return _call_with_retry(client.open_by_key, get_app_config().spreadsheet.id)
 
 
 def _create_temp_worksheet(real_spreadsheet, prefix: str):
@@ -240,7 +241,7 @@ def test_real_save_settlement_row_preserves_unmapped_column(
         sheet_name=settlement_worksheet.title,
     )
 
-    field_to_header = config.spreadsheet.field_to_header("settlement")
+    field_to_header = get_app_config().spreadsheet.field_to_header("settlement")
     values = _call_with_retry(settlement_worksheet.get_all_values)
     assert len(values) == 2
     assert _value_at_header(settlement_worksheet, 2, extra_header) == "KEEP"
@@ -260,7 +261,9 @@ def test_real_save_settlement_row_fails_when_required_header_missing(
 ) -> None:
     headers = _headers_for_settlement()
     headers.remove(
-        config.spreadsheet.field_to_header("settlement")["settlement_completed"]
+        get_app_config().spreadsheet.field_to_header("settlement")[
+            "settlement_completed"
+        ]
     )
     _call_with_retry(settlement_worksheet.append_row, headers)
 
@@ -307,7 +310,7 @@ def test_real_append_issue_log_row_upserts_by_sync_key(
         lambda: real_spreadsheet,
     )
     monkeypatch.setattr(
-        config.spreadsheet.sheets.issue_log,
+        get_app_config().spreadsheet.sheets.issue_log,
         "name",
         issue_log_worksheet.title,
     )
@@ -320,7 +323,7 @@ def test_real_append_issue_log_row_upserts_by_sync_key(
     )
 
     values = _call_with_retry(issue_log_worksheet.get_all_values)
-    field_to_header = config.spreadsheet.field_to_header("issue_log")
+    field_to_header = get_app_config().spreadsheet.field_to_header("issue_log")
     assert len(values) == 2
     assert _value_at_header(issue_log_worksheet, 2, extra_header) == "LEGACY"
     assert _value_at_header(issue_log_worksheet, 2, field_to_header["status"]) == "반려"

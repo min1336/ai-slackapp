@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.config import DatabaseProperties
 from app.models.settlement import SettlementData
 from tests.factories import SettlementDataFactory
 from tests.fakes.fake_spreadsheet import FakeSpreadsheet
@@ -28,3 +29,13 @@ def sample_settlement_data() -> SettlementData:
 def fake_spreadsheet() -> FakeSpreadsheet:
     """테스트용 FakeSpreadsheet 인스턴스"""
     return FakeSpreadsheet()
+
+
+@pytest.fixture
+def db_configured(monkeypatch):
+    """get_database_settings()가 DB 설정 완료 상태를 반환하도록 mock."""
+    fake = DatabaseProperties(host="test-host", password="test-pw")
+    monkeypatch.setattr(
+        "app.services.settlement_service.get_database_settings",
+        lambda: fake,
+    )

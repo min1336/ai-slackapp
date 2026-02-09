@@ -25,11 +25,7 @@ def fake_db():
 class TestSaveSettlement:
     """save_settlement() 함수 테스트"""
 
-    def test_승인시_DB에_저장한다(self, monkeypatch, fake_db, sample_settlement_data):
-        # Given
-        monkeypatch.setattr("app.config.database.host", "test-host")
-        monkeypatch.setattr("app.config.database.password", "test-password")
-
+    def test_승인시_DB에_저장한다(self, db_configured, fake_db, sample_settlement_data):
         # When - no exception means success
         save_settlement(
             data=sample_settlement_data,
@@ -46,11 +42,7 @@ class TestSaveSettlement:
             assert found is not None
             assert found.user_name == sample_settlement_data.user_name
 
-    def test_반려시_DB에_저장한다(self, monkeypatch, fake_db, sample_settlement_data):
-        # Given
-        monkeypatch.setattr("app.config.database.host", "test-host")
-        monkeypatch.setattr("app.config.database.password", "test-password")
-
+    def test_반려시_DB에_저장한다(self, db_configured, fake_db, sample_settlement_data):
         # When
         save_settlement(
             data=sample_settlement_data,
@@ -71,8 +63,13 @@ class TestSaveSettlement:
     def test_DATABASE_URL_미설정시_ValueError_발생(
         self, monkeypatch, sample_settlement_data
     ):
-        # Given
-        monkeypatch.setattr("app.config.database.host", "")
+        # Given — DB 미설정 상태 명시적 주입
+        from app.config import DatabaseProperties
+
+        monkeypatch.setattr(
+            "app.services.settlement_service.get_database_settings",
+            lambda: DatabaseProperties(host="", password=""),
+        )
 
         # When & Then
         with pytest.raises(ValueError, match="DATABASE_URL is not configured"):
@@ -84,12 +81,8 @@ class TestSaveSettlement:
             )
 
     def test_승인시_settlement과_issue_log_모두_저장한다(
-        self, monkeypatch, fake_db, sample_settlement_data
+        self, db_configured, fake_db, sample_settlement_data
     ):
-        # Given
-        monkeypatch.setattr("app.config.database.host", "test-host")
-        monkeypatch.setattr("app.config.database.password", "test-password")
-
         # When
         save_settlement(
             data=sample_settlement_data,
@@ -112,12 +105,10 @@ class TestSaveSettlement:
             assert log_count == 1
 
     def test_저장된_데이터에_승인자_이름이_포함된다(
-        self, monkeypatch, fake_db, sample_settlement_data
+        self, db_configured, fake_db, sample_settlement_data
     ):
         # Given
         approver = "김승인"
-        monkeypatch.setattr("app.config.database.host", "test-host")
-        monkeypatch.setattr("app.config.database.password", "test-password")
 
         # When
         save_settlement(
@@ -135,11 +126,9 @@ class TestSaveSettlement:
             assert found.approver_name == approver
 
     def test_sheets_동기화_성공시_synced_True(
-        self, monkeypatch, fake_db, sample_settlement_data
+        self, monkeypatch, db_configured, fake_db, sample_settlement_data
     ):
         # Given - after_commit 훅으로 Sheets 동기화 성공 시
-        monkeypatch.setattr("app.config.database.host", "test-host")
-        monkeypatch.setattr("app.config.database.password", "test-password")
         # _mark_synced는 @transactional 데코레이터를 사용하므로 connection 모듈도 패치
         monkeypatch.setattr(
             "app.infrastructure.database.connection.get_session",
@@ -166,12 +155,9 @@ class TestSaveSettlement:
             assert found.sheets_synced is True
 
     def test_sheets_동기화_실패시_synced_False(
-        self, monkeypatch, fake_db, sample_settlement_data
+        self, monkeypatch, db_configured, fake_db, sample_settlement_data
     ):
         # Given - after_commit 훅에서 Sheets 동기화 실패 시
-        monkeypatch.setattr("app.config.database.host", "test-host")
-        monkeypatch.setattr("app.config.database.password", "test-password")
-
         def fail_sync(row, log_id):
             raise ConnectionError("Sheets API unavailable")
 
@@ -195,11 +181,7 @@ class TestSaveSettlement:
             found = repo.get_by_booking_key(sample_settlement_data.booking_key)
             assert found.sheets_synced is False
 
-    def test_요청시_DB에_저장한다(self, monkeypatch, fake_db, sample_settlement_data):
-        # Given
-        monkeypatch.setattr("app.config.database.host", "test-host")
-        monkeypatch.setattr("app.config.database.password", "test-password")
-
+    def test_요청시_DB에_저장한다(self, db_configured, fake_db, sample_settlement_data):
         # When
         save_settlement(
             data=sample_settlement_data,
@@ -217,11 +199,9 @@ class TestSaveSettlement:
             assert found.status == SettlementStatus.REQUESTED.value
 
     def test_요청시_sheets_동기화_실행된다(
-        self, monkeypatch, fake_db, sample_settlement_data
+        self, monkeypatch, db_configured, fake_db, sample_settlement_data
     ):
         # Given
-        monkeypatch.setattr("app.config.database.host", "test-host")
-        monkeypatch.setattr("app.config.database.password", "test-password")
         monkeypatch.setattr(
             "app.infrastructure.database.connection.get_session",
             fake_db.get_session,
@@ -247,11 +227,9 @@ class TestSaveSettlement:
             assert found.sheets_synced is True
 
     def test_반려시_sheets_동기화_실행된다(
-        self, monkeypatch, fake_db, sample_settlement_data
+        self, monkeypatch, db_configured, fake_db, sample_settlement_data
     ):
         # Given
-        monkeypatch.setattr("app.config.database.host", "test-host")
-        monkeypatch.setattr("app.config.database.password", "test-password")
         monkeypatch.setattr(
             "app.infrastructure.database.connection.get_session",
             fake_db.get_session,
@@ -278,12 +256,8 @@ class TestSaveSettlement:
             assert found.sheets_synced is True
 
     def test_rejection_reason_저장된다(
-        self, monkeypatch, fake_db, sample_settlement_data
+        self, db_configured, fake_db, sample_settlement_data
     ):
-        # Given
-        monkeypatch.setattr("app.config.database.host", "test-host")
-        monkeypatch.setattr("app.config.database.password", "test-password")
-
         # When
         save_settlement(
             data=sample_settlement_data,
@@ -300,11 +274,9 @@ class TestSaveSettlement:
             found = repo.get_by_booking_key(sample_settlement_data.booking_key)
             assert found.rejection_reason == "고객 정보 오류"
 
-    def test_reviewer_name_저장된다(self, monkeypatch, fake_db, sample_settlement_data):
-        # Given
-        monkeypatch.setattr("app.config.database.host", "test-host")
-        monkeypatch.setattr("app.config.database.password", "test-password")
-
+    def test_reviewer_name_저장된다(
+        self, db_configured, fake_db, sample_settlement_data
+    ):
         # When - 승인 시 reviewer_name = approver_name
         save_settlement(
             data=sample_settlement_data,
@@ -321,12 +293,8 @@ class TestSaveSettlement:
             assert found.reviewer_name == "김검토"
 
     def test_요청시_reviewer_name_비어있다(
-        self, monkeypatch, fake_db, sample_settlement_data
+        self, db_configured, fake_db, sample_settlement_data
     ):
-        # Given
-        monkeypatch.setattr("app.config.database.host", "test-host")
-        monkeypatch.setattr("app.config.database.password", "test-password")
-
         # When - 요청 시 아직 검토자 없음
         save_settlement(
             data=sample_settlement_data,

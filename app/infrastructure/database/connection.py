@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.config import database
+from app.config import get_database_settings
 from app.core import get_logger
 
 logger = get_logger(__name__)
@@ -23,6 +23,7 @@ _session_factory = None
 def get_engine():
     global _engine
     if _engine is None:
+        database = get_database_settings()
         if not database.url:
             raise ValueError("DATABASE_URL is not configured")
         _engine = create_engine(

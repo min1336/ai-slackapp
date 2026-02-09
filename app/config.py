@@ -185,31 +185,25 @@ def _load_app_config() -> AppConfig:
     return AppConfig.model_validate(data)
 
 
-slack = SlackProperties()
-spreadsheet = SpreadsheetProperties()
-database = DatabaseProperties()
-config = _load_app_config()
-
-
 @lru_cache
 def get_app_config() -> AppConfig:
     """AppConfig 싱글톤 반환."""
-    return config
+    return _load_app_config()
 
 
 @lru_cache
 def get_slack_settings() -> SlackProperties:
     """SlackProperties 싱글톤 반환."""
-    return slack
+    return SlackProperties()
 
 
 @lru_cache
 def get_spreadsheet_settings() -> SpreadsheetProperties:
     """SpreadsheetProperties 싱글톤 반환."""
-    return spreadsheet
+    return SpreadsheetProperties()
 
 
 @lru_cache
 def get_database_settings() -> DatabaseProperties:
     """DatabaseProperties 싱글톤 반환."""
-    return database
+    return DatabaseProperties()

@@ -7,7 +7,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from gspread import Worksheet
 
-from app.config import config, spreadsheet
+from app.config import get_app_config, get_spreadsheet_settings
 from app.core import get_logger
 from app.exceptions import SpreadsheetError
 from app.infrastructure.column_mapper import ColumnMapper, ColumnMapping
@@ -35,7 +35,7 @@ def _resolve_mapping(worksheet: Worksheet, sheet_type: str) -> ColumnMapping:
     else:
         raise ValueError(f"Unknown sheet_type: {sheet_type}")
 
-    mapper = ColumnMapper(config.spreadsheet.field_to_header(sheet_type))
+    mapper = ColumnMapper(get_app_config().spreadsheet.field_to_header(sheet_type))
     return mapper.resolve(headers, required)
 
 
@@ -70,11 +70,11 @@ def get_spreadsheet_client() -> gspread.Spreadsheet:
 
         if should_refresh:
             credentials = Credentials.from_service_account_file(
-                spreadsheet.credentials_file,
+                get_spreadsheet_settings().credentials_file,
                 scopes=SCOPES,
             )
             gc = gspread.authorize(credentials)
-            _spreadsheet_client = gc.open_by_key(config.spreadsheet.id)
+            _spreadsheet_client = gc.open_by_key(get_app_config().spreadsheet.id)
             _client_created_at = now
             logger.debug("spreadsheet_client_refreshed")
 
@@ -83,7 +83,7 @@ def get_spreadsheet_client() -> gspread.Spreadsheet:
 
 def save_settlement_row(row: SettlementRow, sheet_name: str | None = None) -> None:
     if sheet_name is None:
-        sheet_name = config.spreadsheet.sheet_name("settlement")
+        sheet_name = get_app_config().spreadsheet.sheet_name("settlement")
 
     try:
         spreadsheet_client = get_spreadsheet_client()
@@ -136,7 +136,7 @@ def save_settlement_row(row: SettlementRow, sheet_name: str | None = None) -> No
 
 
 def append_issue_log_row(row: SettlementRow, sync_key: str) -> None:
-    sheet_name = config.spreadsheet.sheet_name("issue_log")
+    sheet_name = get_app_config().spreadsheet.sheet_name("issue_log")
 
     try:
         spreadsheet_client = get_spreadsheet_client()
@@ -233,7 +233,7 @@ def find_row_by_booking_key(
 
 
 def get_spreadsheet_url() -> str:
-    return f"https://docs.google.com/spreadsheets/d/{config.spreadsheet.id}"
+    return f"https://docs.google.com/spreadsheets/d/{get_app_config().spreadsheet.id}"
 
 
 def update_settlement_row(
@@ -425,5 +425,5 @@ class DefaultSpreadsheetGateway:
         self, booking_key: str, sheet_name: str | None = None
     ) -> int | None:
         if sheet_name is None:
-            sheet_name = config.spreadsheet.sheet_name("settlement")
+            sheet_name = get_app_config().spreadsheet.sheet_name("settlement")
         return find_row_by_booking_key(booking_key, sheet_name)

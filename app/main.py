@@ -6,7 +6,7 @@ from threading import Event, Thread
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
-from app.config import config, database, slack
+from app.config import get_app_config, get_database_settings, get_slack_settings
 from app.core import get_logger, setup_logging
 from app.error_handler import register_error_handler
 from app.listener.actions import register_action_handlers
@@ -21,16 +21,16 @@ logger = get_logger(__name__)
 # Graceful shutdown을 위한 이벤트
 _stop_event = Event()
 
-# Initializes your app with your bot token and socket mode handler
-app = App(token=slack.bot_token)
 
-# 에러 핸들러 등록 (다른 핸들러보다 먼저)
-register_error_handler(app)
-
-# 리스너 등록
-register_message_handlers(app)
-register_action_handlers(app)
-register_view_handlers(app)
+def _create_app() -> App:
+    """Slack Bolt App 초기화 (lazy — main() 호출 시에만 실행)."""
+    slack_settings = get_slack_settings()
+    bolt_app = App(token=slack_settings.bot_token)
+    register_error_handler(bolt_app)
+    register_message_handlers(bolt_app)
+    register_action_handlers(bolt_app)
+    register_view_handlers(bolt_app)
+    return bolt_app
 
 
 def _start_sync_worker(interval_seconds: int) -> None:
@@ -69,15 +69,19 @@ def main():
     signal.signal(signal.SIGINT, _handle_shutdown)
 
     logger.info("app_started")
+    database = get_database_settings()
     if database.is_configured:
         recover_stale_sync_records()
-        _start_sync_worker(config.sync_interval_seconds)
+        app_config = get_app_config()
+        _start_sync_worker(app_config.sync_interval_seconds)
     else:
         logger.warning(
             "database_not_configured",
             consequence="sync_worker_disabled",
         )
-    SocketModeHandler(app, slack.app_token).start()
+    app = _create_app()
+    slack_settings = get_slack_settings()
+    SocketModeHandler(app, slack_settings.app_token).start()
 
 
 if __name__ == "__main__":

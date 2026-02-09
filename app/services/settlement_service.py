@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from app.config import database
+from app.config import get_database_settings
 from app.core import get_logger
 from app.infrastructure.database import (
     IssueLogRepository,
@@ -106,7 +106,7 @@ def save_settlement(
     *,
     session_factory: SessionFactory | None = None,
 ) -> None:
-    if not database.is_configured:
+    if not get_database_settings().is_configured:
         raise ValueError("DATABASE_URL is not configured")
 
     row = SettlementRow.from_settlement_data(

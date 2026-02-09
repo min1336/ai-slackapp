@@ -17,9 +17,9 @@ if config.config_file_name is not None:
 # CI에서 SQLite 사용: ALEMBIC_DATABASE_URL 우선, 없으면 .env 기반 PG URL
 db_url = os.getenv("ALEMBIC_DATABASE_URL")
 if not db_url:
-    from app.config import database
+    from app.config import get_database_settings
 
-    db_url = database.url
+    db_url = get_database_settings().url
 config.set_main_option("sqlalchemy.url", db_url)
 
 target_metadata = Base.metadata

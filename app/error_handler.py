@@ -5,7 +5,7 @@ from typing import Any
 from slack_bolt import App
 from slack_sdk import WebClient
 
-from app.config import config
+from app.config import get_app_config
 from app.core import get_logger
 from app.exceptions import AppError, SlackError, SpreadsheetError, ValidationError
 
@@ -65,7 +65,7 @@ def send_monitoring_alert(
     channel_id: str | None,
     user_id: str | None,
 ) -> None:
-    error_channel_id = config.error_channel_id
+    error_channel_id = get_app_config().error_channel_id
     if not error_channel_id:
         logger.debug(
             "monitoring_alert_skipped",
