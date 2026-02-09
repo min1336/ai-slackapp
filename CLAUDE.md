@@ -108,7 +108,7 @@ uv run alembic check
 ## 핵심 흐름
 
 1. **정산 이슈**: 스레드에서 `!정산` 명령 → 원본 메시지 파싱 → 모달 → 승인 요청 → 시트 저장
-2. **이관 예약**: 특정 채널에 메시지 작성 시 자동 감지 → 파싱 → 모달 → 승인/반려
+2. **이관 예약**: 이관 채널 메시지 자동 감지 → 파싱 → 예약 채널의 기존 정산이슈 스레드 탐색(DB→Slack API 폴백) → 해당 스레드에 포스트 → 이관 후 예약번호 체인 저장
 
 ## 로깅 (structlog)
 
@@ -138,6 +138,7 @@ Slack Bolt의 `@app.error` 핸들러가 주입하는 `logger` 파라미터는 `*
 
 - `tests/factories.py`의 `SettlementDataFactory.create(**overrides)` 사용하여 테스트 데이터 생성
 - `tests/fakes/` — Protocol 기반 Fake 구현체 (외부 의존성 없이 테스트)
+- `tests/fakes/fake_database.py` — 인메모리 SQLite `FakeDatabase`. Repository 테스트 시 `fake_db.get_session`을 `session_factory`로 주입
 - `FakeSpreadsheet.completed_keys: set[str]` — 정산완료 시뮬레이션용 (`find_row_by_booking_key`가 None 반환)
 - `tests/conftest.py` — 공유 픽스처 (팩토리 기반)
 - Pre-commit 훅: ruff + ruff-format + pytest-unit (3개 모두 커밋 시 자동 실행)
@@ -157,6 +158,7 @@ Slack Bolt의 `@app.error` 핸들러가 주입하는 `logger` 파라미터는 `*
 
 ## Slack Block Kit 주의사항
 
+- `say()`는 현재 채널에만 포스트 — 다른 채널에 포스트하려면 `client.chat_postMessage()` 사용
 - `header` 블록은 `plain_text`만 지원 → mrkdwn 문법(`~취소선~`, `*볼드*`) 사용 불가
 - mrkdwn 필요시 `section` 블록 사용: `{"type": "section", "text": {"type": "mrkdwn", "text": "~취소선~"}}`
 
@@ -184,3 +186,4 @@ Slack Bolt의 `@app.error` 핸들러가 주입하는 `logger` 파라미터는 `*
 - TYPE: `FEAT`, `FIX`, `TEST`, `DOCS`, `CHORE`, `REFACTOR`
 - TICKET: 현재 브랜치명에서 추출 (예: `feat/AI-100` → `AI-100`)
 - 기능 단위로 커밋, 필요시 squash
+- **커밋 전 `uv run ruff format` 먼저 실행** — pre-commit의 ruff-format 훅이 stash 충돌을 일으킬 수 있음

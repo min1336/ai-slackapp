@@ -190,3 +190,34 @@ class TestParseTransferReservationMessageEdgeCases:
         result = parse_transfer_reservation_message(text)
         assert result.company_name == ""
         assert result.company_sub_name == "테스트렌터카"
+
+    def test_이관후_예약번호_추출(self):
+        """이관 전/후 예약번호가 모두 추출되는지 확인"""
+        text = """이관 전 예약번호 : 1010
+예약번호 : 2020
+예약자명 : 홍길동"""
+        result = parse_transfer_reservation_message(text)
+        assert result.booking_key == "1010"
+        assert result.new_booking_key == "2020"
+
+    def test_이관후_예약번호_없으면_빈값(self):
+        text = "이관 전 예약번호 : 1010"
+        result = parse_transfer_reservation_message(text)
+        assert result.booking_key == "1010"
+        assert result.new_booking_key == ""
+
+    def test_실제_이관_메시지_전체_파싱(self):
+        """실제 이관 메시지 포맷에서 두 예약번호 모두 추출"""
+        text = """[카모아 단기 업체이관]   전화예약 이에요!
+                이관 전 예약번호 : 1010
+                예약번호 : 2020
+                예약자명 : 박종선 (01037187349)
+                업체 : (주)특별한렌트카 김포지점
+                원금 : 332,500원
+                카모아 부담금 : 0원"""
+        result = parse_transfer_reservation_message(text)
+        assert result.booking_key == "1010"
+        assert result.new_booking_key == "2020"
+        assert result.customer_name == "박종선"
+        assert result.settlement_cost == "332500"
+        assert result.carmore_cost == "0"

@@ -14,6 +14,9 @@ from app.infrastructure.slack_client import (
     extract_text_value as _extract_text_value,
 )
 from app.infrastructure.slack_client import (
+    find_message_by_text as _find_message_by_text,
+)
+from app.infrastructure.slack_client import (
     get_thread_parent_message as _get_thread_parent_message,
 )
 from app.infrastructure.slack_client import (
@@ -59,6 +62,16 @@ def send_dm(
     blocks: list[dict[str, Any]] | None = None,
 ) -> None:
     _send_dm(client, user_id, text, blocks)
+
+
+def find_message_by_text(
+    client: WebClient,
+    channel_id: str,
+    search_text: str,
+    *,
+    max_pages: int = 10,
+) -> str | None:
+    return _find_message_by_text(client, channel_id, search_text, max_pages=max_pages)
 
 
 def get_spreadsheet_url() -> str:

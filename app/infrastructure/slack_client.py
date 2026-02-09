@@ -134,6 +134,42 @@ def update_message(
         ) from e
 
 
+def find_message_by_text(
+    client: WebClient,
+    channel_id: str,
+    search_text: str,
+    *,
+    max_pages: int = 10,
+    page_size: int = 100,
+) -> str | None:
+    cursor = None
+    for _ in range(max_pages):
+        try:
+            kwargs: dict = {
+                "channel": channel_id,
+                "limit": page_size,
+            }
+            if cursor:
+                kwargs["cursor"] = cursor
+
+            result = client.conversations_history(**kwargs)
+        except SlackApiError:
+            return None
+
+        for msg in result.get("messages", []):
+            text = msg.get("text", "")
+            if search_text in text:
+                return msg.get("ts")
+
+        # 다음 페이지
+        metadata = result.get("response_metadata", {})
+        cursor = metadata.get("next_cursor")
+        if not cursor:
+            break
+
+    return None
+
+
 def send_dm(
     client: WebClient,
     user_id: str,

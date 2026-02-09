@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
-from app.infrastructure.database.models import IssueLog, Settlement
+from app.infrastructure.database.models import IssueLog, Settlement, ThreadReference
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -239,3 +239,35 @@ class IssueLogRepository:
             record.sync_status = "pending"
 
         return len(records)
+
+
+class ThreadReferenceRepository:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def get_by_booking_key(self, booking_key: str) -> ThreadReference | None:
+        stmt = select(ThreadReference).where(
+            ThreadReference.booking_key == booking_key,
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
+    def save(
+        self,
+        booking_key: str,
+        channel_id: str,
+        thread_ts: str,
+        root_booking_key: str | None = None,
+    ) -> ThreadReference:
+        existing = self.get_by_booking_key(booking_key)
+        if existing:
+            return existing
+
+        ref = ThreadReference(
+            booking_key=booking_key,
+            channel_id=channel_id,
+            thread_ts=thread_ts,
+            root_booking_key=root_booking_key or booking_key,
+        )
+        self.session.add(ref)
+        self.session.flush()
+        return ref

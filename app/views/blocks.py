@@ -113,9 +113,10 @@ def build_transfer_parsing_result_message(
     settlement_cost: str,
     carmore_cost: str,
     button_value: str,
+    transfer_message_url: str = "",
 ) -> Blocks:
     """이관 예약 파싱 결과 메시지 빌더 (통합된 1개 버튼)"""
-    return [
+    blocks: Blocks = [
         {
             "type": "section",
             "fields": [
@@ -156,6 +157,22 @@ def build_transfer_parsing_result_message(
                 },
             ],
         },
+    ]
+
+    if transfer_message_url:
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"<{transfer_message_url}|이관 예약 메시지 바로가기>",
+                    }
+                ],
+            }
+        )
+
+    blocks.append(
         {
             "type": "actions",
             "elements": [
@@ -171,7 +188,9 @@ def build_transfer_parsing_result_message(
                 },
             ],
         },
-    ]
+    )
+
+    return blocks
 
 
 def build_registration_modal(

@@ -12,6 +12,7 @@ from app.views.blocks import (
     build_registration_modal,
     build_rejected_message,
     build_rejection_modal,
+    build_transfer_parsing_result_message,
 )
 from tests.factories import SettlementDataFactory
 
@@ -466,3 +467,54 @@ class TestMinimalProcessingMessage:
         assert len(blocks) == 2
         assert blocks[0]["type"] == "header"
         assert blocks[1]["type"] == "section"
+
+
+class TestTransferParsingResultMessage:
+    """이관 예약 파싱 결과 메시지 빌더 테스트"""
+
+    _COMMON_KWARGS = {
+        "booking_key": "BK-001",
+        "customer_name": "홍길동",
+        "company_name": "업체A",
+        "company_sub_name": "대리점B",
+        "settlement_cost": "100000",
+        "carmore_cost": "5000",
+        "button_value": "{}",
+    }
+
+    def test_기본_호출시_context_블록_없음(self):
+        blocks = build_transfer_parsing_result_message(**self._COMMON_KWARGS)
+
+        context_blocks = [b for b in blocks if b["type"] == "context"]
+        assert len(context_blocks) == 0
+
+    def test_transfer_message_url_있으면_context_블록_추가(self):
+        blocks = build_transfer_parsing_result_message(
+            **self._COMMON_KWARGS,
+            transfer_message_url="https://slack.com/archives/C123/p456",
+        )
+
+        context_blocks = [b for b in blocks if b["type"] == "context"]
+        assert len(context_blocks) == 1
+        assert "이관 예약 메시지 바로가기" in context_blocks[0]["elements"][0]["text"]
+        assert (
+            "https://slack.com/archives/C123/p456"
+            in (context_blocks[0]["elements"][0]["text"])
+        )
+
+    def test_actions_블록은_항상_마지막(self):
+        blocks = build_transfer_parsing_result_message(
+            **self._COMMON_KWARGS,
+            transfer_message_url="https://slack.com/test",
+        )
+
+        assert blocks[-1]["type"] == "actions"
+
+    def test_빈_url은_context_블록_추가_안함(self):
+        blocks = build_transfer_parsing_result_message(
+            **self._COMMON_KWARGS,
+            transfer_message_url="",
+        )
+
+        context_blocks = [b for b in blocks if b["type"] == "context"]
+        assert len(context_blocks) == 0

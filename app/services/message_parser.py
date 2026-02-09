@@ -39,6 +39,7 @@ class ParsedSettlement(BaseModel):
 
 class ParsedTransferReservation(BaseModel):
     booking_key: str = ""  # 이관 전 예약번호
+    new_booking_key: str = ""  # 이관 후 예약번호
     customer_name: str = ""  # 예약자명
     company_name: str = ""  # 업체명 (요구사항상 기본은 비움)
     company_sub_name: str = ""  # 업체명 (company_name은 비워둠)
@@ -103,6 +104,7 @@ def _get_next_nonempty_line(lines: list[str], start: int) -> str:
 # 인라인 패턴 정의 (컴파일은 한 번만)
 _INLINE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"이관\s*전\s*예약번호\s*[:：]\s*([^\s]+)"), "booking_key"),
+    (re.compile(r"(?<!전\s)예약번호\s*[:：]\s*([^\s]+)"), "new_booking_key"),
     (re.compile(r"예약자명\s*[:：]\s*(.+)"), "customer_name"),
     (re.compile(r"업체\s*[:：]\s*(.+)"), "company_sub_name"),
     (re.compile(r"원금\s*[:：]\s*([0-9,]+)\s*원?"), "settlement_cost"),

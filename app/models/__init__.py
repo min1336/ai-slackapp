@@ -7,6 +7,7 @@ from app.models.settlement import (
     SettlementData,
     SettlementRow,
     SettlementStatus,
+    ThreadLocation,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "SettlementData",
     "SettlementRow",
     "SettlementStatus",
+    "ThreadLocation",
 ]

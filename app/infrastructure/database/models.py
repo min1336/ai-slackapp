@@ -140,3 +140,29 @@ class IssueLog(Base):
 
     # Relationship
     settlement: Mapped[Settlement | None] = relationship(back_populates="issue_logs")
+
+
+class ThreadReference(Base):
+    """예약번호 → 정산이슈 스레드 매핑.
+
+    이관 예약 감지 시 기존 정산이슈 스레드를 빠르게 찾기 위한 캐시 테이블.
+    root_booking_key로 A→B→C 이관 체인을 추적한다.
+    """
+
+    __tablename__ = "thread_references"
+    __table_args__ = (
+        Index(
+            "idx_thread_refs_booking_key",
+            "booking_key",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(_BigIntPK, primary_key=True)
+    booking_key: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    channel_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    thread_ts: Mapped[str] = mapped_column(String(50), nullable=False)
+    root_booking_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now, nullable=True
+    )

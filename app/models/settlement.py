@@ -8,6 +8,14 @@ from enum import Enum
 from pydantic import BaseModel, field_validator
 
 
+@dataclass(frozen=True, slots=True)
+class ThreadLocation:
+    """정산이슈 스레드 위치 정보"""
+
+    channel_id: str
+    thread_ts: str
+
+
 class SettlementStatus(str, Enum):
     REQUESTED = "요청"
     APPROVED = "승인"
