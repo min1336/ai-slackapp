@@ -5,6 +5,7 @@ description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.13.0",
+    "croniter>=6.0.0",
     "dotenv>=0.9.9",
     "google-auth>=2.48.0",
     "gspread>=6.2.1",

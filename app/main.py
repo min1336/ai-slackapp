@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import signal
+from datetime import datetime
 from threading import Event, Thread
 
+from croniter import croniter
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
@@ -33,10 +35,22 @@ def _create_app() -> App:
     return bolt_app
 
 
-def _start_sync_worker(interval_seconds: int) -> None:
+def _start_sync_worker(cron_expr: str) -> None:
     def run() -> None:
-        logger.info("sync_worker_started", interval_seconds=interval_seconds)
+        cron = croniter(cron_expr)
+        logger.info("sync_worker_started", schedule=cron_expr)
         while not _stop_event.is_set():
+            next_run = cron.get_next(datetime)
+            wait_seconds = (next_run - datetime.now()).total_seconds()
+            logger.debug(
+                "sync_worker_waiting",
+                next_run=next_run.isoformat(),
+                wait_seconds=int(wait_seconds),
+            )
+
+            if _stop_event.wait(timeout=max(wait_seconds, 0)):
+                break
+
             try:
                 synced_settlements, synced_logs = sync_pending_records()
                 if synced_settlements or synced_logs:
@@ -47,9 +61,6 @@ def _start_sync_worker(interval_seconds: int) -> None:
                     )
             except Exception as e:
                 logger.warning("background_sync_failed", error=str(e))
-
-            # sleep 대신 Event.wait() 사용 - 종료 신호 시 즉시 응답
-            _stop_event.wait(timeout=interval_seconds)
 
         logger.info("sync_worker_stopped")
 
@@ -73,7 +84,7 @@ def main():
     if database.is_configured:
         recover_stale_sync_records()
         app_config = get_app_config()
-        _start_sync_worker(app_config.sync_interval_seconds)
+        _start_sync_worker(app_config.sync_schedule)
     else:
         logger.warning(
             "database_not_configured",

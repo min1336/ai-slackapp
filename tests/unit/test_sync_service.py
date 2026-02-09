@@ -45,6 +45,7 @@ def test_sync_pending_records_success(fake_db, fake_sheets, sample_settlement_da
     synced_settlements, synced_logs = sync_pending_records(
         sheets=fake_sheets,
         session_factory=fake_db.get_session,
+        record_delay=0,
     )
 
     assert synced_settlements == 1
@@ -75,6 +76,7 @@ def test_sync_pending_records_all_failure(fake_db, fake_sheets, sample_settlemen
     synced_settlements, synced_logs = sync_pending_records(
         sheets=fake_sheets,
         session_factory=fake_db.get_session,
+        record_delay=0,
     )
 
     assert synced_settlements == 0
@@ -99,7 +101,7 @@ def test_sync_pending_records_settlement_only_failure(
     class SettlementOnlyFailSheet(FakeSpreadsheet):
         """save_settlement_row만 실패하는 Fake."""
 
-        def save_settlement_row(self, row, sheet_name=None):
+        def save_settlement_row(self, row, sheet_name=None, *, is_update=False):
             raise SpreadsheetError(
                 message="Settlement sheet failure",
                 details={"booking_key": row.booking_key},
@@ -118,6 +120,7 @@ def test_sync_pending_records_settlement_only_failure(
     synced_settlements, synced_logs = sync_pending_records(
         sheets=failing_sheets,
         session_factory=fake_db.get_session,
+        record_delay=0,
     )
 
     # 정산은 실패, 로그는 성공

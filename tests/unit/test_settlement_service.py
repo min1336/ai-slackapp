@@ -136,7 +136,7 @@ class TestSaveSettlement:
         )
         monkeypatch.setattr(
             "app.services.sync_service.sync_to_sheets",
-            lambda row, log_id: True,  # Sheets 동기화 성공
+            lambda row, log_id, **kwargs: True,  # Sheets 동기화 성공
         )
 
         # When
@@ -158,7 +158,7 @@ class TestSaveSettlement:
         self, monkeypatch, db_configured, fake_db, sample_settlement_data
     ):
         # Given - after_commit 훅에서 Sheets 동기화 실패 시
-        def fail_sync(row, log_id):
+        def fail_sync(row, log_id, **kwargs):
             raise ConnectionError("Sheets API unavailable")
 
         monkeypatch.setattr(
@@ -208,7 +208,7 @@ class TestSaveSettlement:
         )
         monkeypatch.setattr(
             "app.services.sync_service.sync_to_sheets",
-            lambda row, log_id: True,
+            lambda row, log_id, **kwargs: True,
         )
 
         # When
@@ -236,7 +236,7 @@ class TestSaveSettlement:
         )
         monkeypatch.setattr(
             "app.services.sync_service.sync_to_sheets",
-            lambda row, log_id: True,
+            lambda row, log_id, **kwargs: True,
         )
 
         # When

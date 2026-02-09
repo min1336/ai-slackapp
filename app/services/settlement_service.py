@@ -25,11 +25,17 @@ def _mark_synced(session, settlement_id: int, log_id: int) -> None:
     IssueLogRepository(session).mark_synced(log_id)
 
 
-def _sync_after_commit(settlement_id: int, log_id: int, row: SettlementRow) -> None:
+def _sync_after_commit(
+    settlement_id: int,
+    log_id: int,
+    row: SettlementRow,
+    *,
+    is_update: bool = False,
+) -> None:
     from app.services.sync_service import sync_to_sheets
 
     try:
-        sync_to_sheets(row, log_id)
+        sync_to_sheets(row, log_id, is_update=is_update)
         _mark_synced(settlement_id, log_id)
         logger.info("sheets_sync_completed", booking_key=row.booking_key)
 
@@ -128,6 +134,9 @@ def save_settlement(
         log = repo.add_log(row, settlement_id=settlement.id)
         settlement_id = settlement.id
         log_id = log.id
+        is_update = settlement.sheets_synced_at is not None
 
         # 모든 상태(요청/승인/반려)에서 Sheets 동기화 실행
-        session.after_commit(lambda: _sync_after_commit(settlement_id, log_id, row))
+        session.after_commit(
+            lambda: _sync_after_commit(settlement_id, log_id, row, is_update=is_update)
+        )

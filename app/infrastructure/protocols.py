@@ -17,7 +17,11 @@ class SpreadsheetGateway(Protocol):
     """Google Sheets 스프레드시트 접근 프로토콜."""
 
     def save_settlement_row(
-        self, row: SettlementRow, sheet_name: str | None = None
+        self,
+        row: SettlementRow,
+        sheet_name: str | None = None,
+        *,
+        is_update: bool = False,
     ) -> None: ...
 
     def append_issue_log_row(self, row: SettlementRow, sync_key: str) -> None: ...

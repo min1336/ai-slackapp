@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
@@ -56,6 +57,7 @@ def sync_to_sheets(
     row: SettlementRow,
     log_id: int,
     *,
+    is_update: bool = False,
     sheets: SpreadsheetGateway | None = None,
 ) -> bool:
     """정산 데이터를 Google Sheets로 동기화.
@@ -66,7 +68,7 @@ def sync_to_sheets(
     _sheets = sheets or _get_sheets()
 
     try:
-        _sheets.save_settlement_row(row)
+        _sheets.save_settlement_row(row, is_update=is_update)
         _sheets.append_issue_log_row(row, str(log_id))
         return True
 
@@ -79,6 +81,7 @@ def sync_pending_records(
     *,
     sheets: SpreadsheetGateway | None = None,
     session_factory: SessionFactory | None = None,
+    record_delay: float = 2.0,
 ) -> tuple[int, int]:
     """미동기화 레코드 일괄 동기화 (배치 작업용).
 
@@ -86,6 +89,9 @@ def sync_pending_records(
     1. claim_unsynced()로 조회 + in_progress 상태 변경 (같은 트랜잭션)
     2. 외부 API(Sheets) 호출은 트랜잭션 밖에서
     3. 성공/실패 시 DB 업데이트는 별도 트랜잭션에서
+
+    Args:
+        record_delay: 레코드 간 대기 시간(초). API rate limit 방어용.
 
     Returns:
         (동기화된 정산 수, 동기화된 로그 수)
@@ -100,10 +106,13 @@ def sync_pending_records(
         settlements = SettlementRepository(session).claim_unsynced(limit=100)
         logs = IssueLogRepository(session).claim_unsynced(limit=100)
 
-    for settlement in settlements:
+    for i, settlement in enumerate(settlements):
+        if i > 0 and record_delay > 0:
+            time.sleep(record_delay)
         try:
             row = _entity_to_row(settlement, include_updated_at=True)
-            _sheets.save_settlement_row(row)
+            is_update = settlement.sheets_synced_at is not None
+            _sheets.save_settlement_row(row, is_update=is_update)
             with _session() as session:
                 SettlementRepository(session).mark_synced(settlement.id)
             synced_settlements += 1
@@ -117,7 +126,9 @@ def sync_pending_records(
             with _session() as session:
                 SettlementRepository(session).mark_sync_failed(settlement.id, str(e))
 
-    for log in logs:
+    for i, log in enumerate(logs):
+        if i > 0 and record_delay > 0:
+            time.sleep(record_delay)
         try:
             row = _entity_to_row(log, include_updated_at=False)
             _sheets.append_issue_log_row(row, str(log.id))

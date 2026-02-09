@@ -20,7 +20,11 @@ class FakeSpreadsheet:
         self.should_fail: bool = False
 
     def save_settlement_row(
-        self, row: SettlementRow, sheet_name: str | None = None
+        self,
+        row: SettlementRow,
+        sheet_name: str | None = None,
+        *,
+        is_update: bool = False,
     ) -> None:
         """settlement 시트에 저장 (동일 키면 업데이트)
 

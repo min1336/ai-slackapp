@@ -161,7 +161,7 @@ class AppConfig(BaseModel):
     approvers: list[str] = []
     spreadsheet: SpreadsheetConfig
     slack_channels: SlackChannelsConfig = SlackChannelsConfig()
-    sync_interval_seconds: int = 300
+    sync_schedule: str = "0 8 * * *"  # cron 표현식 (기본: 매일 08:00)
 
     @property
     def error_channel_id(self) -> str:
