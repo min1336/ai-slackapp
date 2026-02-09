@@ -32,7 +32,9 @@ class FakeDatabase:
 
         SessionWithAfterCommit을 사용하여 after_commit 훅을 지원합니다.
         """
-        session = SessionWithAfterCommit(bind=self.engine, expire_on_commit=False)
+        session = SessionWithAfterCommit(
+            bind=self.engine, expire_on_commit=False, async_hooks=False
+        )
         try:
             yield session
             session.commit()

@@ -25,6 +25,7 @@ from app.services.slack_service import (
 from app.views.blocks import (
     build_approval_request_message,
     build_minimal_approval_message,
+    build_minimal_processing_message,
     build_minimal_rejected_message,
     build_rejected_message,
 )
@@ -218,6 +219,14 @@ def register_view_handlers(app: App) -> None:
                 HeaderText.TRANSFER_REGISTER
                 if is_transfer
                 else HeaderText.SETTLEMENT_ISSUE_REGISTER
+            )
+
+            # 즉시 처리 중 상태 표시 (버튼 제거 + 중복 클릭 방지)
+            client.chat_update(
+                channel=metadata.channel_id,
+                ts=metadata.message_ts,
+                text="처리 중...",
+                blocks=build_minimal_processing_message(is_transfer=is_transfer),
             )
 
             # 상세 메시지 URL (원본 스레드의 상세 메시지)

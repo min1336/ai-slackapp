@@ -29,6 +29,7 @@ from app.views.blocks import (
     build_approval_request_message,
     build_approved_message,
     build_minimal_approved_message,
+    build_minimal_processing_message,
     build_registration_modal,
     build_rejection_modal,
 )
@@ -146,6 +147,14 @@ def _handle_settlement_approve(
         return
 
     try:
+        # 즉시 처리 중 상태 표시 (버튼 제거 + 중복 클릭 방지)
+        client.chat_update(
+            channel=context.channel_id,
+            ts=context.message_ts,
+            text="처리 중...",
+            blocks=build_minimal_processing_message(is_transfer=False),
+        )
+
         approver_name = get_user_name(client, context.user_id)
         data = SettlementData.model_validate_json(action_value(body))
 
@@ -259,6 +268,14 @@ def _handle_transfer_approve(
         return
 
     try:
+        # 즉시 처리 중 상태 표시 (버튼 제거 + 중복 클릭 방지)
+        client.chat_update(
+            channel=context.channel_id,
+            ts=context.message_ts,
+            text="처리 중...",
+            blocks=build_minimal_processing_message(is_transfer=True),
+        )
+
         approver_name = get_user_name(client, context.user_id)
         data = SettlementData.model_validate_json(action_value(body))
 

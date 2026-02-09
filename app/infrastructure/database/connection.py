@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Generator
 from contextlib import contextmanager
 from functools import wraps
+from threading import Thread
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -48,11 +49,16 @@ def get_session_factory() -> sessionmaker[Session]:
 
 
 class SessionWithAfterCommit(Session):
-    """after_commit 훅을 지원하는 Session."""
+    """after_commit 훅을 지원하는 Session.
 
-    def __init__(self, *args, **kwargs):
+    async_hooks=True(기본): 훅을 별도 스레드에서 비동기 실행.
+    async_hooks=False: 동기 실행 (테스트용).
+    """
+
+    def __init__(self, *args, async_hooks: bool = True, **kwargs):
         super().__init__(*args, **kwargs)
         self._after_commit_hooks: list[Callable[[], None]] = []
+        self._async_hooks = async_hooks
 
     def after_commit(self, fn: Callable[[], None]) -> None:
         """커밋 후 실행할 함수 등록."""
@@ -61,11 +67,18 @@ class SessionWithAfterCommit(Session):
     def _execute_after_commit_hooks(self):
         """등록된 after_commit 훅들 실행."""
         for hook in self._after_commit_hooks:
-            try:
-                hook()
-            except Exception as e:
-                logger.warning("after_commit_hook_failed", error=str(e))
+            if self._async_hooks:
+                Thread(target=self._run_hook, args=(hook,), daemon=True).start()
+            else:
+                self._run_hook(hook)
         self._after_commit_hooks.clear()
+
+    @staticmethod
+    def _run_hook(hook: Callable[[], None]) -> None:
+        try:
+            hook()
+        except Exception as e:
+            logger.warning("after_commit_hook_failed", error=str(e))
 
 
 def _setup_after_commit_listener():

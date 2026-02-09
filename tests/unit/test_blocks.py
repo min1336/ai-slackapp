@@ -7,6 +7,7 @@ from app.views.blocks import (
     build_approved_message,
     build_minimal_approval_message,
     build_minimal_approved_message,
+    build_minimal_processing_message,
     build_minimal_rejected_message,
     build_registration_modal,
     build_rejected_message,
@@ -437,3 +438,31 @@ class TestApprovalRequestMessageIncludeButtons:
 
         assert blocks[-1]["type"] == "actions"
         assert len(blocks[-1]["elements"]) == 2
+
+
+class TestMinimalProcessingMessage:
+    """처리 중 표시 메시지 테스트"""
+
+    def test_정산이슈_처리중_메시지(self):
+        blocks = build_minimal_processing_message(is_transfer=False)
+
+        assert blocks[0]["text"]["text"] == "정산 이슈 승인 요청"
+        assert "처리 중" in blocks[1]["text"]["text"]
+
+    def test_업체이관_처리중_메시지(self):
+        blocks = build_minimal_processing_message(is_transfer=True)
+
+        assert blocks[0]["text"]["text"] == "업체 이관 승인 요청"
+        assert "처리 중" in blocks[1]["text"]["text"]
+
+    def test_버튼이_없다(self):
+        blocks = build_minimal_processing_message()
+
+        assert all(block["type"] != "actions" for block in blocks)
+
+    def test_블록_구조는_header와_section만_포함한다(self):
+        blocks = build_minimal_processing_message()
+
+        assert len(blocks) == 2
+        assert blocks[0]["type"] == "header"
+        assert blocks[1]["type"] == "section"

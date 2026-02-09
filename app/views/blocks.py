@@ -832,6 +832,26 @@ def build_minimal_approved_message(
     return blocks
 
 
+def build_minimal_processing_message(
+    is_transfer: bool = False,
+) -> Blocks:
+    """승인 채널 처리 중 메시지 (버튼 제거, 처리 중 표시)"""
+    request_type = "업체 이관" if is_transfer else "정산 이슈"
+    return [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"{request_type} 승인 요청",
+            },
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "⏳ *처리 중...*"},
+        },
+    ]
+
+
 def build_minimal_rejected_message(
     requester_name: str,
     thread_url: str,
