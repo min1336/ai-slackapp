@@ -22,9 +22,9 @@ spreadsheet:
       name: "정산"
       # 헤더 이름 → 코드 필드 매핑
       # 시트 헤더 이름이 바뀌면 왼쪽(헤더명)만 바꾸세요.
+      # config에 없는 필드는 시트에 기록되지 않습니다.
       columns:
         "정산기준일": settlement_day
-        "작성자": user_name
         "이슈사항": issue_type
         "고객명": customer_name
         "예약번호": booking_key
@@ -33,17 +33,13 @@ spreadsheet:
         "정산기준금액": settlement_cost
         "카모아 부담비용": carmore_cost
         "고객환불금액": user_refund_cost
-        "판매채널": sales_channel
         "내용": description
-        "처리": status
-        "승인자": approver_name
-        "등록시간": created_at
-        "수정시간": updated_at
+        "판매채널": sales_channel
         "스레드 링크": thread_url
         "비고": note
-        "반려자": reviewer_name
-        "고객 정보 오류": rejection_reason
+        "처리": status
         "정산완료": settlement_completed
+        "작성자": user_name
     issue_log:
       name: "정산이슈로그"
       columns:

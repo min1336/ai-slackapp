@@ -49,14 +49,17 @@ def _resolve_mapping(worksheet: Worksheet, sheet_type: str) -> ColumnMapping:
         return cached
 
     headers = worksheet.row_values(1)
+    field_to_header = get_app_config().spreadsheet.field_to_header(sheet_type)
+    configured = tuple(f for f in SETTLEMENT_FIELDS if f in field_to_header)
+
     if sheet_type == "settlement":
-        required = (*SETTLEMENT_FIELDS, "settlement_completed")
+        required = (*configured, "settlement_completed")
     elif sheet_type == "issue_log":
-        required = (*SETTLEMENT_FIELDS, "sync_key")
+        required = (*configured, "sync_key")
     else:
         raise ValueError(f"Unknown sheet_type: {sheet_type}")
 
-    mapper = ColumnMapper(get_app_config().spreadsheet.field_to_header(sheet_type))
+    mapper = ColumnMapper(field_to_header)
     mapping = mapper.resolve(headers, required)
     _mapping_cache.set(cache_key, mapping)
     return mapping
