@@ -100,7 +100,7 @@ uv run alembic check
 **새 필드 추가 시 체크리스트:**
 1. `models/settlement.py` - Pydantic/dataclass 필드
 2. `models/__init__.py` - 새 모델 export 추가 (누락 시 런타임 ImportError)
-3. `infrastructure/database/repository.py` - INSERT/UPDATE 쿼리
+3. `infrastructure/database/repository.py` - `_SHARED_FIELDS` 튜플에 추가 (save/add_log 자동 반영)
 4. `infrastructure/database/models.py` - SQLAlchemy 컬럼 (DB 저장 필요시)
 5. `uv run alembic revision --autogenerate -m "설명"` - 마이그레이션 생성 후 확인
 6. `config.yaml` `spreadsheet.columns` - 시트 컬럼 매핑 추가 (시트 표시 필요시)
@@ -132,7 +132,7 @@ except (SlackApiError, ValidationError, KeyError):
 글로벌 에러 핸들러(`error_handler.py`)에서 사용자/시스템 에러 분류, 모니터링 알림 전송.
 Slack Bolt의 `@app.error` 핸들러가 주입하는 `logger` 파라미터는 `**_kwargs`로 무시 (모듈 레벨 structlog 사용).
 
-**예외 계층** (`app/exceptions.py`): `AppError(message, user_message, details)` → `SpreadsheetError` | `SlackError` | `ValidationError`. `user_message`는 사용자에게 표시, `details`는 모니터링 알림에 포함.
+**예외 계층** (`app/exceptions.py`): `AppError(message, user_message, details)` → `SpreadsheetError` | `SlackError` | `ValidationError`. 서브클래스는 `_default_user_message` 클래스 변수로 기본 메시지 정의 (MRO 기반). `user_message`는 사용자에게 표시, `details`는 모니터링 알림에 포함.
 
 ## 테스트
 
@@ -149,10 +149,21 @@ Slack Bolt의 `@app.error` 핸들러가 주입하는 `logger` 파라미터는 `*
 - 선택된 ruff 규칙: E, W, F, I, UP, B, SIM, C4, FA
 - 상수(`ActionId`, `BlockId`): `StrEnum` 사용, `app/constants/slack_ids.py`에 정의
 
+**Pythonic 관용구:**
+- dataclass는 순수 데이터 홀더 — `__post_init__` 사이드이펙트 금지, 생성 로직은 `@classmethod` 팩토리에
+- 반복 필드 매핑은 튜플/dict 상수로 DRY 처리 (예: `repository.py`의 `_SHARED_FIELDS`)
+- Slack body 파싱 등 외부 데이터 접근 시 EAFP(try/except) 선호 — LBYL(isinstance 체크) 대신
+- `TYPE_CHECKING` import는 OK, 함수 내부 inline import는 circular dependency 있을 때만 허용
+
 ## Slack Block Kit 주의사항
 
 - `header` 블록은 `plain_text`만 지원 → mrkdwn 문법(`~취소선~`, `*볼드*`) 사용 불가
 - mrkdwn 필요시 `section` 블록 사용: `{"type": "section", "text": {"type": "mrkdwn", "text": "~취소선~"}}`
+
+## gspread 주의사항
+
+- gspread 6.x에서 `CellNotFound` 예외가 공개 API에서 제거됨 — `from gspread.exceptions import CellNotFound` 불가
+- `_is_cell_not_found()`가 `__class__.__name__` 문자열 비교를 사용하는 것은 의도적 (isinstance 변환 금지)
 
 ## CI/CD
 

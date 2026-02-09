@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from app.models import SETTLEMENT_FIELDS, SettlementRow
+from app.models.settlement import SettlementStatus
+from tests.factories import SettlementDataFactory
 
 
 class TestSettlementRow:
@@ -67,23 +69,14 @@ class TestSettlementRow:
         result = row.to_dict()
         assert "settlement_completed" not in result
 
-    def test_created_at_자동_생성을_확인한다(self):
-        """created_at, updated_at이 자동 생성되는지 확인"""
-        row = SettlementRow(
-            settlement_day="2025-01-28",
-            user_name="작성자",
-            customer_name="고객",
-            booking_key="BK-001",
-            company_name="업체",
-            company_sub_name="",
-            settlement_cost="100000",
-            carmore_cost="",
-            user_refund_cost="",
-            description="",
-            status="승인",
+    def test_from_settlement_data_타임스탬프_생성(self):
+        """from_settlement_data()가 타임스탬프를 생성하는지 확인"""
+        data = SettlementDataFactory.create()
+        row = SettlementRow.from_settlement_data(
+            data=data,
+            status=SettlementStatus.APPROVED,
             approver_name="승인자",
         )
-
         assert row.created_at != ""
         assert row.updated_at != ""
 

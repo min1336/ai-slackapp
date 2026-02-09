@@ -109,13 +109,6 @@ class SettlementRow:
     rejection_reason: str = ""
     settlement_completed: str = "FALSE"  # 정산 시트 전용, to_dict()에 미포함
 
-    def __post_init__(self) -> None:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        if not self.created_at:
-            self.created_at = now
-        if not self.updated_at:
-            self.updated_at = now
-
     @classmethod
     def from_settlement_data(
         cls,
@@ -125,6 +118,7 @@ class SettlementRow:
         thread_url: str = "",
         rejection_reason: str = "",
     ) -> SettlementRow:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return cls(
             settlement_day=data.settlement_day,
             user_name=data.user_name,
@@ -144,6 +138,8 @@ class SettlementRow:
             note=data.note or "",
             reviewer_name=approver_name,
             rejection_reason=rejection_reason,
+            created_at=now,
+            updated_at=now,
         )
 
     def to_dict(self) -> dict[str, str]:

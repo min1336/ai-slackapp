@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from app.constants import DateFormat
 from app.core import get_logger
@@ -15,10 +15,8 @@ from app.infrastructure.database import (
 )
 from app.infrastructure.protocols import SpreadsheetGateway
 from app.infrastructure.spreadsheet import DefaultSpreadsheetGateway
+from app.models import SettlementRow
 from app.models.settlement import format_cost
-
-if TYPE_CHECKING:
-    from app.models import SettlementRow
 
 logger = get_logger(__name__)
 
@@ -173,8 +171,6 @@ class RowConvertible(Protocol):
 def _entity_to_row(
     entity: RowConvertible, *, include_updated_at: bool = True
 ) -> SettlementRow:
-    from app.models import SettlementRow
-
     updated_at = ""
     if include_updated_at and hasattr(entity, "updated_at"):
         updated_at = entity.updated_at.strftime(DateFormat.DATETIME)

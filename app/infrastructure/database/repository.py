@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
@@ -26,6 +26,40 @@ def _parse_cost(value: str) -> int | None:
         return None
 
 
+_COST_FIELDS = frozenset({"settlement_cost", "carmore_cost", "user_refund_cost"})
+
+_SHARED_FIELDS: tuple[str, ...] = (
+    "settlement_day",
+    "user_name",
+    "customer_name",
+    "company_name",
+    "company_sub_name",
+    "settlement_cost",
+    "carmore_cost",
+    "user_refund_cost",
+    "issue_type",
+    "sales_channel",
+    "description",
+    "status",
+    "approver_name",
+    "thread_url",
+    "note",
+    "reviewer_name",
+    "rejection_reason",
+)
+
+
+def _row_to_model_dict(row: SettlementRow) -> dict[str, Any]:
+    return {
+        field: (
+            _parse_cost(getattr(row, field))
+            if field in _COST_FIELDS
+            else getattr(row, field)
+        )
+        for field in _SHARED_FIELDS
+    }
+
+
 class SettlementRepository:
     """정산 데이터 저장소
 
@@ -44,23 +78,8 @@ class SettlementRepository:
     def save(self, row: SettlementRow) -> Settlement:
         existing = self.get_active_by_booking_key(row.booking_key)
         if existing:
-            existing.settlement_day = row.settlement_day
-            existing.user_name = row.user_name
-            existing.customer_name = row.customer_name
-            existing.company_name = row.company_name
-            existing.company_sub_name = row.company_sub_name
-            existing.settlement_cost = _parse_cost(row.settlement_cost)
-            existing.carmore_cost = _parse_cost(row.carmore_cost)
-            existing.user_refund_cost = _parse_cost(row.user_refund_cost)
-            existing.issue_type = row.issue_type
-            existing.sales_channel = row.sales_channel
-            existing.description = row.description
-            existing.status = row.status
-            existing.approver_name = row.approver_name
-            existing.thread_url = row.thread_url
-            existing.note = row.note
-            existing.reviewer_name = row.reviewer_name
-            existing.rejection_reason = row.rejection_reason
+            for field, value in _row_to_model_dict(row).items():
+                setattr(existing, field, value)
             existing.updated_at = datetime.now()
             existing.sheets_synced = False
             self.session.flush()
@@ -68,50 +87,22 @@ class SettlementRepository:
 
         settlement = Settlement(
             booking_key=row.booking_key,
-            settlement_day=row.settlement_day,
-            user_name=row.user_name,
-            customer_name=row.customer_name,
-            company_name=row.company_name,
-            company_sub_name=row.company_sub_name,
-            settlement_cost=_parse_cost(row.settlement_cost),
-            carmore_cost=_parse_cost(row.carmore_cost),
-            user_refund_cost=_parse_cost(row.user_refund_cost),
-            issue_type=row.issue_type,
-            sales_channel=row.sales_channel,
-            description=row.description,
-            status=row.status,
-            approver_name=row.approver_name,
-            thread_url=row.thread_url,
-            note=row.note,
-            reviewer_name=row.reviewer_name,
-            rejection_reason=row.rejection_reason,
+            **_row_to_model_dict(row),
             settlement_completed=False,
         )
         self.session.add(settlement)
         self.session.flush()
         return settlement
 
-    def add_log(self, row: SettlementRow, settlement_id: int | None = None) -> IssueLog:
+    def add_log(
+        self,
+        row: SettlementRow,
+        settlement_id: int | None = None,
+    ) -> IssueLog:
         log = IssueLog(
             settlement_id=settlement_id,
             booking_key=row.booking_key,
-            settlement_day=row.settlement_day,
-            user_name=row.user_name,
-            customer_name=row.customer_name,
-            company_name=row.company_name,
-            company_sub_name=row.company_sub_name,
-            settlement_cost=_parse_cost(row.settlement_cost),
-            carmore_cost=_parse_cost(row.carmore_cost),
-            user_refund_cost=_parse_cost(row.user_refund_cost),
-            issue_type=row.issue_type,
-            sales_channel=row.sales_channel,
-            description=row.description,
-            status=row.status,
-            approver_name=row.approver_name,
-            thread_url=row.thread_url,
-            note=row.note,
-            reviewer_name=row.reviewer_name,
-            rejection_reason=row.rejection_reason,
+            **_row_to_model_dict(row),
         )
         self.session.add(log)
         self.session.flush()

@@ -47,29 +47,24 @@ class MessageContext:
 
 
 def action_value(body: Mapping[str, Any], default: str = "{}") -> str:
-    actions = body.get("actions", [])
-    if not isinstance(actions, list):
+    try:
+        value = body["actions"][0]["value"]
+    except (KeyError, IndexError, TypeError):
         return default
-    action = next(iter(actions), {})
-    if not isinstance(action, Mapping):
-        return default
-    value = action.get("value")
     return value if isinstance(value, str) else default
 
 
 def message_context(body: Mapping[str, Any]) -> MessageContext:
-    user = body.get("user", {})
-    channel = body.get("channel", {})
-    message = body.get("message", {})
-
-    user_id = user.get("id", "") if isinstance(user, Mapping) else ""
-    channel_id = channel.get("id", "") if isinstance(channel, Mapping) else ""
-    message_ts = message.get("ts", "") if isinstance(message, Mapping) else ""
-    thread_ts = message.get("thread_ts", "") if isinstance(message, Mapping) else ""
+    def _extract(key: str, subkey: str) -> str:
+        try:
+            value = body[key][subkey]
+        except (KeyError, TypeError):
+            return ""
+        return value if isinstance(value, str) else ""
 
     return MessageContext(
-        user_id=user_id,
-        channel_id=channel_id,
-        message_ts=message_ts,
-        thread_ts=thread_ts,
+        user_id=_extract("user", "id"),
+        channel_id=_extract("channel", "id"),
+        message_ts=_extract("message", "ts"),
+        thread_ts=_extract("message", "thread_ts"),
     )

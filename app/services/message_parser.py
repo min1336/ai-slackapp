@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from enum import Enum
 
 from pydantic import BaseModel, field_validator
@@ -109,7 +110,7 @@ _INLINE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
 ]
 
 # 멀티라인 필드 매핑 (키 라인 → (필드명, 변환 함수))
-_MULTILINE_FIELD_MAP: dict[str, tuple[str, callable]] = {
+_MULTILINE_FIELD_MAP: dict[str, tuple[str, Callable[[str], str]]] = {
     TransferMessageField.BOOKING_KEY: ("booking_key", _strip_value),
     TransferMessageField.CUSTOMER_NAME: ("customer_name", _clean_name),
     TransferMessageField.COMPANY: ("company_sub_name", _strip_value),
