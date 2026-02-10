@@ -77,8 +77,8 @@ class SessionWithAfterCommit(Session):
     def _run_hook(hook: Callable[[], None]) -> None:
         try:
             hook()
-        except Exception as e:
-            logger.warning("after_commit_hook_failed", error=str(e))
+        except Exception:  # 안전망: hook은 임의의 callable — 데몬 스레드 크래시 방지
+            logger.exception("after_commit_hook_failed")
 
 
 def _setup_after_commit_listener():

@@ -4,8 +4,6 @@ from enum import StrEnum
 
 
 class TransferMessageField(StrEnum):
-    """이관 예약 메시지 필드명 상수"""
-
     BOOKING_KEY = "이관 전 예약번호"
     CUSTOMER_NAME = "예약자명"
     COMPANY = "업체"
@@ -17,7 +15,5 @@ class TransferMessageField(StrEnum):
 
 
 class DateFormat(StrEnum):
-    """날짜/시간 포맷 상수"""
-
     DATETIME = "%Y-%m-%d %H:%M:%S"
     DATE_ONLY = "%Y-%m-%d"

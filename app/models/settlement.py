@@ -3,20 +3,18 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, fields
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, field_validator
 
 
 @dataclass(frozen=True, slots=True)
 class ThreadLocation:
-    """정산이슈 스레드 위치 정보"""
-
     channel_id: str
     thread_ts: str
 
 
-class SettlementStatus(str, Enum):
+class SettlementStatus(StrEnum):
     REQUESTED = "요청"
     APPROVED = "승인"
     REJECTED = "반려"
@@ -73,8 +71,6 @@ class ModalMetadata(BaseModel):
 
 
 class RejectionMetadata(BaseModel):
-    """반려 모달용 메타데이터"""
-
     channel_id: str
     thread_ts: str
     message_ts: str
@@ -87,7 +83,6 @@ class RejectionMetadata(BaseModel):
 
 
 def format_cost(value: int | None) -> str:
-    """int 금액을 시트 저장용 str로 변환."""
     if value is None:
         return ""
     return str(value)

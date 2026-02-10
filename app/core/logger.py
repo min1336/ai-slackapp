@@ -7,7 +7,6 @@ import structlog
 
 
 def get_log_level() -> int:
-    """dev=DEBUG, prod=INFO"""
     env = os.getenv("ENVIRONMENT", "dev").lower()
     return logging.DEBUG if env == "dev" else logging.INFO
 

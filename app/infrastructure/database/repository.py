@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 def _parse_cost(value: str) -> int | None:
-    if not value or not value.strip():
+    if not value:
         return None
     # 콤마, 원, 공백 제거
     cleaned = value.replace(",", "").replace("원", "").strip()

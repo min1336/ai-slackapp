@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import suppress
+
 from pydantic import ValidationError
 from slack_bolt import App
 from slack_sdk.errors import SlackApiError
@@ -9,6 +11,7 @@ from app.constants import ActionId, BlockId, IssueType
 from app.constants.options import Description
 from app.constants.ui_texts import HeaderText
 from app.core import get_logger
+from app.exceptions import AlreadyProcessedError, AppError
 from app.listener.payload import MessageContext, action_value, message_context
 from app.models import (
     ModalMetadata,
@@ -36,6 +39,89 @@ from app.views.blocks import (
 
 logger = get_logger(__name__)
 Approvers = frozenset[str]
+
+# (field_name, block_id, action_id, extractor)
+_MODAL_FIELD_EXTRACTORS = (
+    (
+        "booking_key",
+        BlockId.BOOKING_KEY_BLOCK,
+        ActionId.BOOKING_KEY_INPUT,
+        extract_text_value,
+    ),
+    (
+        "customer_name",
+        BlockId.CUSTOMER_NAME_BLOCK,
+        ActionId.CUSTOMER_NAME_INPUT,
+        extract_text_value,
+    ),
+    (
+        "settlement_day",
+        BlockId.SETTLEMENT_DAY_BLOCK,
+        ActionId.SETTLEMENT_DAY_INPUT,
+        extract_date_value,
+    ),
+    (
+        "issue_type",
+        BlockId.ISSUE_TYPE_BLOCK,
+        ActionId.ISSUE_TYPE_INPUT,
+        extract_select_value,
+    ),
+    (
+        "custom_issue_type",
+        BlockId.ISSUE_TYPE_TEXT_BLOCK,
+        ActionId.ISSUE_TYPE_TEXT_INPUT,
+        extract_text_value,
+    ),
+    (
+        "company_name",
+        BlockId.COMPANY_NAME_BLOCK,
+        ActionId.COMPANY_NAME_INPUT,
+        extract_text_value,
+    ),
+    (
+        "company_sub_name",
+        BlockId.COMPANY_SUB_NAME_BLOCK,
+        ActionId.COMPANY_SUB_NAME_INPUT,
+        extract_text_value,
+    ),
+    (
+        "settlement_cost",
+        BlockId.SETTLEMENT_COST_BLOCK,
+        ActionId.SETTLEMENT_COST_INPUT,
+        extract_text_value,
+    ),
+    (
+        "carmore_cost",
+        BlockId.CARMORE_COST_BLOCK,
+        ActionId.CARMORE_COST_INPUT,
+        extract_text_value,
+    ),
+    (
+        "user_refund_cost",
+        BlockId.USER_REFUND_COST_BLOCK,
+        ActionId.USER_REFUND_COST_INPUT,
+        extract_text_value,
+    ),
+    (
+        "seller_channel",
+        BlockId.SELLER_CHANNEL_BLOCK,
+        ActionId.SELLER_CHANNEL_INPUT,
+        extract_select_value,
+    ),
+    (
+        "description",
+        BlockId.DESCRIPTION_BLOCK,
+        ActionId.DESCRIPTION_INPUT,
+        extract_select_value,
+    ),
+    (
+        "custom_description",
+        BlockId.DESCRIPTION_TEXT_BLOCK,
+        ActionId.DESCRIPTION_TEXT_INPUT,
+        extract_text_value,
+    ),
+    ("note", BlockId.NOTE_BLOCK, ActionId.NOTE_INPUT, extract_text_value),
+)
 
 
 def _has_permission(
@@ -67,6 +153,17 @@ def _notify_processing_error(
         user=context.user_id,
         text=f"⚠️ {prefix} 처리 중 오류가 발생했습니다.",
         thread_ts=context.thread_ts_or_none,
+    )
+
+
+def _restore_message(client, context: MessageContext, original_blocks: list) -> None:
+    if not original_blocks or not context.message_ts:
+        return
+    client.chat_update(
+        channel=context.channel_id,
+        ts=context.message_ts,
+        blocks=original_blocks,
+        text="승인 요청",
     )
 
 
@@ -130,13 +227,14 @@ def _open_transfer_modal(body: dict, client) -> None:
     )
 
 
-def _handle_settlement_approve(
+def _handle_approve(
     *,
     body: dict,
     client,
     approvers: Approvers,
+    is_transfer: bool,
 ) -> None:
-    """정산 이슈 승인 처리"""
+    """승인 처리 (정산 이슈 / 업체이관 공통)"""
     context = message_context(body)
     if not _has_permission(
         client=client,
@@ -146,13 +244,26 @@ def _handle_settlement_approve(
     ):
         return
 
+    title = (
+        HeaderText.TRANSFER_REGISTER
+        if is_transfer
+        else HeaderText.SETTLEMENT_ISSUE_REGISTER
+    )
+    approved_text = "업체이관 승인됨" if is_transfer else "정산 이슈 승인됨"
+    mention_text = (
+        "업체이관이 승인되었습니다." if is_transfer else "정산 이슈가 승인되었습니다."
+    )
+
+    # 복원용: 원본 승인 메시지 블록 캡처
+    original_blocks = body.get("message", {}).get("blocks", [])
+
     try:
         # 즉시 처리 중 상태 표시 (버튼 제거 + 중복 클릭 방지)
         client.chat_update(
             channel=context.channel_id,
             ts=context.message_ts,
             text="처리 중...",
-            blocks=build_minimal_processing_message(is_transfer=False),
+            blocks=build_minimal_processing_message(is_transfer=is_transfer),
         )
 
         approver_name = get_user_name(client, context.user_id)
@@ -176,24 +287,24 @@ def _handle_settlement_approve(
             requester_name=requester_name,
             thread_url=message_url,
             approver_name=approver_name,
-            is_transfer=False,
+            is_transfer=is_transfer,
         )
         client.chat_update(
             channel=context.channel_id,
             ts=context.message_ts,
-            text="정산 이슈 승인됨",
+            text=approved_text,
             blocks=approval_blocks,
         )
 
         # 2) 원본 스레드 상세 메시지 업데이트 (상세 정보 유지 + 승인 상태)
-        original_blocks = build_approval_request_message(
-            data, title=HeaderText.SETTLEMENT_ISSUE_REGISTER, include_buttons=False
+        detail_blocks = build_approval_request_message(
+            data, title=title, include_buttons=False
         )
-        thread_blocks = build_approved_message(original_blocks, approver_name)
+        thread_blocks = build_approved_message(detail_blocks, approver_name)
         client.chat_update(
             channel=data.original_channel_id,
             ts=data.original_message_ts,
-            text="정산 이슈 승인됨",
+            text=approved_text,
             blocks=thread_blocks,
         )
 
@@ -202,15 +313,38 @@ def _handle_settlement_approve(
             client.chat_postMessage(
                 channel=data.original_channel_id,
                 thread_ts=data.original_thread_ts or None,
-                text=f"<@{data.requester_id}> 정산 이슈가 승인되었습니다.",
+                text=f"<@{data.requester_id}> {mention_text}",
+            )
+    except AlreadyProcessedError:
+        logger.info("approve_already_processed", is_transfer=is_transfer)
+        with suppress(SlackApiError):
+            _restore_message(client, context, original_blocks)
+        with suppress(SlackApiError):
+            client.chat_postEphemeral(
+                channel=context.channel_id,
+                user=context.user_id,
+                text="⚠️ 이미 처리된 건입니다.",
+            )
+    except AppError as e:
+        logger.exception("approve_failed", is_transfer=is_transfer)
+        with suppress(SlackApiError):
+            _restore_message(client, context, original_blocks)
+        with suppress(SlackApiError):
+            client.chat_postEphemeral(
+                channel=context.channel_id,
+                user=context.user_id,
+                text=f"⚠️ {e.user_message}",
             )
     except (SlackApiError, ValidationError, KeyError):
-        logger.exception("settlement_approve_failed")
-        _notify_processing_error(
-            client=client,
-            context=context,
-            prefix="승인",
-        )
+        logger.exception("approve_failed", is_transfer=is_transfer)
+        with suppress(SlackApiError):
+            _restore_message(client, context, original_blocks)
+        with suppress(SlackApiError):
+            _notify_processing_error(
+                client=client,
+                context=context,
+                prefix="승인",
+            )
 
 
 def _open_rejection_modal(
@@ -219,7 +353,6 @@ def _open_rejection_modal(
     client,
     approvers: Approvers,
 ) -> None:
-    """반려 사유 입력 모달 열기"""
     context = message_context(body)
     if not _has_permission(
         client=client,
@@ -251,142 +384,12 @@ def _open_rejection_modal(
     )
 
 
-def _handle_transfer_approve(
-    *,
-    body: dict,
-    client,
-    approvers: Approvers,
-) -> None:
-    """업체이관 승인 처리"""
-    context = message_context(body)
-    if not _has_permission(
-        client=client,
-        approvers=approvers,
-        context=context,
-        denied_text="⚠️ 승인 권한이 없습니다.",
-    ):
-        return
-
-    try:
-        # 즉시 처리 중 상태 표시 (버튼 제거 + 중복 클릭 방지)
-        client.chat_update(
-            channel=context.channel_id,
-            ts=context.message_ts,
-            text="처리 중...",
-            blocks=build_minimal_processing_message(is_transfer=True),
-        )
-
-        approver_name = get_user_name(client, context.user_id)
-        data = SettlementData.model_validate_json(action_value(body))
-
-        logger.info("transfer_approve_started", booking_key=data.booking_key)
-        logger.debug("transfer_approve_data", data=data.model_dump())
-
-        # 상세 메시지 URL (원본 스레드의 상세 메시지)
-        message_url = get_thread_url(
-            client, data.original_channel_id, data.original_message_ts
-        )
-
-        save_settlement(
-            data=data,
-            status=SettlementStatus.APPROVED,
-            approver_name=approver_name,
-            thread_url=message_url,
-        )
-
-        # 1) 승인 채널 메시지 업데이트
-        requester_name = get_user_name(client, data.requester_id)
-        approval_blocks = build_minimal_approved_message(
-            requester_name=requester_name,
-            thread_url=message_url,
-            approver_name=approver_name,
-            is_transfer=True,
-        )
-        client.chat_update(
-            channel=context.channel_id,
-            ts=context.message_ts,
-            text="업체이관 승인됨",
-            blocks=approval_blocks,
-        )
-
-        # 2) 원본 스레드 상세 메시지 업데이트 (상세 정보 유지 + 승인 상태)
-        original_blocks = build_approval_request_message(
-            data, title=HeaderText.TRANSFER_REGISTER, include_buttons=False
-        )
-        thread_blocks = build_approved_message(original_blocks, approver_name)
-        client.chat_update(
-            channel=data.original_channel_id,
-            ts=data.original_message_ts,
-            text="업체이관 승인됨",
-            blocks=thread_blocks,
-        )
-
-        # 3) 원본 스레드에 요청자 멘션
-        if data.requester_id:
-            client.chat_postMessage(
-                channel=data.original_channel_id,
-                thread_ts=data.original_thread_ts or None,
-                text=f"<@{data.requester_id}> 업체이관이 승인되었습니다.",
-            )
-
-        logger.info("transfer_approve_completed", booking_key=data.booking_key)
-    except (SlackApiError, ValidationError, KeyError):
-        logger.exception("transfer_approve_failed")
-        _notify_processing_error(
-            client=client,
-            context=context,
-            prefix="승인",
-        )
-
-
 def _extract_current_modal_state(view: dict) -> dict:
     """views_update 시 현재 입력값 보존을 위해 모든 필드값 추출"""
     values = view.get("state", {}).get("values", {})
-    text_value = extract_text_value
-    date_value = extract_date_value
-    select_value = extract_select_value
-
     return {
-        "booking_key": text_value(
-            values, BlockId.BOOKING_KEY_BLOCK, ActionId.BOOKING_KEY_INPUT
-        ),
-        "customer_name": text_value(
-            values, BlockId.CUSTOMER_NAME_BLOCK, ActionId.CUSTOMER_NAME_INPUT
-        ),
-        "settlement_day": date_value(
-            values, BlockId.SETTLEMENT_DAY_BLOCK, ActionId.SETTLEMENT_DAY_INPUT
-        ),
-        "issue_type": select_value(
-            values, BlockId.ISSUE_TYPE_BLOCK, ActionId.ISSUE_TYPE_INPUT
-        ),
-        "custom_issue_type": text_value(
-            values, BlockId.ISSUE_TYPE_TEXT_BLOCK, ActionId.ISSUE_TYPE_TEXT_INPUT
-        ),
-        "company_name": text_value(
-            values, BlockId.COMPANY_NAME_BLOCK, ActionId.COMPANY_NAME_INPUT
-        ),
-        "company_sub_name": text_value(
-            values, BlockId.COMPANY_SUB_NAME_BLOCK, ActionId.COMPANY_SUB_NAME_INPUT
-        ),
-        "settlement_cost": text_value(
-            values, BlockId.SETTLEMENT_COST_BLOCK, ActionId.SETTLEMENT_COST_INPUT
-        ),
-        "carmore_cost": text_value(
-            values, BlockId.CARMORE_COST_BLOCK, ActionId.CARMORE_COST_INPUT
-        ),
-        "user_refund_cost": text_value(
-            values, BlockId.USER_REFUND_COST_BLOCK, ActionId.USER_REFUND_COST_INPUT
-        ),
-        "seller_channel": select_value(
-            values, BlockId.SELLER_CHANNEL_BLOCK, ActionId.SELLER_CHANNEL_INPUT
-        ),
-        "description": select_value(
-            values, BlockId.DESCRIPTION_BLOCK, ActionId.DESCRIPTION_INPUT
-        ),
-        "custom_description": text_value(
-            values, BlockId.DESCRIPTION_TEXT_BLOCK, ActionId.DESCRIPTION_TEXT_INPUT
-        ),
-        "note": text_value(values, BlockId.NOTE_BLOCK, ActionId.NOTE_INPUT),
+        name: extractor(values, block_id, action_id)
+        for name, block_id, action_id, extractor in _MODAL_FIELD_EXTRACTORS
     }
 
 
@@ -460,10 +463,11 @@ def register_action_handlers(app: App) -> None:
     @app.action(ActionId.SETTLEMENT_APPROVE)
     def handle_settlement_approve(ack, body, client):
         ack()
-        _handle_settlement_approve(
+        _handle_approve(
             body=body,
             client=client,
             approvers=approvers,
+            is_transfer=False,
         )
 
     @app.action(ActionId.SETTLEMENT_REJECT)
@@ -478,10 +482,11 @@ def register_action_handlers(app: App) -> None:
     @app.action(ActionId.TRANSFER_APPROVE)
     def handle_transfer_approve(ack, body, client):
         ack()
-        _handle_transfer_approve(
+        _handle_approve(
             body=body,
             client=client,
             approvers=approvers,
+            is_transfer=True,
         )
 
     @app.action(ActionId.TRANSFER_REJECT)

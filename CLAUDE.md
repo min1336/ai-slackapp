@@ -121,18 +121,90 @@ uv run alembic check
 
 ## 에러 핸들링 패턴
 
-`listener/` 핸들러에서 Slack API 호출 시 표준 예외 처리:
+### 패턴 선택 가이드
+
+**1. 예상된 비즈니스 에러 → 명시적 try/except**
 ```python
 try:
-    # 핸들러 로직
-except (SlackApiError, ValidationError, KeyError):
-    logger.exception("settlement_approve_failed")
+    save_settlement(data, status, approver_name)
+except AlreadyProcessedError:
+    logger.info("already_processed", booking_key=key)
+    notify_user_safe(client, user_id, "이미 처리된 건입니다.")
+    return
+except ValidationError:
+    logger.exception("validation_failed", booking_key=key)
+    notify_user_safe(client, user_id, "입력값이 올바르지 않습니다.")
+    return
 ```
 
-글로벌 에러 핸들러(`error_handler.py`)에서 사용자/시스템 에러 분류, 모니터링 알림 전송.
-Slack Bolt의 `@app.error` 핸들러가 주입하는 `logger` 파라미터는 `**_kwargs`로 무시 (모듈 레벨 structlog 사용).
+**언제**:
+- 비즈니스 로직에서 예상되는 에러 (AlreadyProcessedError, ValidationError)
+- 에러 타입별로 다른 처리가 필요한 경우
+- 사용자에게 다른 메시지를 보여줘야 하는 경우
 
-**예외 계층** (`app/exceptions.py`): `AppError(message, user_message, details)` → `SpreadsheetError` | `SlackError` | `ValidationError`. 서브클래스는 `_default_user_message` 클래스 변수로 기본 메시지 정의 (MRO 기반). `user_message`는 사용자에게 표시, `details`는 모니터링 알림에 포함.
+**2. Best-effort cleanup → contextlib.suppress (구체적 타입)**
+```python
+from contextlib import suppress
+
+# ✅ GOOD - 구체적인 에러 타입
+with suppress(SlackApiError):
+    client.chat_delete(channel=channel_id, ts=message_ts)
+
+# ❌ BAD - 너무 광범위
+with suppress(Exception):  # KeyError, AttributeError까지 숨김!
+    client.chat_delete(channel=channel_id, ts=message_ts)
+```
+
+**언제**:
+- Cleanup 작업 (메시지 삭제, 임시 데이터 정리)
+- 실패해도 주 작업에 영향 없는 부가 작업
+- **반드시 구체적인 예외 타입 사용** (SlackApiError, SQLAlchemyError, APIError 등)
+
+**3. 사용자 알림 → 공통 유틸리티**
+```python
+from app.listener.error_utils import notify_user_safe
+
+# 알림 실패를 신경 쓰지 않아도 됨
+notify_user_safe(client, user_id, "⚠️ 오류 메시지")
+```
+
+**언제**:
+- 사용자에게 에러 알림을 보낼 때
+- 알림 실패가 주 작업 실패로 이어지지 않아야 할 때
+
+### suppress 사용 체크리스트
+
+- [ ] 구체적인 예외 타입을 사용했는가? (Exception 사용 금지)
+- [ ] 이 작업이 실패해도 주 작업에 영향이 없는가?
+- [ ] 실패 시 로깅이 이미 되어 있는가? (suppress 내부에서는 로깅 불가)
+- [ ] 명시적 try/except가 의도를 더 명확히 하지 않는가?
+
+### 금지 패턴
+
+```python
+# ❌ 절대 사용 금지
+with suppress(Exception):  # 모든 에러를 숨김
+    important_business_logic()
+
+# ❌ 금지 - 로깅 없이 무시
+with suppress(SlackApiError):
+    critical_operation()  # 실패를 어디서도 알 수 없음
+
+# ✅ 대신 이렇게
+try:
+    critical_operation()
+except SlackApiError:
+    logger.exception("critical_operation_failed")
+    # 필요시 재시도, 대체 로직, 사용자 알림 등
+```
+
+### 예외 계층
+
+**기본 구조** (`app/exceptions.py`): `AppError(message, user_message, details)` → `SpreadsheetError` | `SlackError` | `ValidationError`.
+
+**서브클래스 규칙**: `_default_user_message` 클래스 변수로 기본 메시지 정의 (MRO 기반). `user_message`는 사용자에게 표시, `details`는 모니터링 알림에 포함.
+
+**글로벌 핸들러**: `error_handler.py`에서 사용자/시스템 에러 분류, 모니터링 알림 전송. Slack Bolt의 `@app.error` 핸들러가 주입하는 `logger` 파라미터는 `**_kwargs`로 무시 (모듈 레벨 structlog 사용).
 
 ## 테스트
 

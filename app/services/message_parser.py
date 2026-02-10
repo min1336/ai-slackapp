@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, field_validator
 
 from app.constants import TransferMessageField
 
 
-class BookingMessageField(str, Enum):
+class BookingMessageField(StrEnum):
     booking_key = "예약번호"
     company_name = "업체"
     customer_name = "예약자명"
@@ -102,13 +102,25 @@ def _get_next_nonempty_line(lines: list[str], start: int) -> str:
 
 
 # 인라인 패턴 정의 (컴파일은 한 번만)
-_INLINE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"이관\s*전\s*예약번호\s*[:：]\s*([^\s]+)"), "booking_key"),
-    (re.compile(r"(?<!전\s)예약번호\s*[:：]\s*([^\s]+)"), "new_booking_key"),
-    (re.compile(r"예약자명\s*[:：]\s*(.+)"), "customer_name"),
-    (re.compile(r"업체\s*[:：]\s*(.+)"), "company_sub_name"),
-    (re.compile(r"원금\s*[:：]\s*([0-9,]+)\s*원?"), "settlement_cost"),
-    (re.compile(r"카모아\s*부담(?:비용|금)\s*[:：]\s*([0-9,]+)\s*원?"), "carmore_cost"),
+_INLINE_PATTERNS: list[tuple[re.Pattern[str], str, Callable[[str], str]]] = [
+    (
+        re.compile(r"이관\s*전\s*예약번호\s*[:：]\s*([^\s]+)"),
+        "booking_key",
+        _strip_value,
+    ),
+    (
+        re.compile(r"(?<!전\s)예약번호\s*[:：]\s*([^\s]+)"),
+        "new_booking_key",
+        _strip_value,
+    ),
+    (re.compile(r"예약자명\s*[:：]\s*(.+)"), "customer_name", _clean_name),
+    (re.compile(r"업체\s*[:：]\s*(.+)"), "company_sub_name", _strip_value),
+    (re.compile(r"원금\s*[:：]\s*([0-9,]+)\s*원?"), "settlement_cost", _digits_only),
+    (
+        re.compile(r"카모아\s*부담(?:비용|금)\s*[:：]\s*([0-9,]+)\s*원?"),
+        "carmore_cost",
+        _digits_only,
+    ),
 ]
 
 # 멀티라인 필드 매핑 (키 라인 → (필드명, 변환 함수))
@@ -122,7 +134,6 @@ _MULTILINE_FIELD_MAP: dict[str, tuple[str, Callable[[str], str]]] = {
 
 
 def parse_transfer_reservation_message(text: str) -> ParsedTransferReservation:
-    """이관 예약 메시지를 파싱하여 구조화된 데이터 반환."""
     result = ParsedTransferReservation()
 
     # 전체 텍스트에서 볼드 마크업 제거 (슬랙 포맷팅 정규화)
@@ -146,24 +157,14 @@ def _extract_inline_patterns(
         if not line:
             continue
 
-        for pattern, field_name in _INLINE_PATTERNS:
+        for pattern, field_name, transform in _INLINE_PATTERNS:
             # 이미 값이 있으면 스킵
             if getattr(result, field_name):
                 continue
 
             match = pattern.search(line)
-            if not match:
-                continue
-
-            raw_value = match.group(1).strip()
-
-            # 필드별 변환 적용
-            if field_name == "customer_name":
-                setattr(result, field_name, _clean_name(raw_value))
-            elif field_name in ("settlement_cost", "carmore_cost"):
-                setattr(result, field_name, _digits_only(raw_value))
-            else:
-                setattr(result, field_name, _strip_value(raw_value))
+            if match:
+                setattr(result, field_name, transform(match.group(1).strip()))
 
 
 def _extract_multiline_patterns(

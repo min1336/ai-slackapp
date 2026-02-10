@@ -49,67 +49,45 @@ class DatabaseProperties(BaseSettings):
 
     @property
     def is_configured(self) -> bool:
-        """DB 설정 여부 확인."""
         return bool(self.host and self.password)
 
     @property
     def url(self) -> str:
-        """SQLAlchemy connection URL 생성."""
         if not self.is_configured:
             return ""
         return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.dbname}"
 
 
+_BASE_COLUMNS: dict[str, str] = {
+    "정산기준일": "settlement_day",
+    "작성자": "user_name",
+    "이슈사항": "issue_type",
+    "고객명": "customer_name",
+    "예약번호": "booking_key",
+    "업체명1": "company_name",
+    "업체명2(대신배차)": "company_sub_name",
+    "정산기준금액": "settlement_cost",
+    "카모아 부담비용": "carmore_cost",
+    "고객환불금액": "user_refund_cost",
+    "판매채널": "sales_channel",
+    "내용": "description",
+    "처리": "status",
+    "승인자": "approver_name",
+    "등록시간": "created_at",
+    "수정시간": "updated_at",
+    "스레드 링크": "thread_url",
+    "비고": "note",
+    "반려자": "reviewer_name",
+    "고객 정보 오류": "rejection_reason",
+}
+
+
 def _default_settlement_columns() -> dict[str, str]:
-    return {
-        "정산기준일": "settlement_day",
-        "작성자": "user_name",
-        "이슈사항": "issue_type",
-        "고객명": "customer_name",
-        "예약번호": "booking_key",
-        "업체명1": "company_name",
-        "업체명2(대신배차)": "company_sub_name",
-        "정산기준금액": "settlement_cost",
-        "카모아 부담비용": "carmore_cost",
-        "고객환불금액": "user_refund_cost",
-        "판매채널": "sales_channel",
-        "내용": "description",
-        "처리": "status",
-        "승인자": "approver_name",
-        "등록시간": "created_at",
-        "수정시간": "updated_at",
-        "스레드 링크": "thread_url",
-        "비고": "note",
-        "반려자": "reviewer_name",
-        "고객 정보 오류": "rejection_reason",
-        "정산완료": "settlement_completed",
-    }
+    return {**_BASE_COLUMNS, "정산완료": "settlement_completed"}
 
 
 def _default_issue_log_columns() -> dict[str, str]:
-    return {
-        "정산기준일": "settlement_day",
-        "작성자": "user_name",
-        "이슈사항": "issue_type",
-        "고객명": "customer_name",
-        "예약번호": "booking_key",
-        "업체명1": "company_name",
-        "업체명2(대신배차)": "company_sub_name",
-        "정산기준금액": "settlement_cost",
-        "카모아 부담비용": "carmore_cost",
-        "고객환불금액": "user_refund_cost",
-        "판매채널": "sales_channel",
-        "내용": "description",
-        "처리": "status",
-        "승인자": "approver_name",
-        "등록시간": "created_at",
-        "수정시간": "updated_at",
-        "스레드 링크": "thread_url",
-        "비고": "note",
-        "반려자": "reviewer_name",
-        "고객 정보 오류": "rejection_reason",
-        "sync_key": "sync_key",
-    }
+    return {**_BASE_COLUMNS, "sync_key": "sync_key"}
 
 
 class SlackChannelsConfig(BaseModel):
@@ -165,12 +143,10 @@ class AppConfig(BaseModel):
 
     @property
     def error_channel_id(self) -> str:
-        """에러 모니터링 채널 ID."""
         return self.slack_channels.error
 
     @property
     def approval_channel_id(self) -> str:
-        """승인 전용 채널 ID."""
         return self.slack_channels.approval
 
 
@@ -188,23 +164,19 @@ def _load_app_config() -> AppConfig:
 
 @lru_cache
 def get_app_config() -> AppConfig:
-    """AppConfig 싱글톤 반환."""
     return _load_app_config()
 
 
 @lru_cache
 def get_slack_settings() -> SlackProperties:
-    """SlackProperties 싱글톤 반환."""
     return SlackProperties()
 
 
 @lru_cache
 def get_spreadsheet_settings() -> SpreadsheetProperties:
-    """SpreadsheetProperties 싱글톤 반환."""
     return SpreadsheetProperties()
 
 
 @lru_cache
 def get_database_settings() -> DatabaseProperties:
-    """DatabaseProperties 싱글톤 반환."""
     return DatabaseProperties()

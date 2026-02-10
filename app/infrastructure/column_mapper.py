@@ -10,12 +10,9 @@ logger = get_logger(__name__)
 
 @dataclass(frozen=True)
 class ColumnMapping:
-    """헤더 해석 결과 (불변)."""
-
     field_to_index: dict[str, int] = field(default_factory=dict)
 
     def index_of(self, field_name: str) -> int:
-        """0-based 인덱스 반환."""
         return self.field_to_index[field_name]
 
     def column_of(self, field_name: str) -> int:
@@ -27,7 +24,6 @@ class ColumnMapping:
         data: dict[str, str],
         extra: dict[str, str] | None = None,
     ) -> list[str]:
-        """dict를 시트 행(list)으로 변환."""
         merged = data | extra if extra else data
         max_col = max(self.field_to_index.values()) + 1
         row = [""] * max_col
@@ -36,16 +32,13 @@ class ColumnMapping:
         return row
 
     def row_to_dict(self, values: list[str]) -> dict[str, str]:
-        """시트 행(list)을 dict로 변환."""
-        result: dict[str, str] = {}
-        for field_name, idx in self.field_to_index.items():
-            result[field_name] = values[idx] if idx < len(values) else ""
-        return result
+        return {
+            field_name: values[idx] if idx < len(values) else ""
+            for field_name, idx in self.field_to_index.items()
+        }
 
 
 class ColumnMapper:
-    """헤더 기반 동적 컬럼 해석기."""
-
     def __init__(self, field_to_header: dict[str, str]) -> None:
         self._field_to_header = field_to_header
 

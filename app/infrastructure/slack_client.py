@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
-from slack_sdk.web import SlackResponse
-
-from app.exceptions import SlackError
 
 
 def get_user_real_name(client: WebClient, user_id: str) -> str:
@@ -55,83 +52,7 @@ def extract_date_value(values: dict, block_id: str, action_id: str) -> str:
 
 def extract_select_text(values: dict, block_id: str, action_id: str) -> str:
     selected = values.get(block_id, {}).get(action_id, {}).get("selected_option", {})
-    return selected.get("text", {}).get("text", "") or "" if selected else ""
-
-
-def send_ephemeral_message(
-    client: WebClient,
-    channel_id: str,
-    user_id: str,
-    text: str,
-    blocks: list | None = None,
-    thread_ts: str | None = None,
-) -> None:
-    try:
-        client.chat_postEphemeral(
-            channel=channel_id,
-            user=user_id,
-            text=text,
-            blocks=blocks,
-            thread_ts=thread_ts,
-        )
-    except SlackApiError as e:
-        raise SlackError(
-            message=f"Failed to send ephemeral message: {e}",
-            details={
-                "channel_id": channel_id,
-                "user_id": user_id,
-                "original_error": str(e),
-            },
-        ) from e
-
-
-def post_message(
-    client: WebClient,
-    channel_id: str,
-    text: str,
-    blocks: list | None = None,
-    thread_ts: str | None = None,
-) -> SlackResponse:
-    try:
-        return client.chat_postMessage(
-            channel=channel_id,
-            text=text,
-            blocks=blocks,
-            thread_ts=thread_ts,
-        )
-    except SlackApiError as e:
-        raise SlackError(
-            message=f"Failed to post message: {e}",
-            details={
-                "channel_id": channel_id,
-                "original_error": str(e),
-            },
-        ) from e
-
-
-def update_message(
-    client: WebClient,
-    channel_id: str,
-    ts: str,
-    text: str,
-    blocks: list | None = None,
-) -> None:
-    try:
-        client.chat_update(
-            channel=channel_id,
-            ts=ts,
-            text=text,
-            blocks=blocks,
-        )
-    except SlackApiError as e:
-        raise SlackError(
-            message=f"Failed to update message: {e}",
-            details={
-                "channel_id": channel_id,
-                "message_ts": ts,
-                "original_error": str(e),
-            },
-        ) from e
+    return selected.get("text", {}).get("text", "") if selected else ""
 
 
 def find_message_by_text(
@@ -168,28 +89,3 @@ def find_message_by_text(
             break
 
     return None
-
-
-def send_dm(
-    client: WebClient,
-    user_id: str,
-    text: str,
-    blocks: list | None = None,
-) -> None:
-    try:
-        im = client.conversations_open(users=[user_id])
-        channel_id = im["channel"]["id"]
-
-        client.chat_postMessage(
-            channel=channel_id,
-            text=text,
-            blocks=blocks,
-        )
-    except SlackApiError as e:
-        raise SlackError(
-            message=f"Failed to send DM: {e}",
-            details={
-                "user_id": user_id,
-                "original_error": str(e),
-            },
-        ) from e

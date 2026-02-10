@@ -4,6 +4,7 @@ from typing import Any
 
 from slack_bolt import App
 from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
 
 from app.config import get_app_config
 from app.core import get_logger
@@ -130,7 +131,7 @@ def send_monitoring_alert(
             text=f"{error_type} 발생: {str(error)}",
             blocks=blocks,
         )
-    except Exception as e:
+    except (SlackApiError, OSError) as e:
         logger.error("monitoring_alert_failed", error=str(e))
 
 
@@ -179,5 +180,5 @@ def register_error_handler(app: App) -> None:
                     text=f":{emoji}: {user_message}",
                     thread_ts=thread_ts,
                 )
-            except Exception as e:
+            except (SlackApiError, OSError) as e:
                 logger.error("ephemeral_error_message_failed", error=str(e))

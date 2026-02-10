@@ -11,6 +11,7 @@ from app.constants import (
     LabelText,
     find_option_by_text,
     is_transfer_description,
+    request_type_label,
 )
 from app.constants.options import SlackOption
 from app.models import SettlementData
@@ -25,7 +26,6 @@ def _display_text(value: str | None) -> str:
 
 
 def _display_cost(value: int | None) -> str:
-    """int 금액을 표시용 문자열로 변환."""
     if value is None:
         return CommonText.NONE
     return str(value)
@@ -533,7 +533,6 @@ def _add_select_with_initial(
     is_required: bool = True,
     dispatch_action: bool = False,
 ) -> None:
-    """static_select 블록 초기화와 함께 추가"""
     element = {
         "type": "static_select",
         "action_id": action_id,
@@ -569,7 +568,6 @@ def _add_text_input(
     initial_value: str | None = None,
     is_optional: bool = False,
 ) -> None:
-    """text input 블록 추가"""
     element = {
         "type": "plain_text_input",
         "action_id": action_id,
@@ -597,7 +595,6 @@ def _add_multiline_text_input(
     initial_value: str | None = None,
     is_optional: bool = True,
 ) -> None:
-    """multiline text input 블록 추가 (비고 필드용)"""
     element: Block = {
         "type": "plain_text_input",
         "action_id": action_id,
@@ -626,7 +623,6 @@ def _add_datepicker_with_initial(
     placeholder_text: str,
     initial_date: str | None = None,
 ) -> None:
-    """datepicker 블록 초기화와 함께 추가"""
     element = {
         "type": "datepicker",
         "action_id": action_id,
@@ -712,7 +708,6 @@ def _build_decision_message(
 
 
 def build_rejection_modal(metadata: str) -> dict:
-    """반려 사유 입력 모달 빌더"""
     return {
         "type": "modal",
         "callback_id": ActionId.REJECTION_SUBMIT,
@@ -795,7 +790,7 @@ def build_minimal_approval_message(
     is_transfer: bool = False,
 ) -> Blocks:
     """승인 채널용 최소 정보 메시지 (스레드 링크 + 요청자 + 버튼)"""
-    request_type = "업체 이관" if is_transfer else "정산 이슈"
+    request_type = request_type_label(is_transfer)
     approve_action = (
         ActionId.TRANSFER_APPROVE if is_transfer else ActionId.SETTLEMENT_APPROVE
     )
@@ -837,7 +832,7 @@ def build_minimal_approved_message(
     is_transfer: bool = False,
 ) -> Blocks:
     """승인 채널 승인 완료 메시지 (버튼 제거, 승인됨 표시)"""
-    request_type = "업체 이관" if is_transfer else "정산 이슈"
+    request_type = request_type_label(is_transfer)
     blocks = _build_minimal_base_blocks(requester_name, thread_url, request_type)
     blocks.append(
         {
@@ -855,7 +850,7 @@ def build_minimal_processing_message(
     is_transfer: bool = False,
 ) -> Blocks:
     """승인 채널 처리 중 메시지 (버튼 제거, 처리 중 표시)"""
-    request_type = "업체 이관" if is_transfer else "정산 이슈"
+    request_type = request_type_label(is_transfer)
     return [
         {
             "type": "header",
@@ -878,7 +873,7 @@ def build_minimal_rejected_message(
     is_transfer: bool = False,
 ) -> Blocks:
     """승인 채널 반려 완료 메시지 (버튼 제거, 반려됨 표시)"""
-    request_type = "업체 이관" if is_transfer else "정산 이슈"
+    request_type = request_type_label(is_transfer)
     blocks = _build_minimal_base_blocks(requester_name, thread_url, request_type)
     blocks.append(
         {

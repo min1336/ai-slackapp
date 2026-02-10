@@ -1,5 +1,3 @@
-"""Google Sheets 동기화 서비스"""
-
 from __future__ import annotations
 
 import time
@@ -7,8 +5,12 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
+from gspread.exceptions import APIError
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.constants import DateFormat
 from app.core import get_logger
+from app.exceptions import SpreadsheetError
 from app.infrastructure.database import (
     IssueLogRepository,
     SettlementRepository,
@@ -66,15 +68,9 @@ def sync_to_sheets(
     예외 발생 시 실패로 처리.
     """
     _sheets = sheets or _get_sheets()
-
-    try:
-        _sheets.save_settlement_row(row, is_update=is_update)
-        _sheets.append_issue_log_row(row, str(log_id))
-        return True
-
-    except Exception as e:
-        logger.error("sheets_sync_failed", booking_key=row.booking_key, error=str(e))
-        raise
+    _sheets.save_settlement_row(row, is_update=is_update)
+    _sheets.append_issue_log_row(row, str(log_id))
+    return True
 
 
 def sync_pending_records(
@@ -116,7 +112,7 @@ def sync_pending_records(
             with _session() as session:
                 SettlementRepository(session).mark_synced(settlement.id)
             synced_settlements += 1
-        except Exception as e:
+        except (SpreadsheetError, APIError, SQLAlchemyError) as e:
             logger.warning(
                 "retry_sync_failed",
                 record_type="settlement",
@@ -135,7 +131,7 @@ def sync_pending_records(
             with _session() as session:
                 IssueLogRepository(session).mark_synced(log.id)
             synced_logs += 1
-        except Exception as e:
+        except (SpreadsheetError, APIError, SQLAlchemyError) as e:
             logger.warning(
                 "retry_sync_failed",
                 record_type="issue_log",
@@ -157,8 +153,6 @@ def sync_pending_records(
 
 @runtime_checkable
 class RowConvertible(Protocol):
-    """SettlementRow로 변환 가능한 엔티티 프로토콜."""
-
     settlement_day: str
     user_name: str
     customer_name: str
@@ -210,7 +204,3 @@ def _entity_to_row(
             "TRUE" if getattr(entity, "settlement_completed", False) else "FALSE"
         ),
     )
-
-
-class SyncError(Exception):
-    pass

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.config import get_app_config
 from app.core import get_logger
 from app.infrastructure.database import (
@@ -53,7 +55,7 @@ def find_issue_thread(
                     channel_id=ref.channel_id,
                     thread_ts=ref.thread_ts,
                 )
-    except Exception:
+    except SQLAlchemyError:
         logger.exception("thread_ref_db_lookup_failed", booking_key=booking_key)
 
     # 2단계: Slack API 폴백
@@ -97,7 +99,7 @@ def save_thread_reference(
                 thread_ts=thread_ts,
                 root_booking_key=root_booking_key,
             )
-    except Exception:
+    except SQLAlchemyError:
         logger.exception(
             "thread_ref_save_failed",
             booking_key=booking_key,

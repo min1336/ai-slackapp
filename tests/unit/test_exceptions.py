@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from app.exceptions import AppError, SlackError, SpreadsheetError, ValidationError
+from app.exceptions import (
+    AlreadyProcessedError,
+    AppError,
+    DatabaseError,
+    SlackError,
+    SpreadsheetError,
+    ValidationError,
+)
 
 
 class TestExceptionHierarchy:
@@ -12,6 +19,8 @@ class TestExceptionHierarchy:
         assert issubclass(SpreadsheetError, AppError)
         assert issubclass(SlackError, AppError)
         assert issubclass(ValidationError, AppError)
+        assert issubclass(DatabaseError, AppError)
+        assert issubclass(AlreadyProcessedError, AppError)
 
     def test_app_error_has_default_user_message(self):
         error = AppError("Internal error")
@@ -28,6 +37,14 @@ class TestExceptionHierarchy:
     def test_validation_error_has_specific_user_message(self):
         error = ValidationError("Invalid input")
         assert "입력값" in error.user_message
+
+    def test_database_error_has_specific_user_message(self):
+        error = DatabaseError("DB connection failed")
+        assert "데이터 저장" in error.user_message
+
+    def test_already_processed_error_has_specific_user_message(self):
+        error = AlreadyProcessedError("Already handled")
+        assert "이미 처리" in error.user_message
 
     def test_custom_user_message_overrides_default(self):
         error = SpreadsheetError("Internal error", user_message="커스텀 메시지")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.config import DatabaseProperties
-from app.models.settlement import SettlementData
+from app.models.settlement import SettlementData, SettlementRow, SettlementStatus
 from tests.factories import SettlementDataFactory
 from tests.fakes.fake_spreadsheet import FakeSpreadsheet
 
@@ -22,6 +22,17 @@ def sample_settlement_data() -> SettlementData:
         issue_type="결제 오류",
         settlement_cost=100000,
         requester_id="U12345678",
+    )
+
+
+@pytest.fixture
+def sample_settlement_row(sample_settlement_data: SettlementData) -> SettlementRow:
+    """테스트용 SettlementRow 샘플 (sample_settlement_data 기반)"""
+    return SettlementRow.from_settlement_data(
+        data=sample_settlement_data,
+        status=SettlementStatus.APPROVED,
+        approver_name="승인자",
+        thread_url="https://test.slack.com/thread",
     )
 
 

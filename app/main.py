@@ -59,8 +59,8 @@ def _start_sync_worker(cron_expr: str) -> None:
                         settlements=synced_settlements,
                         logs=synced_logs,
                     )
-            except Exception as e:
-                logger.warning("background_sync_failed", error=str(e))
+            except Exception:
+                logger.exception("background_sync_failed")
 
         logger.info("sync_worker_stopped")
 

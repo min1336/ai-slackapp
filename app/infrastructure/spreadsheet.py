@@ -6,7 +6,7 @@ from threading import Lock
 import gspread
 from google.oauth2.service_account import Credentials
 from gspread import Worksheet
-from gspread.exceptions import APIError
+from gspread.exceptions import APIError, GSpreadException
 
 from app.config import get_app_config, get_spreadsheet_settings
 from app.core import get_logger
@@ -32,7 +32,6 @@ _mapping_cache: TTLCache[str, ColumnMapping] = TTLCache(ttl=_CACHE_TTL_SECONDS)
 
 
 def _get_worksheet(sheet_name: str) -> Worksheet:
-    """워크시트를 TTL 캐시로 반환 (5분 유지)."""
     cached = _worksheet_cache.get(sheet_name)
     if cached is not None:
         return cached
@@ -42,7 +41,6 @@ def _get_worksheet(sheet_name: str) -> Worksheet:
 
 
 def _resolve_mapping(worksheet: Worksheet, sheet_type: str) -> ColumnMapping:
-    """워크시트의 헤더 행을 읽어 ColumnMapping을 반환 (TTL 캐시)."""
     cache_key = f"{worksheet.title}:{sheet_type}"
     cached = _mapping_cache.get(cache_key)
     if cached is not None:
@@ -70,12 +68,11 @@ def _merge_with_existing_row(
     mapped_row: list[str],
     mapping: ColumnMapping,
 ) -> list[str]:
-    """기존 행의 비매핑 컬럼을 보존하면서 매핑된 컬럼만 교체한다."""
     merged_row = existing_row.copy()
     if len(merged_row) < len(mapped_row):
         merged_row.extend([""] * (len(mapped_row) - len(merged_row)))
 
-    for _, idx in mapping.field_to_index.items():
+    for idx in mapping.field_to_index.values():
         if idx >= len(merged_row):
             merged_row.extend([""] * (idx + 1 - len(merged_row)))
         merged_row[idx] = mapped_row[idx] if idx < len(mapped_row) else ""
@@ -145,11 +142,9 @@ def save_settlement_row(
                 extra={"settlement_completed": "FALSE"},
             )
             worksheet.append_row(row_data)
-    except SpreadsheetError:
+    except (SpreadsheetError, APIError):
         raise
-    except APIError:
-        raise
-    except Exception as e:
+    except (GSpreadException, ValueError, KeyError) as e:
         logger.exception(
             "spreadsheet_save_failed",
             sheet_name=sheet_name,
@@ -166,6 +161,21 @@ def save_settlement_row(
         ) from e
 
 
+def _find_by_sync_key(
+    worksheet: Worksheet, mapping: ColumnMapping, sync_key: str
+) -> bool:
+    """sync_key로 기존 행 존재 여부 확인 (멱등성 보장용)."""
+    try:
+        sync_key_col = mapping.column_of("sync_key")
+        matches = worksheet.findall(sync_key)
+        return any(cell.col == sync_key_col for cell in matches)
+    except (GSpreadException, KeyError) as e:
+        if isinstance(e, GSpreadException) and _is_cell_not_found(e):
+            return False
+        logger.warning("sync_key_search_failed", sync_key=sync_key, error=str(e))
+        return False  # 검색 실패 시 안전하게 중복 허용 > 실패
+
+
 @retry_on_rate_limit()
 def append_issue_log_row(row: SettlementRow, sync_key: str) -> None:
     sheet_name = get_app_config().spreadsheet.sheet_name("issue_log")
@@ -173,13 +183,21 @@ def append_issue_log_row(row: SettlementRow, sync_key: str) -> None:
     try:
         worksheet = _get_worksheet(sheet_name)
         mapping = _resolve_mapping(worksheet, "issue_log")
+
+        # 멱등성: sync_key로 기존 행 존재 여부 확인
+        if _find_by_sync_key(worksheet, mapping, sync_key):
+            logger.info(
+                "issue_log_row_already_exists",
+                sync_key=sync_key,
+                booking_key=row.booking_key,
+            )
+            return
+
         row_data = mapping.dict_to_row(row.to_dict(), extra={"sync_key": sync_key})
         worksheet.append_row(row_data)
-    except SpreadsheetError:
+    except (SpreadsheetError, APIError):
         raise
-    except APIError:
-        raise
-    except Exception as e:
+    except (GSpreadException, ValueError, KeyError) as e:
         logger.exception(
             "issue_log_append_failed",
             sheet_name=sheet_name,
@@ -225,7 +243,7 @@ def find_row_by_booking_key(
         return None
     except APIError:
         raise
-    except Exception as e:
+    except GSpreadException as e:
         if _is_cell_not_found(e):
             return None
         logger.exception(
@@ -242,10 +260,6 @@ def find_row_by_booking_key(
                 "original_error": str(e),
             },
         ) from e
-
-
-def get_spreadsheet_url() -> str:
-    return f"https://docs.google.com/spreadsheets/d/{get_app_config().spreadsheet.id}"
 
 
 def update_settlement_row(
@@ -273,13 +287,13 @@ def update_settlement_row(
         merged_row = _merge_with_existing_row(existing_row, row_data, mapping)
 
         cell_list = worksheet.range(row_number, 1, row_number, len(merged_row))
-        for i, cell in enumerate(cell_list):
-            cell.value = merged_row[i]
+        for cell, value in zip(cell_list, merged_row, strict=True):
+            cell.value = value
 
         worksheet.update_cells(cell_list)
     except APIError:
         raise
-    except Exception as e:
+    except (GSpreadException, ValueError, KeyError) as e:
         logger.exception(
             "spreadsheet_row_update_failed",
             sheet_name=worksheet.title,
@@ -303,11 +317,6 @@ def _is_cell_not_found(error: Exception) -> bool:
 
 
 class DefaultSpreadsheetGateway:
-    """SpreadsheetGateway Protocol의 기본 구현체.
-
-    기존 모듈-레벨 함수에 위임합니다.
-    """
-
     def save_settlement_row(
         self,
         row: SettlementRow,

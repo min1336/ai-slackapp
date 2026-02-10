@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import TypedDict
 
 
@@ -14,7 +14,7 @@ class SlackOption(TypedDict):
     value: str
 
 
-class IssueType(str, Enum):
+class IssueType(StrEnum):
     OTHER = "기타(직접입력)"
     IGNORE_SETTLEMENT = "정산제외"
     CANCEL_CHARGE_FEE = "취소수수료"
@@ -32,7 +32,7 @@ class IssueType(str, Enum):
         }
 
 
-class SellerChannel(str, Enum):
+class SellerChannel(StrEnum):
     CARMORE = "카모아"
     TMAP = "티맵"
     KLOOK = "클룩"
@@ -51,7 +51,7 @@ class SellerChannel(str, Enum):
         }
 
 
-class Description(str, Enum):
+class Description(StrEnum):
     OTHER = "기타(직접입력)"
     EXCLUDE_UNABLE_DISPATCH = "배차불가로 인한 정산제외 (정산 100% 제외)"
     EXCLUDE_FLIGHT_CANCEL = "결항으로 인한 정산제외 (정산 100% 제외)"
@@ -107,3 +107,7 @@ TRANSFER_DESCRIPTIONS = frozenset(
 
 def is_transfer_description(description: str) -> bool:
     return description in TRANSFER_DESCRIPTIONS
+
+
+def request_type_label(is_transfer: bool) -> str:
+    return "업체 이관" if is_transfer else "정산 이슈"
