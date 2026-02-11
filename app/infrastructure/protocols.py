@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from app.models import SettlementRow
@@ -21,3 +21,52 @@ class SpreadsheetGateway(Protocol):
     def find_row_by_booking_key(
         self, booking_key: str, sheet_name: str | None = None
     ) -> int | None: ...
+
+
+@runtime_checkable
+class SlackMessageReader(Protocol):
+    def get_user_name(self, user_id: str) -> str: ...
+
+    def get_thread_url(self, channel_id: str, thread_ts: str) -> str: ...
+
+    def get_parent_message(self, channel_id: str, thread_ts: str) -> str | None: ...
+
+    def find_message_by_text(
+        self,
+        channel_id: str,
+        search_text: str,
+        *,
+        max_pages: int = 10,
+    ) -> str | None: ...
+
+
+@runtime_checkable
+class SlackMessageWriter(Protocol):
+    def post_message(
+        self,
+        *,
+        channel: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+        thread_ts: str | None = None,
+    ) -> str: ...
+
+    def update_message(
+        self,
+        *,
+        channel: str,
+        ts: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> None: ...
+
+    def delete_message(self, *, channel: str, ts: str) -> None: ...
+
+    def post_ephemeral(
+        self,
+        *,
+        channel: str,
+        user: str,
+        text: str,
+        thread_ts: str | None = None,
+    ) -> None: ...

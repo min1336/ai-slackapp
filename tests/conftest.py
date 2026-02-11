@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from app.config import DatabaseProperties
 from app.models.settlement import SettlementData, SettlementRow, SettlementStatus
 from tests.factories import SettlementDataFactory
+from tests.fakes.fake_database import FakeDatabase
+from tests.fakes.fake_slack import FakeSlackReader, FakeSlackWriter
 from tests.fakes.fake_spreadsheet import FakeSpreadsheet
 
 
@@ -43,10 +44,18 @@ def fake_spreadsheet() -> FakeSpreadsheet:
 
 
 @pytest.fixture
-def db_configured(monkeypatch):
-    """get_database_settings()가 DB 설정 완료 상태를 반환하도록 mock."""
-    fake = DatabaseProperties(host="test-host", password="test-pw")
-    monkeypatch.setattr(
-        "app.services.settlement_service.get_database_settings",
-        lambda: fake,
-    )
+def fake_db() -> FakeDatabase:
+    """인메모리 SQLite FakeDatabase"""
+    return FakeDatabase()
+
+
+@pytest.fixture
+def fake_reader() -> FakeSlackReader:
+    """FakeSlackReader 인스턴스"""
+    return FakeSlackReader()
+
+
+@pytest.fixture
+def fake_writer() -> FakeSlackWriter:
+    """FakeSlackWriter 인스턴스"""
+    return FakeSlackWriter()

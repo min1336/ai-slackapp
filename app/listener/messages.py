@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from slack_bolt import App
 from slack_sdk.errors import SlackApiError
 
-from app.config import get_app_config
 from app.constants import Command
 from app.core import get_logger
 from app.services.message_parser import (
@@ -13,29 +13,30 @@ from app.services.message_parser import (
     parse_settlement_message,
     parse_transfer_reservation_message,
 )
-from app.services.slack_service import get_parent_message, get_thread_url
-from app.services.thread_discovery_service import (
-    find_issue_thread,
-    register_origin_thread,
-    save_thread_reference,
-)
 from app.views.blocks import (
     build_parsing_result_message,
     build_transfer_parsing_result_message,
 )
 
+if TYPE_CHECKING:
+    from app.container import ServiceContainer
+
 logger = get_logger(__name__)
 
 
-def register_message_handlers(app: App) -> None:
+def register_message_handlers(app: App, container: ServiceContainer) -> None:
+    discovery = container.discovery
+    reader = container.reader
+    writer = container.writer
+    reservation_channel = container.reservation_channel
+    transfer_channel = container.transfer_channel
+
     @app.message(re.compile(rf"^{re.escape(Command.SETTLEMENT_ISSUE)}$"))
-    def handle_read(message, client, say):
+    def handle_read(message, say):
         channel_id = message.get("channel")
         thread_ts = message.get("thread_ts")
         message_ts = message.get("ts")
 
-        # 예약 채널에서만 처리 (정산이슈 명령 + 스레드 탐색이 같은 채널)
-        reservation_channel = get_app_config().slack_channels.reservation
         if reservation_channel and channel_id != reservation_channel:
             return
 
@@ -46,11 +47,7 @@ def register_message_handlers(app: App) -> None:
             )
             return
 
-        parent_text = get_parent_message(
-            client=client,
-            channel_id=channel_id,
-            thread_ts=thread_ts,
-        )
+        parent_text = reader.get_parent_message(channel_id, thread_ts)
 
         if not parent_text:
             say(
@@ -61,7 +58,10 @@ def register_message_handlers(app: App) -> None:
 
         parsed = parse_settlement_message(parent_text)
 
-        logger.info("settlement_parse_requested", booking_key=parsed.booking_key)
+        logger.info(
+            "settlement_parse_requested",
+            booking_key=parsed.booking_key,
+        )
 
         say(
             text="예약 정보를 확인해주세요 📋",
@@ -74,20 +74,17 @@ def register_message_handlers(app: App) -> None:
             thread_ts=thread_ts,
         )
 
-        # 스레드 레퍼런스 등록 (이관 시 이 스레드를 찾을 수 있도록)
         if parsed.booking_key:
-            register_origin_thread(
+            discovery.register_origin_thread(
                 booking_key=parsed.booking_key,
                 channel_id=channel_id,
                 thread_ts=thread_ts,
             )
 
     @app.message("")
-    def handle_auto_detect_transfer(message, say, client):
+    def handle_auto_detect_transfer(message, say):
         channel_id = message.get("channel")
 
-        # 이관 예약 채널에서만 처리
-        transfer_channel = get_app_config().slack_channels.transfer_reservation
         if not transfer_channel:
             logger.warning("transfer_channel_not_configured")
             return
@@ -99,7 +96,6 @@ def register_message_handlers(app: App) -> None:
         if not text:
             return
 
-        # 이관 예약 메시지 패턴 확인
         if not is_transfer_reservation_message(text):
             return
 
@@ -117,14 +113,12 @@ def register_message_handlers(app: App) -> None:
 
         message_ts = message.get("ts")
 
-        # 정산이슈 스레드 탐색
-        thread = find_issue_thread(parsed.booking_key, client)
+        thread = discovery.find_issue_thread(parsed.booking_key)
 
         if thread:
-            # 정산이슈 스레드에 포스트
-            transfer_msg_url = get_thread_url(client, channel_id, message_ts)
+            transfer_msg_url = reader.get_thread_url(channel_id, message_ts)
             try:
-                client.chat_postMessage(
+                writer.post_message(
                     channel=thread.channel_id,
                     thread_ts=thread.thread_ts,
                     text="이관 예약 정보를 확인해주세요 🚗",
@@ -139,9 +133,8 @@ def register_message_handlers(app: App) -> None:
                         transfer_message_url=transfer_msg_url,
                     ),
                 )
-                # 이관 후 예약번호도 같은 스레드에 매핑 (체인 연결)
                 if parsed.new_booking_key:
-                    save_thread_reference(
+                    discovery.save_thread_reference(
                         booking_key=parsed.new_booking_key,
                         channel_id=thread.channel_id,
                         thread_ts=thread.thread_ts,
@@ -154,9 +147,7 @@ def register_message_handlers(app: App) -> None:
                     booking_key=parsed.booking_key,
                     thread_ts=thread.thread_ts,
                 )
-                # 폴백: 이관채널 스레드에 포스트
 
-        # 스레드 못 찾음 또는 포스트 실패 → 이관채널 스레드에 폴백
         say(
             text="이관 예약 정보를 확인해주세요 🚗",
             blocks=build_transfer_parsing_result_message(

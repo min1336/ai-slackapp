@@ -1,10 +1,10 @@
-"""slack_client 순수 함수 테스트"""
+"""Slack view state 값 추출 순수 함수 테스트"""
 
 from __future__ import annotations
 
-from app.infrastructure.slack_client import (
+from app.listener.payload import (
     extract_date_value,
-    extract_select_text,
+    extract_select_value,
     extract_text_value,
 )
 
@@ -68,7 +68,7 @@ class TestExtractDateValue:
 
 
 class TestExtractSelectText:
-    """extract_select_text() 함수 테스트"""
+    """extract_select_value() 함수 테스트"""
 
     def test_정상적인_선택값_추출(self):
         # Given - Slack static_select values 구조
@@ -84,24 +84,24 @@ class TestExtractSelectText:
         }
 
         # When
-        result = extract_select_text(values, "block_issue", "action_issue")
+        result = extract_select_value(values, "block_issue", "action_issue")
 
         # Then
         assert result == "결제 오류"
 
     def test_block_id가_없으면_빈문자열_반환(self):
         values = {}
-        result = extract_select_text(values, "nonexistent", "action")
+        result = extract_select_value(values, "nonexistent", "action")
         assert result == ""
 
     def test_selected_option이_None이면_빈문자열_반환(self):
         values = {"block_id": {"action_id": {"selected_option": None}}}
-        result = extract_select_text(values, "block_id", "action_id")
+        result = extract_select_value(values, "block_id", "action_id")
         assert result == ""
 
     def test_selected_option이_빈딕셔너리면_빈문자열_반환(self):
         values = {"block_id": {"action_id": {"selected_option": {}}}}
-        result = extract_select_text(values, "block_id", "action_id")
+        result = extract_select_value(values, "block_id", "action_id")
         assert result == ""
 
     def test_text_중첩구조에서_정상_추출(self):
@@ -116,5 +116,5 @@ class TestExtractSelectText:
                 }
             }
         }
-        result = extract_select_text(values, "block", "action")
+        result = extract_select_value(values, "block", "action")
         assert result == "옵션A"

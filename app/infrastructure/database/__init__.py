@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from app.infrastructure.database.connection import get_session, transactional
+from app.infrastructure.database.connection import (
+    SessionFactory,
+    get_session,
+    transactional,
+)
 from app.infrastructure.database.models import (
     Base,
     IssueLog,
@@ -21,6 +25,7 @@ __all__ = [
     "SettlementRepository",
     "ThreadReference",
     "ThreadReferenceRepository",
+    "SessionFactory",
     "get_session",
     "transactional",
 ]

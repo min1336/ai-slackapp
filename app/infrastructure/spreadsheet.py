@@ -1,14 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from threading import Lock
 
 import gspread
-from google.oauth2.service_account import Credentials
 from gspread import Worksheet
 from gspread.exceptions import APIError, GSpreadException
 
-from app.config import get_app_config, get_spreadsheet_settings
 from app.core import get_logger
 from app.exceptions import SpreadsheetError
 from app.infrastructure.column_mapper import ColumnMapper, ColumnMapping
@@ -21,46 +20,9 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
 ]
 
-_spreadsheet_client: gspread.Spreadsheet | None = None
-_client_lock = Lock()
-_client_created_at: datetime | None = None
-_CLIENT_REFRESH_MINUTES = 55
-_CACHE_TTL_SECONDS = 300  # 5분
 
-_worksheet_cache: TTLCache[str, Worksheet] = TTLCache(ttl=_CACHE_TTL_SECONDS)
-_mapping_cache: TTLCache[str, ColumnMapping] = TTLCache(ttl=_CACHE_TTL_SECONDS)
-
-
-def _get_worksheet(sheet_name: str) -> Worksheet:
-    cached = _worksheet_cache.get(sheet_name)
-    if cached is not None:
-        return cached
-    ws = get_spreadsheet_client().worksheet(sheet_name)
-    _worksheet_cache.set(sheet_name, ws)
-    return ws
-
-
-def _resolve_mapping(worksheet: Worksheet, sheet_type: str) -> ColumnMapping:
-    cache_key = f"{worksheet.title}:{sheet_type}"
-    cached = _mapping_cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    headers = worksheet.row_values(1)
-    field_to_header = get_app_config().spreadsheet.field_to_header(sheet_type)
-    configured = tuple(f for f in SETTLEMENT_FIELDS if f in field_to_header)
-
-    if sheet_type == "settlement":
-        required = (*configured, "settlement_completed")
-    elif sheet_type == "issue_log":
-        required = (*configured, "sync_key")
-    else:
-        raise ValueError(f"Unknown sheet_type: {sheet_type}")
-
-    mapper = ColumnMapper(field_to_header)
-    mapping = mapper.resolve(headers, required)
-    _mapping_cache.set(cache_key, mapping)
-    return mapping
+def _is_cell_not_found(error: Exception) -> bool:
+    return error.__class__.__name__ == "CellNotFound"
 
 
 def _merge_with_existing_row(
@@ -80,243 +42,84 @@ def _merge_with_existing_row(
     return merged_row
 
 
-def get_spreadsheet_client() -> gspread.Spreadsheet:
-    global _spreadsheet_client, _client_created_at
+class SpreadsheetService:
+    """SpreadsheetGateway 구현체 — gspread 기반 Google Sheets 접근."""
 
-    with _client_lock:
-        now = datetime.now()
-        should_refresh = (
-            _spreadsheet_client is None
-            or _client_created_at is None
-            or (now - _client_created_at) > timedelta(minutes=_CLIENT_REFRESH_MINUTES)
+    def __init__(
+        self,
+        client_factory: Callable[[], gspread.Spreadsheet],
+        sheet_name_resolver: Callable[[str], str],
+        field_to_header_resolver: Callable[[str], dict[str, str]],
+        *,
+        client_refresh_minutes: int = 55,
+        cache_ttl_seconds: int = 300,
+    ) -> None:
+        self._client_factory = client_factory
+        self._sheet_name = sheet_name_resolver
+        self._field_to_header = field_to_header_resolver
+
+        self._client: gspread.Spreadsheet | None = None
+        self._client_lock = Lock()
+        self._client_created_at: datetime | None = None
+        self._client_refresh_minutes = client_refresh_minutes
+
+        self._worksheet_cache: TTLCache[str, Worksheet] = TTLCache(
+            ttl=cache_ttl_seconds
+        )
+        self._mapping_cache: TTLCache[str, ColumnMapping] = TTLCache(
+            ttl=cache_ttl_seconds
         )
 
-        if should_refresh:
-            credentials = Credentials.from_service_account_file(
-                get_spreadsheet_settings().credentials_file,
-                scopes=SCOPES,
+    def _get_client(self) -> gspread.Spreadsheet:
+        with self._client_lock:
+            now = datetime.now()
+            should_refresh = (
+                self._client is None
+                or self._client_created_at is None
+                or (now - self._client_created_at)
+                > timedelta(minutes=self._client_refresh_minutes)
             )
-            gc = gspread.authorize(credentials)
-            _spreadsheet_client = gc.open_by_key(get_app_config().spreadsheet.id)
-            _client_created_at = now
-            _worksheet_cache.clear()
-            _mapping_cache.clear()
-            logger.debug("spreadsheet_client_refreshed")
 
-        return _spreadsheet_client
+            if should_refresh:
+                self._client = self._client_factory()
+                self._client_created_at = now
+                self._worksheet_cache.clear()
+                self._mapping_cache.clear()
+                logger.debug("spreadsheet_client_refreshed")
 
+            return self._client  # type: ignore[return-value]
 
-@retry_on_rate_limit()
-def save_settlement_row(
-    row: SettlementRow,
-    sheet_name: str | None = None,
-    *,
-    is_update: bool = False,
-) -> None:
-    if sheet_name is None:
-        sheet_name = get_app_config().spreadsheet.sheet_name("settlement")
+    def _get_worksheet(self, sheet_name: str) -> Worksheet:
+        cached = self._worksheet_cache.get(sheet_name)
+        if cached is not None:
+            return cached
+        ws = self._get_client().worksheet(sheet_name)
+        self._worksheet_cache.set(sheet_name, ws)
+        return ws
 
-    try:
-        worksheet = _get_worksheet(sheet_name)
-        mapping = _resolve_mapping(worksheet, "settlement")
+    def _resolve_mapping(self, worksheet: Worksheet, sheet_type: str) -> ColumnMapping:
+        cache_key = f"{worksheet.title}:{sheet_type}"
+        cached = self._mapping_cache.get(cache_key)
+        if cached is not None:
+            return cached
 
-        if is_update:
-            existing_row_number = find_row_by_booking_key(
-                row.booking_key,
-                sheet_name,
-                worksheet,
-                mapping,
-            )
-            if existing_row_number:
-                update_settlement_row(row, existing_row_number, worksheet, mapping)
-            else:
-                # 시트에서 수동 삭제된 경우 → 폴백 INSERT
-                row_data = mapping.dict_to_row(
-                    row.to_dict(),
-                    extra={"settlement_completed": "FALSE"},
-                )
-                worksheet.append_row(row_data)
+        headers = worksheet.row_values(1)
+        field_to_header = self._field_to_header(sheet_type)
+        configured = tuple(f for f in SETTLEMENT_FIELDS if f in field_to_header)
+
+        if sheet_type == "settlement":
+            required = (*configured, "settlement_completed")
+        elif sheet_type == "issue_log":
+            required = (*configured, "sync_key")
         else:
-            row_data = mapping.dict_to_row(
-                row.to_dict(),
-                extra={"settlement_completed": "FALSE"},
-            )
-            worksheet.append_row(row_data)
-    except (SpreadsheetError, APIError):
-        raise
-    except (GSpreadException, ValueError, KeyError) as e:
-        logger.exception(
-            "spreadsheet_save_failed",
-            sheet_name=sheet_name,
-            error=str(e),
-        )
-        logger.debug("failed_row_data", row_data=row.to_dict())
-        raise SpreadsheetError(
-            message=f"Failed to save settlement row: {e}",
-            details={
-                "sheet_name": sheet_name,
-                "booking_key": row.booking_key,
-                "original_error": str(e),
-            },
-        ) from e
+            raise ValueError(f"Unknown sheet_type: {sheet_type}")
 
+        mapper = ColumnMapper(field_to_header)
+        mapping = mapper.resolve(headers, required)
+        self._mapping_cache.set(cache_key, mapping)
+        return mapping
 
-def _find_by_sync_key(
-    worksheet: Worksheet, mapping: ColumnMapping, sync_key: str
-) -> bool:
-    """sync_key로 기존 행 존재 여부 확인 (멱등성 보장용)."""
-    try:
-        sync_key_col = mapping.column_of("sync_key")
-        matches = worksheet.findall(sync_key)
-        return any(cell.col == sync_key_col for cell in matches)
-    except (GSpreadException, KeyError) as e:
-        if isinstance(e, GSpreadException) and _is_cell_not_found(e):
-            return False
-        logger.warning("sync_key_search_failed", sync_key=sync_key, error=str(e))
-        return False  # 검색 실패 시 안전하게 중복 허용 > 실패
-
-
-@retry_on_rate_limit()
-def append_issue_log_row(row: SettlementRow, sync_key: str) -> None:
-    sheet_name = get_app_config().spreadsheet.sheet_name("issue_log")
-
-    try:
-        worksheet = _get_worksheet(sheet_name)
-        mapping = _resolve_mapping(worksheet, "issue_log")
-
-        # 멱등성: sync_key로 기존 행 존재 여부 확인
-        if _find_by_sync_key(worksheet, mapping, sync_key):
-            logger.info(
-                "issue_log_row_already_exists",
-                sync_key=sync_key,
-                booking_key=row.booking_key,
-            )
-            return
-
-        row_data = mapping.dict_to_row(row.to_dict(), extra={"sync_key": sync_key})
-        worksheet.append_row(row_data)
-    except (SpreadsheetError, APIError):
-        raise
-    except (GSpreadException, ValueError, KeyError) as e:
-        logger.exception(
-            "issue_log_append_failed",
-            sheet_name=sheet_name,
-            error=str(e),
-        )
-        logger.debug("failed_row_data", row_data=row.to_dict())
-        raise SpreadsheetError(
-            message=f"Failed to append issue log: {e}",
-            details={
-                "sheet_name": sheet_name,
-                "booking_key": row.booking_key,
-                "original_error": str(e),
-            },
-        ) from e
-
-
-def find_row_by_booking_key(
-    booking_key: str,
-    sheet_name: str,
-    worksheet: Worksheet | None = None,
-    mapping: ColumnMapping | None = None,
-) -> int | None:
-    """booking_key로 활성(정산완료=FALSE) 행 번호를 찾는다.
-
-    정산완료된 행은 무시하고, 활성 행만 반환한다.
-    활성 행이 없으면 None (= 새 행 INSERT 필요).
-    """
-    try:
-        if worksheet is None:
-            worksheet = _get_worksheet(sheet_name)
-        if mapping is None:
-            mapping = _resolve_mapping(worksheet, "settlement")
-        matches = worksheet.findall(booking_key)
-
-        booking_col = mapping.column_of("booking_key")
-        for cell in matches:
-            if cell.col != booking_col:
-                continue
-            data = mapping.row_to_dict(worksheet.row_values(cell.row))
-            if data.get("settlement_completed") != "TRUE":
-                return cell.row
-
-        return None
-    except APIError:
-        raise
-    except GSpreadException as e:
-        if _is_cell_not_found(e):
-            return None
-        logger.exception(
-            "booking_key_search_failed",
-            booking_key=booking_key,
-            sheet_name=sheet_name,
-            error=str(e),
-        )
-        raise SpreadsheetError(
-            message=f"Failed to find row by booking key: {e}",
-            details={
-                "booking_key": booking_key,
-                "sheet_name": sheet_name,
-                "original_error": str(e),
-            },
-        ) from e
-
-
-def update_settlement_row(
-    row: SettlementRow,
-    row_number: int,
-    worksheet: Worksheet,
-    mapping: ColumnMapping,
-) -> None:
-    try:
-        existing_row = worksheet.row_values(row_number)
-        existing_data = mapping.row_to_dict(existing_row)
-
-        data = row.to_dict()
-        data["created_at"] = existing_data.get("created_at", "")
-
-        settlement_completed = (
-            existing_data.get("settlement_completed", "FALSE") or "FALSE"
-        )
-
-        row_data = mapping.dict_to_row(
-            data,
-            extra={"settlement_completed": settlement_completed},
-        )
-
-        merged_row = _merge_with_existing_row(existing_row, row_data, mapping)
-
-        cell_list = worksheet.range(row_number, 1, row_number, len(merged_row))
-        for cell, value in zip(cell_list, merged_row, strict=True):
-            cell.value = value
-
-        worksheet.update_cells(cell_list)
-    except APIError:
-        raise
-    except (GSpreadException, ValueError, KeyError) as e:
-        logger.exception(
-            "spreadsheet_row_update_failed",
-            sheet_name=worksheet.title,
-            row_number=row_number,
-            error=str(e),
-        )
-        logger.debug("failed_row_data", row_data=row.to_dict())
-        raise SpreadsheetError(
-            message=f"Failed to update settlement row: {e}",
-            details={
-                "sheet_name": worksheet.title,
-                "row_number": row_number,
-                "booking_key": row.booking_key,
-                "original_error": str(e),
-            },
-        ) from e
-
-
-def _is_cell_not_found(error: Exception) -> bool:
-    return error.__class__.__name__ == "CellNotFound"
-
-
-class DefaultSpreadsheetGateway:
+    @retry_on_rate_limit()
     def save_settlement_row(
         self,
         row: SettlementRow,
@@ -324,14 +127,199 @@ class DefaultSpreadsheetGateway:
         *,
         is_update: bool = False,
     ) -> None:
-        save_settlement_row(row, sheet_name, is_update=is_update)
+        if sheet_name is None:
+            sheet_name = self._sheet_name("settlement")
 
+        try:
+            worksheet = self._get_worksheet(sheet_name)
+            mapping = self._resolve_mapping(worksheet, "settlement")
+
+            if is_update:
+                existing_row_number = self.find_row_by_booking_key(
+                    row.booking_key,
+                    sheet_name,
+                    worksheet,
+                    mapping,
+                )
+                if existing_row_number:
+                    self._update_settlement_row(
+                        row, existing_row_number, worksheet, mapping
+                    )
+                else:
+                    row_data = mapping.dict_to_row(
+                        row.to_dict(),
+                        extra={"settlement_completed": "FALSE"},
+                    )
+                    worksheet.append_row(row_data)
+            else:
+                row_data = mapping.dict_to_row(
+                    row.to_dict(),
+                    extra={"settlement_completed": "FALSE"},
+                )
+                worksheet.append_row(row_data)
+        except (SpreadsheetError, APIError):
+            raise
+        except (GSpreadException, ValueError, KeyError) as e:
+            logger.exception(
+                "spreadsheet_save_failed",
+                sheet_name=sheet_name,
+                error=str(e),
+            )
+            logger.debug("failed_row_data", row_data=row.to_dict())
+            raise SpreadsheetError(
+                message=f"Failed to save settlement row: {e}",
+                details={
+                    "sheet_name": sheet_name,
+                    "booking_key": row.booking_key,
+                    "original_error": str(e),
+                },
+            ) from e
+
+    def _find_by_sync_key(
+        self, worksheet: Worksheet, mapping: ColumnMapping, sync_key: str
+    ) -> bool:
+        try:
+            sync_key_col = mapping.column_of("sync_key")
+            matches = worksheet.findall(sync_key)
+            return any(cell.col == sync_key_col for cell in matches)
+        except (GSpreadException, KeyError) as e:
+            if isinstance(e, GSpreadException) and _is_cell_not_found(e):
+                return False
+            logger.warning(
+                "sync_key_search_failed",
+                sync_key=sync_key,
+                error=str(e),
+            )
+            return False
+
+    @retry_on_rate_limit()
     def append_issue_log_row(self, row: SettlementRow, sync_key: str) -> None:
-        append_issue_log_row(row, sync_key)
+        sheet_name = self._sheet_name("issue_log")
+
+        try:
+            worksheet = self._get_worksheet(sheet_name)
+            mapping = self._resolve_mapping(worksheet, "issue_log")
+
+            if self._find_by_sync_key(worksheet, mapping, sync_key):
+                logger.info(
+                    "issue_log_row_already_exists",
+                    sync_key=sync_key,
+                    booking_key=row.booking_key,
+                )
+                return
+
+            row_data = mapping.dict_to_row(row.to_dict(), extra={"sync_key": sync_key})
+            worksheet.append_row(row_data)
+        except (SpreadsheetError, APIError):
+            raise
+        except (GSpreadException, ValueError, KeyError) as e:
+            logger.exception(
+                "issue_log_append_failed",
+                sheet_name=sheet_name,
+                error=str(e),
+            )
+            logger.debug("failed_row_data", row_data=row.to_dict())
+            raise SpreadsheetError(
+                message=f"Failed to append issue log: {e}",
+                details={
+                    "sheet_name": sheet_name,
+                    "booking_key": row.booking_key,
+                    "original_error": str(e),
+                },
+            ) from e
 
     def find_row_by_booking_key(
-        self, booking_key: str, sheet_name: str | None = None
+        self,
+        booking_key: str,
+        sheet_name: str | None = None,
+        worksheet: Worksheet | None = None,
+        mapping: ColumnMapping | None = None,
     ) -> int | None:
-        if sheet_name is None:
-            sheet_name = get_app_config().spreadsheet.sheet_name("settlement")
-        return find_row_by_booking_key(booking_key, sheet_name)
+        """booking_key로 활성(정산완료=FALSE) 행 번호를 찾는다."""
+        try:
+            if sheet_name is None:
+                sheet_name = self._sheet_name("settlement")
+            if worksheet is None:
+                worksheet = self._get_worksheet(sheet_name)
+            if mapping is None:
+                mapping = self._resolve_mapping(worksheet, "settlement")
+            matches = worksheet.findall(booking_key)
+
+            booking_col = mapping.column_of("booking_key")
+            for cell in matches:
+                if cell.col != booking_col:
+                    continue
+                data = mapping.row_to_dict(worksheet.row_values(cell.row))
+                if data.get("settlement_completed") != "TRUE":
+                    return cell.row
+
+            return None
+        except APIError:
+            raise
+        except GSpreadException as e:
+            if _is_cell_not_found(e):
+                return None
+            logger.exception(
+                "booking_key_search_failed",
+                booking_key=booking_key,
+                sheet_name=sheet_name,
+                error=str(e),
+            )
+            raise SpreadsheetError(
+                message=f"Failed to find row by booking key: {e}",
+                details={
+                    "booking_key": booking_key,
+                    "sheet_name": sheet_name,
+                    "original_error": str(e),
+                },
+            ) from e
+
+    def _update_settlement_row(
+        self,
+        row: SettlementRow,
+        row_number: int,
+        worksheet: Worksheet,
+        mapping: ColumnMapping,
+    ) -> None:
+        try:
+            existing_row = worksheet.row_values(row_number)
+            existing_data = mapping.row_to_dict(existing_row)
+
+            data = row.to_dict()
+            data["created_at"] = existing_data.get("created_at", "")
+
+            settlement_completed = (
+                existing_data.get("settlement_completed", "FALSE") or "FALSE"
+            )
+
+            row_data = mapping.dict_to_row(
+                data,
+                extra={"settlement_completed": settlement_completed},
+            )
+
+            merged_row = _merge_with_existing_row(existing_row, row_data, mapping)
+
+            cell_list = worksheet.range(row_number, 1, row_number, len(merged_row))
+            for cell, value in zip(cell_list, merged_row, strict=True):
+                cell.value = value
+
+            worksheet.update_cells(cell_list)
+        except APIError:
+            raise
+        except (GSpreadException, ValueError, KeyError) as e:
+            logger.exception(
+                "spreadsheet_row_update_failed",
+                sheet_name=worksheet.title,
+                row_number=row_number,
+                error=str(e),
+            )
+            logger.debug("failed_row_data", row_data=row.to_dict())
+            raise SpreadsheetError(
+                message=f"Failed to update settlement row: {e}",
+                details={
+                    "sheet_name": worksheet.title,
+                    "row_number": row_number,
+                    "booking_key": row.booking_key,
+                    "original_error": str(e),
+                },
+            ) from e

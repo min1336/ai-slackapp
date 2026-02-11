@@ -1,4 +1,4 @@
-"""sync_service 동기화 재시도 테스트"""
+"""SyncService 동기화 재시도 테스트 (constructor DI)"""
 
 from __future__ import annotations
 
@@ -10,14 +10,9 @@ from app.infrastructure.database.repository import (
     SettlementRepository,
 )
 from app.models import SettlementRow, SettlementStatus
-from app.services.sync_service import _entity_to_row, sync_pending_records
-from tests.fakes.fake_database import FakeDatabase
+from app.services.sync_processor import SyncProcessor
+from app.services.sync_service import SyncService
 from tests.fakes.fake_spreadsheet import FakeSpreadsheet
-
-
-@pytest.fixture
-def fake_db():
-    return FakeDatabase()
 
 
 @pytest.fixture
@@ -25,7 +20,17 @@ def fake_sheets():
     return FakeSpreadsheet()
 
 
-def _create_records(fake_db: FakeDatabase, row: SettlementRow) -> tuple[int, int]:
+@pytest.fixture
+def sync_processor(fake_db, fake_sheets):
+    return SyncProcessor(fake_db.get_session, fake_sheets)
+
+
+@pytest.fixture
+def sync_service(sync_processor, fake_sheets):
+    return SyncService(sync_processor, fake_sheets)
+
+
+def _create_records(fake_db, row: SettlementRow) -> tuple[int, int]:
     with fake_db.get_session() as session:
         repo = SettlementRepository(session)
         settlement = repo.save(row)
@@ -33,7 +38,7 @@ def _create_records(fake_db: FakeDatabase, row: SettlementRow) -> tuple[int, int
         return settlement.id, log.id
 
 
-def test_sync_pending_records_success(fake_db, fake_sheets, sample_settlement_data):
+def test_sync_pending_records_success(fake_db, sync_service, sample_settlement_data):
     row = SettlementRow.from_settlement_data(
         data=sample_settlement_data,
         status=SettlementStatus.APPROVED,
@@ -42,9 +47,7 @@ def test_sync_pending_records_success(fake_db, fake_sheets, sample_settlement_da
     )
     settlement_id, log_id = _create_records(fake_db, row)
 
-    synced_settlements, synced_logs = sync_pending_records(
-        sheets=fake_sheets,
-        session_factory=fake_db.get_session,
+    synced_settlements, synced_logs = sync_service.sync_pending_records(
         record_delay=0,
     )
 
@@ -64,6 +67,8 @@ def test_sync_pending_records_success(fake_db, fake_sheets, sample_settlement_da
 def test_sync_pending_records_all_failure(fake_db, fake_sheets, sample_settlement_data):
     """모든 시트 동기화가 실패하면 모든 레코드가 pending 상태로 유지된다."""
     fake_sheets.should_fail = True
+    processor = SyncProcessor(fake_db.get_session, fake_sheets)
+    svc = SyncService(processor, fake_sheets)
 
     row = SettlementRow.from_settlement_data(
         data=sample_settlement_data,
@@ -73,9 +78,7 @@ def test_sync_pending_records_all_failure(fake_db, fake_sheets, sample_settlemen
     )
     settlement_id, log_id = _create_records(fake_db, row)
 
-    synced_settlements, synced_logs = sync_pending_records(
-        sheets=fake_sheets,
-        session_factory=fake_db.get_session,
+    synced_settlements, synced_logs = svc.sync_pending_records(
         record_delay=0,
     )
 
@@ -93,9 +96,7 @@ def test_sync_pending_records_all_failure(fake_db, fake_sheets, sample_settlemen
         assert log.sync_status == "pending"
 
 
-def test_sync_pending_records_settlement_only_failure(
-    fake_db, fake_sheets, sample_settlement_data
-):
+def test_sync_pending_records_settlement_only_failure(fake_db, sample_settlement_data):
     """정산 시트 실패 시에도 승인 로그는 독립적으로 동기화된다."""
 
     class SettlementOnlyFailSheet(FakeSpreadsheet):
@@ -108,6 +109,8 @@ def test_sync_pending_records_settlement_only_failure(
             )
 
     failing_sheets = SettlementOnlyFailSheet()
+    processor = SyncProcessor(fake_db.get_session, failing_sheets)
+    svc = SyncService(processor, failing_sheets)
 
     row = SettlementRow.from_settlement_data(
         data=sample_settlement_data,
@@ -117,9 +120,7 @@ def test_sync_pending_records_settlement_only_failure(
     )
     settlement_id, log_id = _create_records(fake_db, row)
 
-    synced_settlements, synced_logs = sync_pending_records(
-        sheets=failing_sheets,
-        session_factory=fake_db.get_session,
+    synced_settlements, synced_logs = svc.sync_pending_records(
         record_delay=0,
     )
 
@@ -136,8 +137,8 @@ def test_sync_pending_records_settlement_only_failure(
         assert log.sync_status == "completed"
 
 
-def test_entity_to_row_settlement_completed_변환(fake_db, sample_settlement_data):
-    """_entity_to_row가 settlement_completed를 올바르게 변환하는지 확인."""
+def test_from_entity_settlement_completed_변환(fake_db, sample_settlement_data):
+    """SettlementRow.from_entity가 settlement_completed를 올바르게 변환하는지 확인."""
     row = SettlementRow.from_settlement_data(
         data=sample_settlement_data,
         status=SettlementStatus.APPROVED,
@@ -150,10 +151,10 @@ def test_entity_to_row_settlement_completed_변환(fake_db, sample_settlement_da
         settlement = repo.save(row)
 
         # 기본값: settlement_completed=False → "FALSE"
-        converted = _entity_to_row(settlement)
+        converted = SettlementRow.from_entity(settlement)
         assert converted.settlement_completed == "FALSE"
 
         # settlement_completed=True → "TRUE"
         settlement.settlement_completed = True
-        converted = _entity_to_row(settlement)
+        converted = SettlementRow.from_entity(settlement)
         assert converted.settlement_completed == "TRUE"

@@ -35,17 +35,34 @@ uv run pre-commit install
 레이어드 아키텍처를 따르며, **레이어를 건너뛰어 호출하지 않는다**:
 
 ```
-listener/ (Controller)     ← Slack 이벤트 수신, services/views 호출
-    ├── payload.py         ← Slack body 파싱 헬퍼 (TypedDict, MessageContext)
+listener/ (Thin Controller)   ← Slack 이벤트 수신, 파싱 → container 서비스 위임
+    ├── payload.py            ← Slack body 파싱 헬퍼 (TypedDict, MessageContext)
     ↓
-services/                  ← 비즈니스 로직, infrastructure 호출
+container.py (Composition Root) ← ServiceContainer: 모든 서비스 DI 와이어링
     ↓
-infrastructure/            ← 외부 시스템 통신 (Slack API, Google Sheets)
-    ├── protocols.py       ← Protocol 인터페이스 (DI용)
+services/ (Orchestrators)     ← 워크플로우 조합 (컴포넌트 호출)
+    ├── settlement_decision_service.py   ← 승인/반려 결정
+    ├── settlement_registration_service.py ← 등록 워크플로우
+    ├── thread_discovery_service.py      ← 스레드 탐색 (DB→Slack 폴백)
+    └── sync_service.py                  ← 배치 동기화
     ↓
-models/                    ← 모든 레이어에서 import 가능
-views/                     ← Slack Block Kit JSON 생성 (데이터 가공 금지)
-core/                      ← 공통 유틸 (logger.py: structlog 설정)
+services/ (Components)        ← 단일 책임 컴포넌트
+    ├── slack_reader.py       ← Reader: Slack 정보 조회
+    ├── slack_writer.py       ← Writer: Slack 메시지 쓰기
+    ├── settlement_writer.py  ← Writer: 정산 검증+저장
+    ├── sync_processor.py     ← Processor: DB→Sheets 즉시 동기화
+    ├── thread_reference_store.py ← Store: 스레드 참조 CRUD
+    └── message_parser.py     ← Parser: 텍스트 파싱 (순수 함수)
+    ↓
+infrastructure/               ← 외부 시스템 통신 (Slack API, Google Sheets)
+    ├── protocols.py          ← Protocol 인터페이스 (SlackMessageReader, SlackMessageWriter, SpreadsheetGateway)
+    ├── slack_client.py       ← Raw Slack API 래퍼
+    ├── database/             ← SQLAlchemy, Repository, SessionFactory
+    └── spreadsheet/          ← gspread
+    ↓
+models/                       ← 모든 레이어에서 import 가능
+views/                        ← Slack Block Kit JSON 생성 (데이터 가공 금지)
+core/                         ← 공통 유틸 (logger.py: structlog 설정)
 ```
 
 **경계 규칙:**
@@ -53,7 +70,18 @@ core/                      ← 공통 유틸 (logger.py: structlog 설정)
 - `services/` → `listener/` 호출 금지
 - `views/`는 순수하게 Block Kit JSON만 생성
 
-**DI 패턴:** `infrastructure/protocols.py`에 Protocol 인터페이스 정의. 서비스는 Protocol 타입으로 의존성을 받고, 기본값은 실제 구현체. 테스트에서 Fake 주입 (`tests/fakes/`).
+**DI 패턴:** `ServiceContainer`(Composition Root)가 모든 서비스를 생성·연결. 서비스는 생성자에서 Protocol 타입으로 의존성을 받음. 테스트에서는 Fake 주입 (`tests/fakes/`).
+
+```python
+# 프로덕션: app/main.py
+container = ServiceContainer(client=app.client)
+
+# 테스트: constructor DI — monkeypatch 불필요
+store = ThreadReferenceStore(fake_db.get_session)
+service = ThreadDiscoveryService(store, FakeSlackReader())
+```
+
+**세션 관리:** 클래스 서비스는 `SessionFactory` (= `Callable[[], AbstractContextManager[SessionWithAfterCommit]]`)를 생성자로 받아 `with self._get_session() as session:` 패턴 사용. `@transactional` 데코레이터는 하위 호환용으로 유지.
 
 ## 설정 구조
 
@@ -65,8 +93,8 @@ core/                      ← 공통 유틸 (logger.py: structlog 설정)
 Supabase (PostgreSQL)를 캐시 레이어로 사용. Google Sheets가 primary storage.
 
 **동기화 방향:**
-- DB → Sheets: `save_settlement()` → `after_commit` → `sync_to_sheets()` (활성)
-- Sheets → DB: `_lazy_sync_settlement_completed()` — Sheets 정산완료를 DB에 반영 (구현됨, 미활성. `save_settlement()`에서 `repo.save()` 전에 호출하여 활성화)
+- DB → Sheets: `SettlementWriter.save()` → `after_commit` → `SyncProcessor.after_commit()` (활성)
+- Sheets → DB: `SyncService.lazy_sync_settlement_completed()` — Sheets 정산완료를 DB에 반영 (구현됨, 미활성)
 
 ```bash
 # 마이그레이션 상태 확인
@@ -160,12 +188,10 @@ with suppress(Exception):  # KeyError, AttributeError까지 숨김!
 - 실패해도 주 작업에 영향 없는 부가 작업
 - **반드시 구체적인 예외 타입 사용** (SlackApiError, SQLAlchemyError, APIError 등)
 
-**3. 사용자 알림 → 공통 유틸리티**
+**3. 사용자 알림 → 서비스 내 private 메서드**
 ```python
-from app.listener.error_utils import notify_user_safe
-
-# 알림 실패를 신경 쓰지 않아도 됨
-notify_user_safe(client, user_id, "⚠️ 오류 메시지")
+# 각 서비스에서 _notify_user_safe() private 메서드로 처리
+self._notify_user_safe(user_id, "⚠️ 오류 메시지")
 ```
 
 **언제**:
@@ -210,9 +236,17 @@ except SlackApiError:
 
 - `tests/factories.py`의 `SettlementDataFactory.create(**overrides)` 사용하여 테스트 데이터 생성
 - `tests/fakes/` — Protocol 기반 Fake 구현체 (외부 의존성 없이 테스트)
-- `tests/fakes/fake_database.py` — 인메모리 SQLite `FakeDatabase`. Repository 테스트 시 `fake_db.get_session`을 `session_factory`로 주입
-- `FakeSpreadsheet.completed_keys: set[str]` — 정산완료 시뮬레이션용 (`find_row_by_booking_key`가 None 반환)
-- `tests/conftest.py` — 공유 픽스처 (팩토리 기반)
+  - `fake_database.py` — 인메모리 SQLite `FakeDatabase`. `fake_db.get_session`을 `SessionFactory`로 주입
+  - `fake_spreadsheet.py` — `FakeSpreadsheet`. `completed_keys: set[str]`로 정산완료 시뮬레이션
+  - `fake_slack.py` — `FakeSlackReader` (dict 기반 반환값), `FakeSlackWriter` (list 기반 호출 기록)
+- `tests/conftest.py` — 공유 픽스처: `fake_db`, `fake_reader`, `fake_writer`, `sample_settlement_data` 등
+- **테스트 DI 패턴:** 서비스 생성자에 Fake 직접 주입 — monkeypatch 불필요
+  ```python
+  sync_proc = SyncProcessor(fake_db.get_session, fake_sheets)
+  writer = SettlementWriter(fake_db.get_session, sync_proc)
+  ```
+- **Mock vs Fake 기준:** DB/Sheets 의존 → `FakeDatabase`/`FakeSpreadsheet` (상태 검증), Slack SDK(`WebClient`) 직접 호출 → `Mock()` (행위 검증). `SlackApiError` 생성: `SlackApiError(message="error", response=Mock())` (response 필수)
+- **에러 경로 테스트:** 내부 메서드 실패 시뮬레이션은 `monkeypatch.setattr(instance, "method", _raise)` 허용 (DI 대상이 아닌 self 메서드 한정)
 - Pre-commit 훅: ruff + ruff-format + pytest-unit (3개 모두 커밋 시 자동 실행)
 
 ## 코드 스타일

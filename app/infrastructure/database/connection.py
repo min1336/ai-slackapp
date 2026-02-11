@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Generator
-from contextlib import contextmanager
+from collections.abc import Callable
+from contextlib import AbstractContextManager
 from functools import wraps
 from threading import Thread
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
@@ -18,7 +14,7 @@ from app.core import get_logger
 logger = get_logger(__name__)
 
 _engine = None
-_session_factory = None
+_factory: sessionmaker[SessionWithAfterCommit] | None = None
 
 
 def get_engine():
@@ -38,16 +34,6 @@ def get_engine():
     return _engine
 
 
-def get_session_factory() -> sessionmaker[Session]:
-    global _session_factory
-    if _session_factory is None:
-        _session_factory = sessionmaker(
-            bind=get_engine(),
-            expire_on_commit=False,
-        )
-    return _session_factory
-
-
 class SessionWithAfterCommit(Session):
     """after_commit 훅을 지원하는 Session.
 
@@ -57,15 +43,13 @@ class SessionWithAfterCommit(Session):
 
     def __init__(self, *args, async_hooks: bool = True, **kwargs):
         super().__init__(*args, **kwargs)
-        self._after_commit_hooks: list[Callable[[], None]] = []
+        self._after_commit_hooks = []
         self._async_hooks = async_hooks
 
     def after_commit(self, fn: Callable[[], None]) -> None:
-        """커밋 후 실행할 함수 등록."""
         self._after_commit_hooks.append(fn)
 
     def _execute_after_commit_hooks(self):
-        """등록된 after_commit 훅들 실행."""
         for hook in self._after_commit_hooks:
             if self._async_hooks:
                 Thread(target=self._run_hook, args=(hook,), daemon=True).start()
@@ -81,35 +65,38 @@ class SessionWithAfterCommit(Session):
             logger.exception("after_commit_hook_failed")
 
 
-def _setup_after_commit_listener():
-    """Session의 after_commit 이벤트 리스너 설정."""
+SessionFactory = Callable[[], AbstractContextManager[SessionWithAfterCommit]]
 
+
+def _setup_listeners():
     @event.listens_for(SessionWithAfterCommit, "after_commit")
     def receive_after_commit(session: SessionWithAfterCommit):
         session._execute_after_commit_hooks()
 
-
-_setup_after_commit_listener()
-
-
-@contextmanager
-def get_session() -> Generator[SessionWithAfterCommit, None, None]:
-    """데이터베이스 세션 (자동 트랜잭션 관리)."""
-    session = SessionWithAfterCommit(bind=get_engine(), expire_on_commit=False)
-    try:
-        yield session
-        session.commit()
-    except Exception:
-        session.rollback()
+    @event.listens_for(SessionWithAfterCommit, "after_soft_rollback")
+    def receive_after_rollback(session: SessionWithAfterCommit, _previous_transaction):
         session._after_commit_hooks.clear()
-        raise
-    finally:
-        session.close()
+
+
+_setup_listeners()
+
+
+def _get_factory() -> sessionmaker[SessionWithAfterCommit]:
+    global _factory
+    if _factory is None:
+        _factory = sessionmaker(
+            class_=SessionWithAfterCommit,
+            bind=get_engine(),
+            expire_on_commit=False,
+        )
+    return _factory
+
+
+def get_session() -> AbstractContextManager[SessionWithAfterCommit]:
+    return _get_factory().begin()
 
 
 def transactional[**P, T](fn: Callable[P, T]) -> Callable[P, T]:
-    """첫 번째 파라미터(session)를 자동 주입. 호출 시 session 생략."""
-
     @wraps(fn)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
         with get_session() as session:

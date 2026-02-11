@@ -1,206 +1,104 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
-from datetime import datetime
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING
 
 from gspread.exceptions import APIError
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.constants import DateFormat
 from app.core import get_logger
 from app.exceptions import SpreadsheetError
-from app.infrastructure.database import (
-    IssueLogRepository,
-    SettlementRepository,
-    get_session,
-)
-from app.infrastructure.protocols import SpreadsheetGateway
-from app.infrastructure.spreadsheet import DefaultSpreadsheetGateway
 from app.models import SettlementRow
-from app.models.settlement import format_cost
+
+if TYPE_CHECKING:
+    from app.infrastructure.protocols import SpreadsheetGateway
+    from app.services.sync_processor import SyncProcessor
 
 logger = get_logger(__name__)
 
-# get_session()과 동일한 시그니처의 콜러블 (contextmanager 반환)
-SessionFactory = Callable[..., Any]
 
+class SyncService:
+    def __init__(
+        self,
+        processor: SyncProcessor,
+        sheets: SpreadsheetGateway,
+    ) -> None:
+        self._processor = processor
+        self._sheets = sheets
 
-def _get_sheets() -> SpreadsheetGateway:
-    return DefaultSpreadsheetGateway()
+    def recover_stale_sync_records(self) -> tuple[int, int]:
+        settlements, logs = self._processor.recover_stale_records()
 
-
-def recover_stale_sync_records(
-    *,
-    session_factory: SessionFactory | None = None,
-) -> tuple[int, int]:
-    """앱 시작 시 중단된 동기화 레코드 복구.
-
-    이전 실행에서 in_progress 상태로 남은 레코드를 pending으로 되돌림.
-    단일 인스턴스 환경에서 앱 재시작 시 안전하게 재처리 가능하도록 함.
-
-    Returns:
-        (복구된 정산 수, 복구된 로그 수)
-    """
-    _session = session_factory or get_session
-
-    with _session() as session:
-        settlements = SettlementRepository(session).recover_stale_records()
-        logs = IssueLogRepository(session).recover_stale_records()
-
-    if settlements or logs:
-        logger.info("recovered_stale_records", settlements=settlements, logs=logs)
-
-    return settlements, logs
-
-
-def sync_to_sheets(
-    row: SettlementRow,
-    log_id: int,
-    *,
-    is_update: bool = False,
-    sheets: SpreadsheetGateway | None = None,
-) -> bool:
-    """정산 데이터를 Google Sheets로 동기화.
-
-    정산 시트 (upsert) + 정산이슈로그 시트 (append) 모두 저장.
-    예외 발생 시 실패로 처리.
-    """
-    _sheets = sheets or _get_sheets()
-    _sheets.save_settlement_row(row, is_update=is_update)
-    _sheets.append_issue_log_row(row, str(log_id))
-    return True
-
-
-def sync_pending_records(
-    *,
-    sheets: SpreadsheetGateway | None = None,
-    session_factory: SessionFactory | None = None,
-    record_delay: float = 2.0,
-) -> tuple[int, int]:
-    """미동기화 레코드 일괄 동기화 (배치 작업용).
-
-    처리 흐름:
-    1. claim_unsynced()로 조회 + in_progress 상태 변경 (같은 트랜잭션)
-    2. 외부 API(Sheets) 호출은 트랜잭션 밖에서
-    3. 성공/실패 시 DB 업데이트는 별도 트랜잭션에서
-
-    Args:
-        record_delay: 레코드 간 대기 시간(초). API rate limit 방어용.
-
-    Returns:
-        (동기화된 정산 수, 동기화된 로그 수)
-    """
-    _sheets = sheets or _get_sheets()
-    _session = session_factory or get_session
-
-    synced_settlements = 0
-    synced_logs = 0
-
-    with _session() as session:
-        settlements = SettlementRepository(session).claim_unsynced(limit=100)
-        logs = IssueLogRepository(session).claim_unsynced(limit=100)
-
-    for i, settlement in enumerate(settlements):
-        if i > 0 and record_delay > 0:
-            time.sleep(record_delay)
-        try:
-            row = _entity_to_row(settlement, include_updated_at=True)
-            is_update = settlement.sheets_synced_at is not None
-            _sheets.save_settlement_row(row, is_update=is_update)
-            with _session() as session:
-                SettlementRepository(session).mark_synced(settlement.id)
-            synced_settlements += 1
-        except (SpreadsheetError, APIError, SQLAlchemyError) as e:
-            logger.warning(
-                "retry_sync_failed",
-                record_type="settlement",
-                booking_key=settlement.booking_key,
-                error=str(e),
+        if settlements or logs:
+            logger.info(
+                "recovered_stale_records",
+                settlements=settlements,
+                logs=logs,
             )
-            with _session() as session:
-                SettlementRepository(session).mark_sync_failed(settlement.id, str(e))
 
-    for i, log in enumerate(logs):
-        if i > 0 and record_delay > 0:
-            time.sleep(record_delay)
-        try:
-            row = _entity_to_row(log, include_updated_at=False)
-            _sheets.append_issue_log_row(row, str(log.id))
-            with _session() as session:
-                IssueLogRepository(session).mark_synced(log.id)
-            synced_logs += 1
-        except (SpreadsheetError, APIError, SQLAlchemyError) as e:
-            logger.warning(
-                "retry_sync_failed",
-                record_type="issue_log",
-                booking_key=log.booking_key,
-                error=str(e),
+        return settlements, logs
+
+    def sync_pending_records(
+        self,
+        *,
+        record_delay: float = 2.0,
+    ) -> tuple[int, int]:
+        synced_settlements = 0
+        synced_logs = 0
+
+        settlements, logs = self._processor.claim_unsynced()
+
+        for i, settlement in enumerate(settlements):
+            if i > 0 and record_delay > 0:
+                time.sleep(record_delay)
+            try:
+                row = SettlementRow.from_entity(settlement, include_updated_at=True)
+                is_update = settlement.sheets_synced_at is not None
+                self._sheets.save_settlement_row(row, is_update=is_update)
+                self._processor.mark_settlement_synced(settlement.id)
+                synced_settlements += 1
+            except (SpreadsheetError, APIError, SQLAlchemyError) as e:
+                logger.warning(
+                    "retry_sync_failed",
+                    record_type="settlement",
+                    booking_key=settlement.booking_key,
+                    error=str(e),
+                )
+                self._processor.mark_settlement_failed(settlement.id, str(e))
+
+        for i, log in enumerate(logs):
+            if i > 0 and record_delay > 0:
+                time.sleep(record_delay)
+            try:
+                row = SettlementRow.from_entity(log, include_updated_at=False)
+                self._sheets.append_issue_log_row(row, str(log.id))
+                self._processor.mark_log_synced(log.id)
+                synced_logs += 1
+            except (SpreadsheetError, APIError, SQLAlchemyError) as e:
+                logger.warning(
+                    "retry_sync_failed",
+                    record_type="issue_log",
+                    booking_key=log.booking_key,
+                    error=str(e),
+                )
+                self._processor.mark_log_failed(log.id, str(e))
+
+        if synced_settlements or synced_logs:
+            logger.info(
+                "sync_completed",
+                settlements=synced_settlements,
+                logs=synced_logs,
             )
-            with _session() as session:
-                IssueLogRepository(session).mark_sync_failed(log.id, str(e))
 
-    if synced_settlements or synced_logs:
-        logger.info(
-            "sync_completed",
-            settlements=synced_settlements,
-            logs=synced_logs,
-        )
+        return synced_settlements, synced_logs
 
-    return synced_settlements, synced_logs
+    def lazy_sync_settlement_completed(
+        self,
+        booking_key: str,
+    ) -> bool:
+        """Sheets에서 삭제된(정산완료) 행을 DB에 반영한다.
 
-
-@runtime_checkable
-class RowConvertible(Protocol):
-    settlement_day: str
-    user_name: str
-    customer_name: str
-    booking_key: str
-    company_name: str
-    company_sub_name: str
-    settlement_cost: int | None
-    carmore_cost: int | None
-    user_refund_cost: int | None
-    issue_type: str
-    sales_channel: str
-    description: str
-    status: str
-    approver_name: str
-    thread_url: str
-    reviewer_name: str
-    rejection_reason: str
-    created_at: datetime
-
-
-def _entity_to_row(
-    entity: RowConvertible, *, include_updated_at: bool = True
-) -> SettlementRow:
-    updated_at = ""
-    if include_updated_at and hasattr(entity, "updated_at"):
-        updated_at = entity.updated_at.strftime(DateFormat.DATETIME)
-
-    return SettlementRow(
-        settlement_day=entity.settlement_day,
-        user_name=entity.user_name,
-        customer_name=entity.customer_name,
-        booking_key=entity.booking_key,
-        company_name=entity.company_name,
-        company_sub_name=entity.company_sub_name,
-        settlement_cost=format_cost(entity.settlement_cost),
-        carmore_cost=format_cost(entity.carmore_cost),
-        user_refund_cost=format_cost(entity.user_refund_cost),
-        issue_type=entity.issue_type,
-        sales_channel=entity.sales_channel,
-        description=entity.description,
-        status=entity.status,
-        approver_name=entity.approver_name,
-        thread_url=entity.thread_url,
-        created_at=entity.created_at.strftime(DateFormat.DATETIME),
-        updated_at=updated_at,
-        reviewer_name=entity.reviewer_name,
-        rejection_reason=entity.rejection_reason,
-        settlement_completed=(
-            "TRUE" if getattr(entity, "settlement_completed", False) else "FALSE"
-        ),
-    )
+        현재 미활성 상태 — 호출부가 없음.
+        Sheets 정산완료 프로세스가 확정되면 listener 또는 스케줄러에서 호출 예정.
+        """
+        return self._processor.lazy_complete_settlement(booking_key)

@@ -46,6 +46,19 @@ class MessageContext:
         return self.thread_ts or None
 
 
+def extract_text_value(values: dict, block_id: str, action_id: str) -> str:
+    return values.get(block_id, {}).get(action_id, {}).get("value", "") or ""
+
+
+def extract_date_value(values: dict, block_id: str, action_id: str) -> str:
+    return values.get(block_id, {}).get(action_id, {}).get("selected_date", "") or ""
+
+
+def extract_select_value(values: dict, block_id: str, action_id: str) -> str:
+    selected = values.get(block_id, {}).get(action_id, {}).get("selected_option", {})
+    return selected.get("text", {}).get("text", "") if selected else ""
+
+
 def action_value(body: Mapping[str, Any], default: str = "{}") -> str:
     try:
         value = body["actions"][0]["value"]

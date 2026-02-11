@@ -8,7 +8,7 @@ def get_user_real_name(client: WebClient, user_id: str) -> str:
     try:
         result = client.users_info(user=user_id)
         return result["user"]["real_name"]
-    except SlackApiError:
+    except (SlackApiError, KeyError):
         return ""
 
 
@@ -40,19 +40,6 @@ def get_thread_parent_message(
     except SlackApiError:
         pass
     return None
-
-
-def extract_text_value(values: dict, block_id: str, action_id: str) -> str:
-    return values.get(block_id, {}).get(action_id, {}).get("value", "") or ""
-
-
-def extract_date_value(values: dict, block_id: str, action_id: str) -> str:
-    return values.get(block_id, {}).get(action_id, {}).get("selected_date", "") or ""
-
-
-def extract_select_text(values: dict, block_id: str, action_id: str) -> str:
-    selected = values.get(block_id, {}).get(action_id, {}).get("selected_option", {})
-    return selected.get("text", {}).get("text", "") if selected else ""
 
 
 def find_message_by_text(

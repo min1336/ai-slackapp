@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass, fields
 from datetime import datetime
 from enum import StrEnum
+from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, field_validator
 
@@ -88,6 +89,28 @@ def format_cost(value: int | None) -> str:
     return str(value)
 
 
+@runtime_checkable
+class RowConvertible(Protocol):
+    settlement_day: str
+    user_name: str
+    customer_name: str
+    booking_key: str
+    company_name: str
+    company_sub_name: str
+    settlement_cost: int | None
+    carmore_cost: int | None
+    user_refund_cost: int | None
+    issue_type: str
+    sales_channel: str
+    description: str
+    status: str
+    approver_name: str
+    thread_url: str
+    reviewer_name: str
+    rejection_reason: str
+    created_at: datetime
+
+
 @dataclass(slots=True)
 class SettlementRow:
     settlement_day: str
@@ -143,6 +166,44 @@ class SettlementRow:
             rejection_reason=rejection_reason,
             created_at=now,
             updated_at=now,
+        )
+
+    @classmethod
+    def from_entity(
+        cls,
+        entity: RowConvertible,
+        *,
+        include_updated_at: bool = True,
+    ) -> SettlementRow:
+        from app.constants import DateFormat
+
+        updated_at = ""
+        if include_updated_at and hasattr(entity, "updated_at"):
+            updated_at = entity.updated_at.strftime(DateFormat.DATETIME)
+
+        return cls(
+            settlement_day=entity.settlement_day,
+            user_name=entity.user_name,
+            customer_name=entity.customer_name,
+            booking_key=entity.booking_key,
+            company_name=entity.company_name,
+            company_sub_name=entity.company_sub_name,
+            settlement_cost=format_cost(entity.settlement_cost),
+            carmore_cost=format_cost(entity.carmore_cost),
+            user_refund_cost=format_cost(entity.user_refund_cost),
+            issue_type=entity.issue_type,
+            sales_channel=entity.sales_channel,
+            description=entity.description,
+            status=entity.status,
+            approver_name=entity.approver_name,
+            thread_url=entity.thread_url,
+            created_at=entity.created_at.strftime(DateFormat.DATETIME),
+            updated_at=updated_at,
+            reviewer_name=entity.reviewer_name,
+            rejection_reason=entity.rejection_reason,
+            settlement_completed=(
+                "TRUE" if getattr(entity, "settlement_completed", False) else "FALSE"
+            ),
         )
 
     def to_dict(self) -> dict[str, str]:

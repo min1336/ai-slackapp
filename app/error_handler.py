@@ -6,7 +6,6 @@ from slack_bolt import App
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
-from app.config import get_app_config
 from app.core import get_logger
 from app.exceptions import AppError, SlackError, SpreadsheetError, ValidationError
 
@@ -65,8 +64,9 @@ def send_monitoring_alert(
     body: dict[str, Any],
     channel_id: str | None,
     user_id: str | None,
+    *,
+    error_channel_id: str,
 ) -> None:
-    error_channel_id = get_app_config().error_channel_id
     if not error_channel_id:
         logger.debug(
             "monitoring_alert_skipped",
@@ -135,7 +135,63 @@ def send_monitoring_alert(
         logger.error("monitoring_alert_failed", error=str(e))
 
 
-def register_error_handler(app: App) -> None:
+def _handle_error_impl(
+    error: Exception,
+    body: dict[str, Any],
+    client: WebClient,
+    *,
+    error_channel_id: str,
+) -> None:
+    """에러 핸들러 구현 — 테스트 가능한 순수 로직."""
+    channel_id, user_id, thread_ts = extract_context_from_body(body)
+
+    if is_user_error(error):
+        # 400대 에러: 사용자 실수이므로 info 로그만, 모니터링 알림 불필요
+        logger.info(
+            "user_error",
+            error_type=type(error).__name__,
+            error=str(error),
+            channel_id=channel_id,
+            user_id=user_id,
+        )
+    else:
+        # 500대 에러: 시스템 에러이므로 exception 로그 + 모니터링 알림
+        logger.exception(
+            "system_error",
+            error_type=type(error).__name__,
+            error=str(error),
+            channel_id=channel_id,
+            user_id=user_id,
+        )
+        send_monitoring_alert(
+            client,
+            error,
+            body,
+            channel_id,
+            user_id,
+            error_channel_id=error_channel_id,
+        )
+
+    if channel_id and user_id:
+        emoji, _ = get_error_emoji_and_type(error)
+        user_message = (
+            error.user_message
+            if isinstance(error, AppError)
+            else "예상치 못한 오류가 발생했습니다. 관리자에게 문의해주세요."
+        )
+
+        try:
+            client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f":{emoji}: {user_message}",
+                thread_ts=thread_ts,
+            )
+        except (SlackApiError, OSError) as e:
+            logger.error("ephemeral_error_message_failed", error=str(e))
+
+
+def register_error_handler(app: App, *, error_channel_id: str) -> None:
     @app.error
     def handle_error(
         error: Exception,
@@ -143,42 +199,4 @@ def register_error_handler(app: App) -> None:
         client: WebClient,
         **_kwargs,
     ) -> None:
-        channel_id, user_id, thread_ts = extract_context_from_body(body)
-
-        if is_user_error(error):
-            # 400대 에러: 사용자 실수이므로 info 로그만, 모니터링 알림 불필요
-            logger.info(
-                "user_error",
-                error_type=type(error).__name__,
-                error=str(error),
-                channel_id=channel_id,
-                user_id=user_id,
-            )
-        else:
-            # 500대 에러: 시스템 에러이므로 exception 로그 + 모니터링 알림
-            logger.exception(
-                "system_error",
-                error_type=type(error).__name__,
-                error=str(error),
-                channel_id=channel_id,
-                user_id=user_id,
-            )
-            send_monitoring_alert(client, error, body, channel_id, user_id)
-
-        if channel_id and user_id:
-            emoji, _ = get_error_emoji_and_type(error)
-            user_message = (
-                error.user_message
-                if isinstance(error, AppError)
-                else "예상치 못한 오류가 발생했습니다. 관리자에게 문의해주세요."
-            )
-
-            try:
-                client.chat_postEphemeral(
-                    channel=channel_id,
-                    user=user_id,
-                    text=f":{emoji}: {user_message}",
-                    thread_ts=thread_ts,
-                )
-            except (SlackApiError, OSError) as e:
-                logger.error("ephemeral_error_message_failed", error=str(e))
+        _handle_error_impl(error, body, client, error_channel_id=error_channel_id)

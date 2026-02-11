@@ -1,57 +1,39 @@
-from __future__ import annotations
+"""ThreadDiscoveryService 스레드 탐색 테스트 (constructor DI)"""
 
-from unittest.mock import MagicMock, patch
+from __future__ import annotations
 
 import pytest
 
 from app.infrastructure.database.repository import ThreadReferenceRepository
 from app.models import ThreadLocation
-from app.services.thread_discovery_service import (
-    find_issue_thread,
-    register_origin_thread,
-    save_thread_reference,
-)
-from tests.fakes.fake_database import FakeDatabase
+from app.services.thread_discovery_service import ThreadDiscoveryService
+from app.services.thread_reference_store import ThreadReferenceStore
+from tests.fakes.fake_slack import FakeSlackReader
 
 
 @pytest.fixture
-def fake_db():
-    return FakeDatabase()
+def fake_reader():
+    return FakeSlackReader()
 
 
 @pytest.fixture
-def mock_client():
-    return MagicMock()
+def store(fake_db):
+    return ThreadReferenceStore(fake_db.get_session)
 
 
 @pytest.fixture
-def mock_config():
-    config = MagicMock()
-    config.slack_channels.reservation = "C_ISSUE"
-    with patch(
-        "app.services.thread_discovery_service.get_app_config",
-        return_value=config,
-    ):
-        yield config
+def service(store, fake_reader):
+    return ThreadDiscoveryService(store, fake_reader, reservation_channel="C_ISSUE")
 
 
 class TestFindIssueThread:
-    def test_채널_미설정시_None_반환(self, mock_client, fake_db):
-        config = MagicMock()
-        config.slack_channels.reservation = ""
-        with patch(
-            "app.services.thread_discovery_service.get_app_config",
-            return_value=config,
-        ):
-            result = find_issue_thread(
-                "BK-001",
-                mock_client,
-                session_factory=fake_db.get_session,
-            )
+    def test_채널_미설정시_None_반환(self, store, fake_reader):
+        svc = ThreadDiscoveryService(store, fake_reader, reservation_channel="")
+        result = svc.find_issue_thread("BK-001")
 
         assert result is None
 
-    def test_DB에_있으면_즉시_반환(self, mock_client, mock_config, fake_db):
+    def test_DB에_있으면_즉시_반환(self, fake_db, service):
         # Given — DB에 레퍼런스 저장
         with fake_db.get_session() as session:
             repo = ThreadReferenceRepository(session)
@@ -62,41 +44,22 @@ class TestFindIssueThread:
             )
 
         # When
-        result = find_issue_thread(
-            "BK-001",
-            mock_client,
-            session_factory=fake_db.get_session,
-        )
+        result = service.find_issue_thread("BK-001")
 
         # Then
         assert result == ThreadLocation(channel_id="C_ISSUE", thread_ts="111.111")
 
-    @patch("app.services.thread_discovery_service.find_message_by_text")
-    def test_DB_미스시_Slack_API_폴백(
-        self, mock_find, mock_client, mock_config, fake_db
-    ):
-        mock_find.return_value = "222.222"
+    def test_DB_미스시_Slack_API_폴백(self, fake_reader, service):
+        fake_reader.messages_by_text[("C_ISSUE", "BK-001")] = "222.222"
 
-        result = find_issue_thread(
-            "BK-001",
-            mock_client,
-            session_factory=fake_db.get_session,
-        )
+        result = service.find_issue_thread("BK-001")
 
         assert result == ThreadLocation(channel_id="C_ISSUE", thread_ts="222.222")
-        mock_find.assert_called_once_with(mock_client, "C_ISSUE", "BK-001")
 
-    @patch("app.services.thread_discovery_service.find_message_by_text")
-    def test_Slack_API_폴백_후_DB에_캐시_저장(
-        self, mock_find, mock_client, mock_config, fake_db
-    ):
-        mock_find.return_value = "333.333"
+    def test_Slack_API_폴백_후_DB에_캐시_저장(self, fake_db, fake_reader, service):
+        fake_reader.messages_by_text[("C_ISSUE", "BK-001")] = "333.333"
 
-        find_issue_thread(
-            "BK-001",
-            mock_client,
-            session_factory=fake_db.get_session,
-        )
+        service.find_issue_thread("BK-001")
 
         # DB에 캐시되었는지 확인
         with fake_db.get_session() as session:
@@ -106,28 +69,19 @@ class TestFindIssueThread:
             assert ref.thread_ts == "333.333"
             assert ref.channel_id == "C_ISSUE"
 
-    @patch("app.services.thread_discovery_service.find_message_by_text")
-    def test_Slack_API에서도_못_찾으면_None(
-        self, mock_find, mock_client, mock_config, fake_db
-    ):
-        mock_find.return_value = None
-
-        result = find_issue_thread(
-            "BK-001",
-            mock_client,
-            session_factory=fake_db.get_session,
-        )
+    def test_Slack_API에서도_못_찾으면_None(self, service):
+        # FakeSlackReader는 기본적으로 None 반환
+        result = service.find_issue_thread("BK-001")
 
         assert result is None
 
 
 class TestSaveThreadReference:
-    def test_기본_저장(self, fake_db):
-        save_thread_reference(
+    def test_기본_저장(self, fake_db, service):
+        service.save_thread_reference(
             booking_key="BK-001",
             channel_id="C123",
             thread_ts="111.111",
-            session_factory=fake_db.get_session,
         )
 
         with fake_db.get_session() as session:
@@ -136,13 +90,12 @@ class TestSaveThreadReference:
             assert ref is not None
             assert ref.root_booking_key == "BK-001"
 
-    def test_root_booking_key_지정(self, fake_db):
-        save_thread_reference(
+    def test_root_booking_key_지정(self, fake_db, service):
+        service.save_thread_reference(
             booking_key="BK-002",
             channel_id="C123",
             thread_ts="111.111",
             root_booking_key="BK-001",
-            session_factory=fake_db.get_session,
         )
 
         with fake_db.get_session() as session:
@@ -153,12 +106,11 @@ class TestSaveThreadReference:
 
 
 class TestRegisterOriginThread:
-    def test_최초_스레드_등록(self, fake_db):
-        register_origin_thread(
+    def test_최초_스레드_등록(self, fake_db, service):
+        service.register_origin_thread(
             booking_key="BK-001",
             channel_id="C_ISSUE",
             thread_ts="111.111",
-            session_factory=fake_db.get_session,
         )
 
         with fake_db.get_session() as session:
@@ -169,13 +121,12 @@ class TestRegisterOriginThread:
             assert ref.thread_ts == "111.111"
             assert ref.root_booking_key == "BK-001"
 
-    def test_중복_등록은_안전하게_무시된다(self, fake_db):
+    def test_중복_등록은_안전하게_무시된다(self, fake_db, service):
         for _ in range(3):
-            register_origin_thread(
+            service.register_origin_thread(
                 booking_key="BK-001",
                 channel_id="C_ISSUE",
                 thread_ts="111.111",
-                session_factory=fake_db.get_session,
             )
 
         with fake_db.get_session() as session:
