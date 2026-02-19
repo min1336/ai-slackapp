@@ -34,6 +34,10 @@ class AlreadyProcessedError(AppError):
     _default_user_message = "이미 처리된 건입니다."
 
 
+class SettlementCompletedError(AlreadyProcessedError):
+    _default_user_message = "이미 정산완료된 건입니다."
+
+
 class DatabaseError(AppError):
     """데이터베이스 저장/조회 중 발생하는 오류."""
 

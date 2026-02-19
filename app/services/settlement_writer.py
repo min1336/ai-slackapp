@@ -5,7 +5,11 @@ from typing import TYPE_CHECKING
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.core import get_logger
-from app.exceptions import AlreadyProcessedError, DatabaseError
+from app.exceptions import (
+    AlreadyProcessedError,
+    DatabaseError,
+    SettlementCompletedError,
+)
 from app.infrastructure.database import SettlementRepository
 from app.models import SettlementData, SettlementRow, SettlementStatus
 
@@ -83,6 +87,14 @@ class SettlementWriter:
                 )
             )
 
+    def mark_settlement_completed(self, booking_key: str) -> None:
+        """Sheets 정산완료 상태를 DB에 반영한다."""
+        with self._get_session() as session:
+            repo = SettlementRepository(session)
+            existing = repo.get_by_booking_key(booking_key)
+            if existing:
+                existing.settlement_completed = True
+
     @staticmethod
     def _validate_not_already_processed(
         repo: SettlementRepository,
@@ -94,6 +106,12 @@ class SettlementWriter:
             SettlementStatus.REJECTED,
         ):
             return
+
+        if repo.has_completed_settlement(booking_key):
+            raise SettlementCompletedError(
+                message=f"Settlement {booking_key} already completed",
+                details={"booking_key": booking_key, "source": "db"},
+            )
 
         existing = repo.get_active_by_booking_key(booking_key)
         if existing and existing.status != SettlementStatus.REQUESTED.value:

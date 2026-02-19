@@ -8,7 +8,7 @@ from slack_sdk.errors import SlackApiError
 
 from app.constants.ui_texts import HeaderText
 from app.core import get_logger
-from app.exceptions import AlreadyProcessedError, AppError
+from app.exceptions import AlreadyProcessedError, AppError, SettlementCompletedError
 from app.models import SettlementData, SettlementStatus
 from app.views.blocks import (
     build_approval_request_message,
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from app.infrastructure.protocols import (
         SlackMessageReader,
         SlackMessageWriter,
+        SpreadsheetGateway,
     )
     from app.services.settlement_writer import SettlementWriter
 
@@ -36,11 +37,13 @@ class ApprovalService:
         writer: SlackMessageWriter,
         settlement_writer: SettlementWriter,
         approvers: Approvers,
+        sheets: SpreadsheetGateway | None = None,
     ) -> None:
         self._reader = reader
         self._writer = writer
         self._settlement_writer = settlement_writer
         self._approvers = approvers
+        self._sheets = sheets
 
     def approve(
         self,
@@ -81,6 +84,8 @@ class ApprovalService:
                 data.original_channel_id, data.original_message_ts
             )
 
+            self._guard_settlement_completed(data.booking_key)
+
             self._settlement_writer.save(
                 data=data,
                 status=SettlementStatus.APPROVED,
@@ -99,14 +104,14 @@ class ApprovalService:
             )
             self._update_original_thread(data, title, approver_name, approved_text)
             self._mention_requester(data, mention_text)
-        except AlreadyProcessedError:
+        except AlreadyProcessedError as e:
             logger.info("approve_already_processed", is_transfer=is_transfer)
             self._restore_and_notify(
                 channel_id,
                 message_ts,
                 user_id,
                 original_blocks,
-                "⚠️ 이미 처리된 건입니다.",
+                f"⚠️ {e.user_message}",
             )
         except AppError as e:
             logger.exception("approve_failed", is_transfer=is_transfer)
@@ -203,6 +208,16 @@ class ApprovalService:
                 channel=data.original_channel_id,
                 thread_ts=data.original_thread_ts or None,
                 text=f"<@{data.requester_id}> {mention_text}",
+            )
+
+    def _guard_settlement_completed(self, booking_key: str) -> None:
+        if self._sheets is None:
+            return
+        if self._sheets.is_settlement_completed(booking_key):
+            self._settlement_writer.mark_settlement_completed(booking_key)
+            raise SettlementCompletedError(
+                message=f"Settlement {booking_key} already completed in Sheets",
+                details={"booking_key": booking_key, "source": "sheets"},
             )
 
     def _restore_and_notify(

@@ -124,6 +124,17 @@ class SettlementRepository:
         result = self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    def has_completed_settlement(self, booking_key: str) -> bool:
+        stmt = (
+            select(Settlement.id)
+            .where(
+                Settlement.booking_key == booking_key,
+                Settlement.settlement_completed == True,  # noqa: E712
+            )
+            .limit(1)
+        )
+        return self.session.execute(stmt).scalar_one_or_none() is not None
+
     def list_unsynced(self, limit: int = 100) -> list[Settlement]:
         """동기화 안 된 정산 목록 조회. (하위 호환용, claim_unsynced 사용 권장)"""
         stmt = (

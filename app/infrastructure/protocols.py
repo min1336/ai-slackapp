@@ -22,6 +22,8 @@ class SpreadsheetGateway(Protocol):
         self, booking_key: str, sheet_name: str | None = None
     ) -> int | None: ...
 
+    def is_settlement_completed(self, booking_key: str) -> bool: ...
+
 
 @runtime_checkable
 class SlackMessageReader(Protocol):

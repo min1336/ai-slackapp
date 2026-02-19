@@ -75,12 +75,14 @@ class ServiceContainer:
             self.writer,
             self.settlement_writer,
             approvers,
+            sheets=_sheets,
         )
         self.rejection = RejectionService(
             self.reader,
             self.writer,
             self.settlement_writer,
             approvers,
+            sheets=_sheets,
         )
         self.registration = SettlementRegistrationService(
             self.reader,

@@ -274,6 +274,30 @@ class SpreadsheetService:
                 },
             ) from e
 
+    @retry_on_rate_limit()
+    def is_settlement_completed(self, booking_key: str) -> bool:
+        try:
+            sheet_name = self._sheet_name("settlement")
+            worksheet = self._get_worksheet(sheet_name)
+            mapping = self._resolve_mapping(worksheet, "settlement")
+            matches = worksheet.findall(booking_key)
+
+            booking_col = mapping.column_of("booking_key")
+            for cell in matches:
+                if cell.col != booking_col:
+                    continue
+                data = mapping.row_to_dict(worksheet.row_values(cell.row))
+                if data.get("settlement_completed") == "TRUE":
+                    return True
+
+            return False
+        except (APIError, GSpreadException, ValueError, KeyError):
+            logger.warning(
+                "settlement_completed_check_failed",
+                booking_key=booking_key,
+            )
+            return False
+
     def _update_settlement_row(
         self,
         row: SettlementRow,

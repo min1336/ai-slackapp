@@ -8,7 +8,7 @@ from slack_sdk.errors import SlackApiError
 from app.constants import is_transfer_description, request_type_label
 from app.constants.ui_texts import HeaderText
 from app.core import get_logger
-from app.exceptions import AlreadyProcessedError, AppError
+from app.exceptions import AlreadyProcessedError, AppError, SettlementCompletedError
 from app.models import (
     RejectionMetadata,
     SettlementData,
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from app.infrastructure.protocols import (
         SlackMessageReader,
         SlackMessageWriter,
+        SpreadsheetGateway,
     )
     from app.services.settlement_writer import SettlementWriter
 
@@ -41,11 +42,13 @@ class RejectionService:
         writer: SlackMessageWriter,
         settlement_writer: SettlementWriter,
         approvers: Approvers,
+        sheets: SpreadsheetGateway | None = None,
     ) -> None:
         self._reader = reader
         self._writer = writer
         self._settlement_writer = settlement_writer
         self._approvers = approvers
+        self._sheets = sheets
 
     def reject(
         self,
@@ -83,6 +86,8 @@ class RejectionService:
 
             self._show_processing(metadata, is_transfer)
             processing_shown = True
+
+            self._guard_settlement_completed(data.booking_key)
 
             self._settlement_writer.save(
                 data=data,
@@ -227,6 +232,16 @@ class RejectionService:
                     f" {request_type}가 반려되었습니다.\n"
                     f"*반려 사유:* {rejection_reason}"
                 ),
+            )
+
+    def _guard_settlement_completed(self, booking_key: str) -> None:
+        if self._sheets is None:
+            return
+        if self._sheets.is_settlement_completed(booking_key):
+            self._settlement_writer.mark_settlement_completed(booking_key)
+            raise SettlementCompletedError(
+                message=f"Settlement {booking_key} already completed in Sheets",
+                details={"booking_key": booking_key, "source": "sheets"},
             )
 
     def _restore_rejection(

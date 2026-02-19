@@ -61,6 +61,9 @@ class FakeSpreadsheet:
             return None
         return 1 if booking_key in self.settlement_rows else None
 
+    def is_settlement_completed(self, booking_key: str) -> bool:
+        return booking_key in self.completed_keys
+
     def clear(self):
         """테스트 간 상태 초기화"""
         self.settlement_rows.clear()
