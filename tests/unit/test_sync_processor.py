@@ -1,6 +1,6 @@
 """SyncProcessor 컴포넌트 테스트
 
-에러 경로 + 배치 메서드 + lazy_complete_settlement 경계값 커버.
+에러 경로 + 배치 메서드 + mark_settlements_completed 커버.
 """
 
 from __future__ import annotations
@@ -277,45 +277,55 @@ class TestBatchMarkMethods:
             assert lg.sheets_sync_error == "로그 에러"
 
 
-# ── lazy_complete_settlement ────────────────────
+# ── mark_settlements_completed ─────────────────
 
 
-class TestLazyCompleteSettlement:
-    def test_정상_완료처리(
-        self, fake_db, processor, fake_sheets, sample_settlement_data
-    ):
+class TestMarkSettlementsCompleted:
+    def test_정상_일괄_완료(self, fake_db, processor, sample_settlement_data):
         row = _make_row(sample_settlement_data)
-        s_id, l_id = _create_records(fake_db, row)
-        processor.mark_synced(s_id, l_id)
-        # Sheets에서 해당 행이 삭제됨 (정산완료 시뮬레이션)
-        fake_sheets.completed_keys.add(row.booking_key)
+        s_id, _ = _create_records(fake_db, row)
 
-        result = processor.lazy_complete_settlement(row.booking_key)
+        result = processor.mark_settlements_completed({row.booking_key})
 
-        assert result is True
+        assert result == [row.booking_key]
         with fake_db.get_session() as session:
             s = SettlementRepository(session).get(s_id)
             assert s.settlement_completed is True
 
-    def test_DB에_없으면_False(self, processor):
-        assert processor.lazy_complete_settlement("NONEXISTENT") is False
+    def test_빈_집합이면_빈_리스트(self, processor):
+        assert processor.mark_settlements_completed(set()) == []
 
-    def test_sheets_synced_False면_False(
-        self, fake_db, processor, sample_settlement_data
-    ):
+    def test_이미_완료된_건_스킵(self, fake_db, processor, sample_settlement_data):
         row = _make_row(sample_settlement_data)
-        _create_records(fake_db, row)
-        # sheets_synced 기본값 = False
+        s_id, _ = _create_records(fake_db, row)
+        # 먼저 완료 처리
+        with fake_db.get_session() as session:
+            s = SettlementRepository(session).get(s_id)
+            s.settlement_completed = True
 
-        assert processor.lazy_complete_settlement(row.booking_key) is False
+        result = processor.mark_settlements_completed({row.booking_key})
 
-    def test_시트에_행_존재하면_False(
-        self, fake_db, processor, fake_sheets, sample_settlement_data
-    ):
-        row = _make_row(sample_settlement_data)
-        s_id, l_id = _create_records(fake_db, row)
-        processor.mark_synced(s_id, l_id)
-        # Sheets에 행이 여전히 존재 (정산 미완료)
-        fake_sheets.settlement_rows[row.booking_key] = row.to_dict()
+        assert result == []
 
-        assert processor.lazy_complete_settlement(row.booking_key) is False
+    def test_DB에_없는_키_무시(self, processor):
+        result = processor.mark_settlements_completed({"NONEXISTENT"})
+
+        assert result == []
+
+    def test_여러_건_일괄_처리(self, fake_db, processor):
+        from tests.factories import SettlementDataFactory
+
+        keys = []
+        for i in range(3):
+            data = SettlementDataFactory.create(booking_key=f"BATCH-{i}")
+            row = _make_row(data)
+            _create_records(fake_db, row)
+            keys.append(row.booking_key)
+
+        result = processor.mark_settlements_completed(set(keys))
+
+        assert sorted(result) == sorted(keys)
+        with fake_db.get_session() as session:
+            for key in keys:
+                s = SettlementRepository(session).get_by_booking_key(key)
+                assert s.settlement_completed is True

@@ -298,6 +298,30 @@ class SpreadsheetService:
             )
             return False
 
+    @retry_on_rate_limit()
+    def get_completed_booking_keys(self) -> set[str]:
+        try:
+            sheet_name = self._sheet_name("settlement")
+            worksheet = self._get_worksheet(sheet_name)
+            mapping = self._resolve_mapping(worksheet, "settlement")
+
+            all_rows = worksheet.get_all_values()
+            if len(all_rows) <= 1:
+                return set()
+
+            completed_keys: set[str] = set()
+            for row_values in all_rows[1:]:
+                data = mapping.row_to_dict(row_values)
+                if data.get("settlement_completed") == "TRUE":
+                    booking_key = data.get("booking_key", "")
+                    if booking_key:
+                        completed_keys.add(booking_key)
+
+            return completed_keys
+        except (APIError, GSpreadException, ValueError, KeyError) as e:
+            logger.warning("get_completed_booking_keys_failed", error=str(e))
+            return set()
+
     def _update_settlement_row(
         self,
         row: SettlementRow,

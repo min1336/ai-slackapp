@@ -137,6 +137,92 @@ def test_sync_pending_records_settlement_only_failure(fake_db, sample_settlement
         assert log.sync_status == "completed"
 
 
+# ── reverse_sync_settlement_completed ──────────
+
+
+class TestReverseSyncSettlementCompleted:
+    def test_정상_역동기화(
+        self, fake_db, sync_service, fake_sheets, sample_settlement_data
+    ):
+        row = SettlementRow.from_settlement_data(
+            data=sample_settlement_data,
+            status=SettlementStatus.APPROVED,
+            approver_name="승인자",
+            thread_url="http://example.com/thread",
+        )
+        s_id, _ = _create_records(fake_db, row)
+        fake_sheets.completed_keys.add(row.booking_key)
+
+        result = sync_service.reverse_sync_settlement_completed()
+
+        assert result == 1
+        with fake_db.get_session() as session:
+            s = SettlementRepository(session).get(s_id)
+            assert s.settlement_completed is True
+
+    def test_이미_완료된_건_재처리_안됨(
+        self, fake_db, sync_service, fake_sheets, sample_settlement_data
+    ):
+        row = SettlementRow.from_settlement_data(
+            data=sample_settlement_data,
+            status=SettlementStatus.APPROVED,
+            approver_name="승인자",
+            thread_url="http://example.com/thread",
+        )
+        s_id, _ = _create_records(fake_db, row)
+        with fake_db.get_session() as session:
+            s = SettlementRepository(session).get(s_id)
+            s.settlement_completed = True
+        fake_sheets.completed_keys.add(row.booking_key)
+
+        result = sync_service.reverse_sync_settlement_completed()
+
+        assert result == 0
+
+    def test_빈_시트_0_반환(self, sync_service):
+        result = sync_service.reverse_sync_settlement_completed()
+
+        assert result == 0
+
+    def test_DB에_없는_booking_key_무시(self, sync_service, fake_sheets):
+        fake_sheets.completed_keys.add("NONEXISTENT-KEY")
+
+        result = sync_service.reverse_sync_settlement_completed()
+
+        assert result == 0
+
+    def test_Sheets_실패시_0_반환(self, sync_service, fake_sheets):
+        fake_sheets.should_fail = True
+
+        result = sync_service.reverse_sync_settlement_completed()
+
+        assert result == 0
+
+    def test_여러_건_일괄_처리(self, fake_db, sync_service, fake_sheets):
+        from tests.factories import SettlementDataFactory
+
+        keys = []
+        for i in range(3):
+            data = SettlementDataFactory.create(booking_key=f"REVERSE-{i}")
+            row = SettlementRow.from_settlement_data(
+                data=data,
+                status=SettlementStatus.APPROVED,
+                approver_name="승인자",
+                thread_url="http://example.com/thread",
+            )
+            _create_records(fake_db, row)
+            fake_sheets.completed_keys.add(row.booking_key)
+            keys.append(row.booking_key)
+
+        result = sync_service.reverse_sync_settlement_completed()
+
+        assert result == 3
+        with fake_db.get_session() as session:
+            for key in keys:
+                s = SettlementRepository(session).get_by_booking_key(key)
+                assert s.settlement_completed is True
+
+
 def test_from_entity_settlement_completed_변환(fake_db, sample_settlement_data):
     """SettlementRow.from_entity가 settlement_completed를 올바르게 변환하는지 확인."""
     row = SettlementRow.from_settlement_data(

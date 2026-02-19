@@ -49,6 +49,13 @@ def _start_sync_worker(sync_service: SyncService, cron_expr: str) -> None:
                         settlements=synced_settlements,
                         logs=synced_logs,
                     )
+
+                newly_completed = sync_service.reverse_sync_settlement_completed()
+                if newly_completed:
+                    logger.info(
+                        "background_reverse_sync_completed",
+                        newly_completed=newly_completed,
+                    )
             except Exception:
                 logger.exception("background_sync_failed")
 

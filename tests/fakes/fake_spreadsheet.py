@@ -64,6 +64,14 @@ class FakeSpreadsheet:
     def is_settlement_completed(self, booking_key: str) -> bool:
         return booking_key in self.completed_keys
 
+    def get_completed_booking_keys(self) -> set[str]:
+        if self.should_fail:
+            raise SpreadsheetError(
+                message="Fake spreadsheet failure",
+                details={"operation": "get_completed_booking_keys"},
+            )
+        return set(self.completed_keys)
+
     def clear(self):
         """테스트 간 상태 초기화"""
         self.settlement_rows.clear()

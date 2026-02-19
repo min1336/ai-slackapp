@@ -126,18 +126,10 @@ class SyncProcessor:
         with self._get_session() as session:
             IssueLogRepository(session).mark_sync_failed(log_id, error)
 
-    def lazy_complete_settlement(self, booking_key: str) -> bool:
-        """Sheets에서 삭제된(정산완료) 행을 DB에 반영."""
+    def mark_settlements_completed(self, completed_keys: set[str]) -> list[str]:
+        if not completed_keys:
+            return []
+
         with self._get_session() as session:
             repo = SettlementRepository(session)
-            existing = repo.get_active_by_booking_key(booking_key)
-            if existing is None:
-                return False
-            if not existing.sheets_synced:
-                return False
-            row_number = self._sheets.find_row_by_booking_key(booking_key)
-            if row_number is not None:
-                return False
-            existing.settlement_completed = True
-            logger.info("lazy_sync_settlement_completed", booking_key=booking_key)
-            return True
+            return repo.mark_completed_by_booking_keys(completed_keys)

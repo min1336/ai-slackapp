@@ -69,6 +69,7 @@ core/                         ← 공통 유틸 (logger.py: structlog 설정)
 - `listener/` → `infrastructure/` 직접 호출 금지
 - `services/` → `listener/` 호출 금지
 - `views/`는 순수하게 Block Kit JSON만 생성
+- **Component 서비스**(`settlement_writer`, `sync_processor` 등)는 외부 API(Sheets, Slack) 직접 의존 금지 — 외부 시스템 조합은 Orchestrator 책임
 
 **DI 패턴:** `ServiceContainer`(Composition Root)가 모든 서비스를 생성·연결. 서비스는 생성자에서 Protocol 타입으로 의존성을 받음. 테스트에서는 Fake 주입 (`tests/fakes/`).
 
@@ -94,7 +95,7 @@ Supabase (PostgreSQL)를 캐시 레이어로 사용. Google Sheets가 primary st
 
 **동기화 방향:**
 - DB → Sheets: `SettlementWriter.save()` → `after_commit` → `SyncProcessor.after_commit()` (활성)
-- Sheets → DB: `SyncService.lazy_sync_settlement_completed()` — Sheets 정산완료를 DB에 반영 (구현됨, 미활성)
+- Sheets → DB: `SyncService.reverse_sync_settlement_completed()` — Sheets 정산완료(TRUE)를 DB에 역동기화 (cron 매일 실행)
 
 ```bash
 # 마이그레이션 상태 확인
@@ -226,7 +227,7 @@ except SlackApiError:
 
 ### 예외 계층
 
-**기본 구조** (`app/exceptions.py`): `AppError(message, user_message, details)` → `SpreadsheetError` | `SlackError` | `ValidationError`.
+**기본 구조** (`app/exceptions.py`): `AppError(message, user_message, details)` → `SpreadsheetError` | `SlackError` | `ValidationError`. `AlreadyProcessedError` → `SettlementCompletedError` (정산완료 건 차단, `_default_user_message = "이미 정산완료된 건입니다."`).
 
 **서브클래스 규칙**: `_default_user_message` 클래스 변수로 기본 메시지 정의 (MRO 기반). `user_message`는 사용자에게 표시, `details`는 모니터링 알림에 포함.
 
@@ -248,6 +249,19 @@ except SlackApiError:
 - **Mock vs Fake 기준:** DB/Sheets 의존 → `FakeDatabase`/`FakeSpreadsheet` (상태 검증), Slack SDK(`WebClient`) 직접 호출 → `Mock()` (행위 검증). `SlackApiError` 생성: `SlackApiError(message="error", response=Mock())` (response 필수)
 - **에러 경로 테스트:** 내부 메서드 실패 시뮬레이션은 `monkeypatch.setattr(instance, "method", _raise)` 허용 (DI 대상이 아닌 self 메서드 한정)
 - Pre-commit 훅: ruff + ruff-format + pytest-unit (3개 모두 커밋 시 자동 실행)
+
+## 개발 방법론 (TDD)
+
+Red-Green-Refactor 사이클로 구현한다:
+
+1. **Red**: 실패하는 테스트를 먼저 작성 — `tests/fakes/`의 Fake + `tests/factories.py`의 Factory 활용
+2. **Green**: 테스트를 통과하는 최소한의 구현
+3. **Refactor**: 중복 제거, 네이밍 개선 (테스트는 계속 통과해야 함)
+
+**원칙:**
+- 새 메서드/클래스 추가 시 테스트를 먼저 작성한 뒤 구현
+- 기존 메서드 삭제/변경 시 관련 테스트를 먼저 삭제/수정한 뒤 코드 변경
+- Fake로 테스트 가능한 설계를 우선 — `Mock()`보다 `FakeDatabase`, `FakeSpreadsheet` 선호
 
 ## 코드 스타일
 

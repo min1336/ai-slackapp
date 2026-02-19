@@ -11,7 +11,6 @@ from app.infrastructure.database.repository import SettlementRepository
 from app.models.settlement import SettlementRow, SettlementStatus
 from app.services.settlement_writer import SettlementWriter
 from app.services.sync_processor import SyncProcessor
-from app.services.sync_service import SyncService
 from tests.fakes.fake_database import FakeDatabase
 from tests.fakes.fake_spreadsheet import FakeSpreadsheet
 
@@ -368,67 +367,6 @@ class TestRaceCondition:
             repo = SettlementRepository(session)
             found = repo.get_by_booking_key(sample_settlement_data.booking_key)
             assert found.status == SettlementStatus.APPROVED.value
-
-
-class TestLazySyncSettlementCompleted:
-    """SyncService.lazy_sync_settlement_completed() 테스트"""
-
-    def _save_and_mark_synced(self, fake_db, sample_settlement_data) -> str:
-        row = SettlementRow.from_settlement_data(
-            data=sample_settlement_data,
-            status=SettlementStatus.APPROVED,
-            approver_name="승인자",
-            thread_url="http://example.com/thread",
-        )
-        with fake_db.get_session() as session:
-            repo = SettlementRepository(session)
-            settlement = repo.save(row)
-            settlement.sheets_synced = True
-            session.commit()
-        return sample_settlement_data.booking_key
-
-    def test_정산완료된_건은_DB_completed_처리(self, fake_db, sample_settlement_data):
-        booking_key = self._save_and_mark_synced(fake_db, sample_settlement_data)
-
-        fake_sheets = FakeSpreadsheet()
-        fake_sheets.settlement_rows[booking_key] = ["row"]
-        fake_sheets.completed_keys.add(booking_key)
-
-        processor = SyncProcessor(fake_db.get_session, fake_sheets)
-        svc = SyncService(processor, fake_sheets)
-        result = svc.lazy_sync_settlement_completed(booking_key)
-
-        assert result is True
-        with fake_db.get_session() as session:
-            repo = SettlementRepository(session)
-            found = repo.get_by_booking_key(booking_key)
-            assert found.settlement_completed is True
-
-    def test_동기화_안된_건은_건너뜀(self, fake_db, sample_settlement_data):
-        row = SettlementRow.from_settlement_data(
-            data=sample_settlement_data,
-            status=SettlementStatus.APPROVED,
-            approver_name="승인자",
-            thread_url="http://example.com/thread",
-        )
-        with fake_db.get_session() as session:
-            repo = SettlementRepository(session)
-            repo.save(row)
-            session.commit()
-
-        booking_key = sample_settlement_data.booking_key
-        fake_sheets = FakeSpreadsheet()
-        fake_sheets.completed_keys.add(booking_key)
-
-        processor = SyncProcessor(fake_db.get_session, fake_sheets)
-        svc = SyncService(processor, fake_sheets)
-        result = svc.lazy_sync_settlement_completed(booking_key)
-
-        assert result is False
-        with fake_db.get_session() as session:
-            repo = SettlementRepository(session)
-            found = repo.get_by_booking_key(booking_key)
-            assert found.settlement_completed is False
 
 
 class TestExceptionTransformation:

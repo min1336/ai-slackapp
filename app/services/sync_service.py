@@ -92,13 +92,32 @@ class SyncService:
 
         return synced_settlements, synced_logs
 
-    def lazy_sync_settlement_completed(
-        self,
-        booking_key: str,
-    ) -> bool:
-        """Sheets에서 삭제된(정산완료) 행을 DB에 반영한다.
+    def reverse_sync_settlement_completed(self) -> int:
+        """Sheets에서 정산완료(TRUE)된 건을 DB에 역동기화한다.
 
-        현재 미활성 상태 — 호출부가 없음.
-        Sheets 정산완료 프로세스가 확정되면 listener 또는 스케줄러에서 호출 예정.
+        Returns:
+            새로 완료 처리된 건수
         """
-        return self._processor.lazy_complete_settlement(booking_key)
+        try:
+            completed_keys = self._sheets.get_completed_booking_keys()
+        except (SpreadsheetError, APIError):
+            logger.warning("reverse_sync_sheets_read_failed")
+            return 0
+
+        if not completed_keys:
+            return 0
+
+        try:
+            newly_completed = self._processor.mark_settlements_completed(completed_keys)
+        except SQLAlchemyError:
+            logger.exception("reverse_sync_db_update_failed")
+            return 0
+
+        if newly_completed:
+            logger.info(
+                "reverse_sync_completed",
+                count=len(newly_completed),
+                booking_keys=newly_completed,
+            )
+
+        return len(newly_completed)

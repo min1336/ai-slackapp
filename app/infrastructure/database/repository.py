@@ -135,6 +135,23 @@ class SettlementRepository:
         )
         return self.session.execute(stmt).scalar_one_or_none() is not None
 
+    def mark_completed_by_booking_keys(self, booking_keys: set[str]) -> list[str]:
+        if not booking_keys:
+            return []
+
+        stmt = select(Settlement).where(
+            Settlement.booking_key.in_(booking_keys),
+            Settlement.settlement_completed == False,  # noqa: E712
+        )
+        records = list(self.session.execute(stmt).scalars().all())
+
+        completed: list[str] = []
+        for record in records:
+            record.settlement_completed = True
+            completed.append(record.booking_key)
+
+        return completed
+
     def list_unsynced(self, limit: int = 100) -> list[Settlement]:
         """동기화 안 된 정산 목록 조회. (하위 호환용, claim_unsynced 사용 권장)"""
         stmt = (
