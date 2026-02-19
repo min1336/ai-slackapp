@@ -20,6 +20,7 @@ from app.services.sync_processor import SyncProcessor
 from app.services.sync_service import SyncService
 from app.services.thread_discovery_service import ThreadDiscoveryService
 from app.services.thread_reference_store import ThreadReferenceStore
+from app.services.transfer_lifecycle_service import TransferLifecycleService
 
 if TYPE_CHECKING:
     from slack_sdk import WebClient
@@ -69,6 +70,10 @@ class ServiceContainer:
         self.settlement_writer = SettlementWriter(get_session_fn, self.sync_processor)
         self.thread_ref_store = ThreadReferenceStore(get_session_fn)
 
+        self.transfer_lifecycle = TransferLifecycleService(
+            get_session_fn, self.thread_ref_store, _sheets
+        )
+
         # Orchestrators
         self.approval = ApprovalService(
             self.reader,
@@ -83,12 +88,14 @@ class ServiceContainer:
             self.settlement_writer,
             approvers,
             sheets=_sheets,
+            transfer_lifecycle=self.transfer_lifecycle,
         )
         self.registration = SettlementRegistrationService(
             self.reader,
             self.writer,
             self.settlement_writer,
             approval_channel_id=config.approval_channel_id,
+            transfer_lifecycle=self.transfer_lifecycle,
         )
         self.discovery = ThreadDiscoveryService(
             self.thread_ref_store,

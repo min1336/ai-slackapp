@@ -152,6 +152,22 @@ class SettlementRepository:
 
         return completed
 
+    def mark_transferred(self, booking_key: str, transferred_to: str) -> bool:
+        """활성 정산을 이관 처리한다. 성공 시 True."""
+        settlement = self.get_active_by_booking_key(booking_key)
+        if not settlement:
+            return False
+        settlement.transferred_to = transferred_to
+        return True
+
+    def clear_transferred(self, booking_key: str) -> str | None:
+        """이관 상태를 복구한다. 복구된 경우 원래 note 반환."""
+        settlement = self.get_active_by_booking_key(booking_key)
+        if not settlement or not settlement.transferred_to:
+            return None
+        settlement.transferred_to = None
+        return settlement.note or ""
+
     def list_unsynced(self, limit: int = 100) -> list[Settlement]:
         """동기화 안 된 정산 목록 조회. (하위 호환용, claim_unsynced 사용 권장)"""
         stmt = (

@@ -84,6 +84,7 @@ class Settlement(Base):
     settlement_completed: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=True
     )
+    transferred_to: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Relationship
     issue_logs: Mapped[list[IssueLog]] = relationship(back_populates="settlement")

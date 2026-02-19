@@ -22,6 +22,7 @@ if TYPE_CHECKING:
         SlackMessageWriter,
     )
     from app.services.settlement_writer import SettlementWriter
+    from app.services.transfer_lifecycle_service import TransferLifecycleService
 
 logger = get_logger(__name__)
 
@@ -33,11 +34,13 @@ class SettlementRegistrationService:
         writer: SlackMessageWriter,
         settlement_writer: SettlementWriter,
         approval_channel_id: str,
+        transfer_lifecycle: TransferLifecycleService | None = None,
     ) -> None:
         self._reader = reader
         self._writer = writer
         self._settlement_writer = settlement_writer
         self._approval_channel_id = approval_channel_id
+        self._transfer_lifecycle = transfer_lifecycle
 
     def register(
         self,
@@ -79,6 +82,9 @@ class SettlementRegistrationService:
 
             # 3.5 요청 시점에 DB + 시트 기록
             self._save_to_db_safe(data, thread_url=message_url)
+
+            # 3.6 이관 건이면 기존 정산 이관 처리
+            self._mark_transfer_safe(data.booking_key)
 
             # 4. 요청자 이름 조회
             requester_name = self._reader.get_user_name(requester_id)
@@ -126,6 +132,15 @@ class SettlementRegistrationService:
                 error_type=type(e).__name__,
                 error=str(e),
             )
+
+    def _mark_transfer_safe(self, booking_key: str) -> None:
+        """이관 건이면 기존 정산을 이관 처리한다 (best-effort)."""
+        if self._transfer_lifecycle is None:
+            return
+        try:
+            self._transfer_lifecycle.mark_transferred(booking_key)
+        except Exception:
+            logger.warning("transfer_mark_failed", booking_key=booking_key)
 
     def _cleanup_detail_message(self, channel_id: str, detail_message_ts: str) -> None:
         if not detail_message_ts:

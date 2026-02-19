@@ -25,6 +25,16 @@ class ThreadReferenceStore:
             logger.exception("thread_ref_db_lookup_failed", booking_key=booking_key)
         return None
 
+    def get_root_booking_key(self, booking_key: str) -> str | None:
+        """booking_key의 root_booking_key를 반환한다."""
+        try:
+            with self._get_session() as session:
+                ref = ThreadReferenceRepository(session).get_by_booking_key(booking_key)
+                return ref.root_booking_key if ref else None
+        except SQLAlchemyError:
+            logger.exception("thread_ref_root_lookup_failed", booking_key=booking_key)
+        return None
+
     def save(
         self,
         booking_key: str,

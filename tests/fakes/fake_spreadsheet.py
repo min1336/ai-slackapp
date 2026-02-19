@@ -72,6 +72,13 @@ class FakeSpreadsheet:
             )
         return set(self.completed_keys)
 
+    def update_settlement_note(self, booking_key: str, note: str) -> None:
+        """비고 컬럼만 업데이트 (정산완료 행은 무시)"""
+        if booking_key in self.completed_keys:
+            return
+        if booking_key in self.settlement_rows:
+            self.settlement_rows[booking_key]["note"] = note
+
     def clear(self):
         """테스트 간 상태 초기화"""
         self.settlement_rows.clear()

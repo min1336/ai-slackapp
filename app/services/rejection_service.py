@@ -29,6 +29,7 @@ if TYPE_CHECKING:
         SpreadsheetGateway,
     )
     from app.services.settlement_writer import SettlementWriter
+    from app.services.transfer_lifecycle_service import TransferLifecycleService
 
 logger = get_logger(__name__)
 
@@ -43,12 +44,14 @@ class RejectionService:
         settlement_writer: SettlementWriter,
         approvers: Approvers,
         sheets: SpreadsheetGateway | None = None,
+        transfer_lifecycle: TransferLifecycleService | None = None,
     ) -> None:
         self._reader = reader
         self._writer = writer
         self._settlement_writer = settlement_writer
         self._approvers = approvers
         self._sheets = sheets
+        self._transfer_lifecycle = transfer_lifecycle
 
     def reject(
         self,
@@ -96,6 +99,8 @@ class RejectionService:
                 thread_url=message_url,
                 rejection_reason=rejection_reason,
             )
+
+            self._revert_transfer_safe(data.booking_key)
 
             self._update_approval_channel(
                 metadata,
@@ -233,6 +238,15 @@ class RejectionService:
                     f"*반려 사유:* {rejection_reason}"
                 ),
             )
+
+    def _revert_transfer_safe(self, booking_key: str) -> None:
+        """이관 건이 반려되면 기존 정산을 복구한다 (best-effort)."""
+        if self._transfer_lifecycle is None:
+            return
+        try:
+            self._transfer_lifecycle.revert_transfer(booking_key)
+        except Exception:
+            logger.warning("transfer_revert_failed", booking_key=booking_key)
 
     def _guard_settlement_completed(self, booking_key: str) -> None:
         if self._sheets is None:

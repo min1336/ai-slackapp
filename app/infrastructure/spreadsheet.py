@@ -299,6 +299,36 @@ class SpreadsheetService:
             return False
 
     @retry_on_rate_limit()
+    def update_settlement_note(self, booking_key: str, note: str) -> None:
+        """비고 컬럼만 타겟 업데이트한다."""
+        try:
+            sheet_name = self._sheet_name("settlement")
+            worksheet = self._get_worksheet(sheet_name)
+            mapping = self._resolve_mapping(worksheet, "settlement")
+            row_number = self.find_row_by_booking_key(
+                booking_key, sheet_name, worksheet, mapping
+            )
+            if not row_number:
+                return
+            note_col = mapping.column_of("note")
+            worksheet.update_cell(row_number, note_col, note)
+        except (APIError, SpreadsheetError):
+            raise
+        except (GSpreadException, ValueError, KeyError) as e:
+            logger.exception(
+                "settlement_note_update_failed",
+                booking_key=booking_key,
+                error=str(e),
+            )
+            raise SpreadsheetError(
+                message=f"Failed to update settlement note: {e}",
+                details={
+                    "booking_key": booking_key,
+                    "original_error": str(e),
+                },
+            ) from e
+
+    @retry_on_rate_limit()
     def get_completed_booking_keys(self) -> set[str]:
         try:
             sheet_name = self._sheet_name("settlement")
