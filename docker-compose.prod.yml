@@ -16,3 +16,10 @@ services:
       - DATABASE_DBNAME=${DATABASE_DBNAME:-postgres}
     volumes:
       - ./credentials.json:/app/credentials.json:ro
+    networks:
+      - n8n_network
+
+networks:
+  n8n_network:
+    external: true
+    name: n8n-cloud-tm2-network
