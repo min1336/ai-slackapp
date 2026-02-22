@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from slack_bolt import App
 from slack_sdk.errors import SlackApiError
 
+from app.config import get_env_config
 from app.constants import Command
 from app.core import get_logger
 from app.services.message_parser import (
@@ -22,6 +23,16 @@ if TYPE_CHECKING:
     from app.container import ServiceContainer
 
 logger = get_logger(__name__)
+
+
+def _is_bot_message(message: dict) -> bool:
+    return bool(message.get("bot_id")) or message.get("subtype") == "bot_message"
+
+
+def _should_process_message(message: dict) -> bool:
+    if get_env_config().is_dev:
+        return True
+    return _is_bot_message(message)
 
 
 def register_message_handlers(app: App, container: ServiceContainer) -> None:
@@ -90,6 +101,14 @@ def register_message_handlers(app: App, container: ServiceContainer) -> None:
             return
 
         if channel_id != transfer_channel:
+            return
+
+        if not _should_process_message(message):
+            logger.debug(
+                "user_message_skipped",
+                user=message.get("user"),
+                reason="prod_bot_only",
+            )
             return
 
         text = message.get("text", "")

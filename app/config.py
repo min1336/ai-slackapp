@@ -1,12 +1,36 @@
 from __future__ import annotations
 
 import os
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Environment(str, Enum):
+    DEV = "dev"
+    PROD = "prod"
+
+
+class EnvironmentConfig(BaseSettings):
+    environment: Environment = Environment.DEV
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    @property
+    def is_dev(self) -> bool:
+        return self.environment == Environment.DEV
+
+    @property
+    def is_prod(self) -> bool:
+        return self.environment == Environment.PROD
 
 
 class SlackProperties(BaseSettings):
@@ -180,3 +204,8 @@ def get_spreadsheet_settings() -> SpreadsheetProperties:
 @lru_cache
 def get_database_settings() -> DatabaseProperties:
     return DatabaseProperties()
+
+
+@lru_cache
+def get_env_config() -> EnvironmentConfig:
+    return EnvironmentConfig()

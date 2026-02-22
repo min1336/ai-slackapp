@@ -1,21 +1,18 @@
 from __future__ import annotations
 
 import logging
-import os
 
 import structlog
 
+from app.config import get_env_config
+
 
 def get_log_level() -> int:
-    env = os.getenv("ENVIRONMENT", "dev").lower()
-    return logging.DEBUG if env == "dev" else logging.INFO
+    return logging.DEBUG if get_env_config().is_dev else logging.INFO
 
 
-def setup_logging(env: str | None = None) -> None:
-    if env:
-        os.environ["ENVIRONMENT"] = env
-
-    is_dev = os.getenv("ENVIRONMENT", "dev").lower() == "dev"
+def setup_logging() -> None:
+    is_dev = get_env_config().is_dev
     level = get_log_level()
 
     # stdlib 로깅 기본 설정 (Slack Bolt 등 외부 라이브러리용)
