@@ -1,25 +1,32 @@
-# 테스트/개발 전용 설정 파일
-# 실행 예시:
-#   ENVIRONMENT=test uv run python -m app.main
-#   ENVIRONMENT=test RUN_REAL_INTEGRATION=1 uv run pytest -m integration_real -v
-
+# 승인자 슬랙 UserID
+# Nana, Mia
 approvers:
-  - U_TEST_APPROVER
+  - U04JNUCN1KP
+  - U03EH2WJQCF
 
+# 슬랙 채널 ID
 slack_channels:
-  transfer_reservation: "C_TEST_TRANSFER"
-  error: "C_TEST_ERROR"
-  approval: "C_TEST_APPROVAL"
+  transfer_reservation: "C0AANUJGPAB"
+  error: "C0AANUJGPAB"
+  approval: "C0AANUJGPAB"  # 승인 전용 채널 (실제 채널 ID로 변경 필요)
+  reservation: "C0AANUJGPAB"  # 예약 채널 (정산이슈 명령 + 스레드 탐색)
 
+# 시트 동기화 배치 스케줄 (cron 표현식)
+sync_schedule: "0 8 * * *"  # 매일 08:00
+
+# Spread Sheet ID
+# 아래의 URL의 작업 할 시트의 id를 추출해서 작성한다
+# https://docs.google.com/spreadsheets/d/{id}
 spreadsheet:
-  # 반드시 테스트 전용 스프레드시트 ID로 교체하세요.
-  id: "REPLACE_WITH_TEST_SPREADSHEET_ID"
+  id: "1AS3uLh8rKgHPsjKO_gy6sg1erNjVm_1fOOCPWr458bY"
   sheets:
     settlement:
       name: "정산"
+      # 헤더 이름 → 코드 필드 매핑
+      # 시트 헤더 이름이 바뀌면 왼쪽(헤더명)만 바꾸세요.
+      # config에 없는 필드는 시트에 기록되지 않습니다.
       columns:
         "정산기준일": settlement_day
-        "작성자": user_name
         "이슈사항": issue_type
         "고객명": customer_name
         "예약번호": booking_key
@@ -28,17 +35,13 @@ spreadsheet:
         "정산기준금액": settlement_cost
         "카모아 부담비용": carmore_cost
         "고객환불금액": user_refund_cost
-        "판매채널": sales_channel
         "내용": description
-        "처리": status
-        "승인자": approver_name
-        "등록시간": created_at
-        "수정시간": updated_at
+        "판매채널": sales_channel
         "스레드 링크": thread_url
         "비고": note
-        "반려자": reviewer_name
-        "고객 정보 오류": rejection_reason
+        "처리": status
         "정산완료": settlement_completed
+        "작성자": user_name
     issue_log:
       name: "정산이슈로그"
       columns:
@@ -60,6 +63,6 @@ spreadsheet:
         "수정시간": updated_at
         "스레드 링크": thread_url
         "비고": note
-        "반려자": reviewer_name
-        "고객 정보 오류": rejection_reason
+        "검토자": reviewer_name
+        "반려사유": rejection_reason
         "sync_key": sync_key

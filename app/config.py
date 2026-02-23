@@ -174,13 +174,19 @@ class AppConfig(BaseModel):
         return self.slack_channels.approval
 
 
-def _load_app_config() -> AppConfig:
+def resolve_config_path() -> Path:
     project_root = Path(__file__).parent.parent
-    config_file = os.getenv("APP_CONFIG_FILE", "config.yaml")
-    config_path = Path(config_file)
-    if not config_path.is_absolute():
-        config_path = project_root / config_path
+    env = os.getenv("ENVIRONMENT", "dev")
+    return project_root / f"config.{env}.yaml"
 
+
+def _load_app_config() -> AppConfig:
+    config_path = resolve_config_path()
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"Config file not found: {config_path}. "
+            f"Check ENVIRONMENT (={os.getenv('ENVIRONMENT', 'dev')})."
+        )
     with open(config_path) as f:
         data = yaml.safe_load(f)
     return AppConfig.model_validate(data)

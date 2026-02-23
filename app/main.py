@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import signal
 from datetime import datetime
 from threading import Event, Thread
@@ -8,7 +9,12 @@ from croniter import croniter
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
-from app.config import get_app_config, get_database_settings, get_slack_settings
+from app.config import (
+    get_app_config,
+    get_database_settings,
+    get_slack_settings,
+    resolve_config_path,
+)
 from app.container import ServiceContainer
 from app.core import get_logger, setup_logging
 from app.error_handler import register_error_handler
@@ -76,6 +82,12 @@ def main():
     signal.signal(signal.SIGTERM, _handle_shutdown)
     signal.signal(signal.SIGINT, _handle_shutdown)
 
+    config_path = resolve_config_path()
+    logger.info(
+        "config_resolved",
+        config_file=str(config_path),
+        environment=os.getenv("ENVIRONMENT", "dev"),
+    )
     logger.info("app_started")
     slack_settings = get_slack_settings()
     bolt_app = App(token=slack_settings.bot_token)

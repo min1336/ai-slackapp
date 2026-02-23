@@ -3,7 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        ENVIRONMENT: dev
     container_name: slack-bot-local
+    environment:
+      - ENVIRONMENT=dev
     env_file:
       - .env
     volumes:
