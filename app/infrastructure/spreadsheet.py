@@ -283,14 +283,20 @@ class SpreadsheetService:
             matches = worksheet.findall(booking_key)
 
             booking_col = mapping.column_of("booking_key")
+            has_completed = False
+            has_active = False
             for cell in matches:
                 if cell.col != booking_col:
                     continue
                 data = mapping.row_to_dict(worksheet.row_values(cell.row))
                 if data.get("settlement_completed") == "TRUE":
-                    return True
+                    has_completed = True
+                else:
+                    has_active = True
 
-            return False
+            # 과거 완료(TRUE) 히스토리가 있더라도 활성(FALSE) 행이 존재하면
+            # 현재 처리 가능한 건으로 본다.
+            return has_completed and not has_active
         except (APIError, GSpreadException, ValueError, KeyError):
             logger.warning(
                 "settlement_completed_check_failed",

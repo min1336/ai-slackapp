@@ -121,6 +121,31 @@ class TestWriterDBCheck:
             found = repo.get_by_booking_key(sample_settlement_data.booking_key)
             assert found.status == SettlementStatus.APPROVED.value
 
+    def test_완료_히스토리와_활성요청이_공존하면_승인_허용(
+        self, fake_db, sample_settlement_data
+    ):
+        # Given: completed 히스토리 1건 + active(requested) 1건
+        _save_as_requested(fake_db, sample_settlement_data)
+        _mark_completed_in_db(fake_db, sample_settlement_data.booking_key)
+        _save_as_requested(fake_db, sample_settlement_data)
+
+        writer = _make_writer(fake_db)
+
+        # When
+        writer.save(
+            data=sample_settlement_data,
+            status=SettlementStatus.APPROVED,
+            approver_name="승인자",
+            thread_url="http://example.com/thread",
+        )
+
+        # Then: 활성 건이 승인 상태로 변경됨
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            active = repo.get_active_by_booking_key(sample_settlement_data.booking_key)
+            assert active is not None
+            assert active.status == SettlementStatus.APPROVED.value
+
 
 class TestOrchestratorSheetsGuard:
     """ApprovalService/RejectionService의 Sheets 폴백 체크"""
@@ -276,3 +301,51 @@ class TestOrchestratorSheetsGuard:
             repo = SettlementRepository(session)
             found = repo.get_by_booking_key(data.booking_key)
             assert found.status == SettlementStatus.APPROVED.value
+
+    def test_승인시_시트에_TRUE_히스토리_있어도_활성행이_있으면_허용(
+        self, fake_db, fake_sheets, reader, data
+    ):
+        # Given: DB에는 completed 히스토리 + active 요청건 공존
+        _save_as_requested(fake_db, data)
+        _mark_completed_in_db(fake_db, data.booking_key)
+        _save_as_requested(fake_db, data)
+
+        # 시트에도 동일 booking_key의 completed 히스토리 + active 행이 공존한다고 가정
+        fake_sheets.completed_keys.add(data.booking_key)
+        active_row = SettlementRow.from_settlement_data(
+            data=data,
+            status=SettlementStatus.REQUESTED,
+            approver_name="",
+            thread_url="http://example.com/thread",
+        )
+        fake_sheets.save_settlement_row(active_row)
+
+        sync_proc = SyncProcessor(fake_db.get_session, fake_sheets)
+        sw = SettlementWriter(fake_db.get_session, sync_proc)
+        writer = FakeSlackWriter()
+        svc = ApprovalService(
+            reader,
+            writer,
+            sw,
+            approvers=frozenset({"U_APPROVER"}),
+            sheets=fake_sheets,
+        )
+
+        # When
+        svc.approve(
+            data=data,
+            user_id="U_APPROVER",
+            channel_id="C_APPROVAL",
+            message_ts="msg.ts",
+            thread_ts="thread.ts",
+            original_blocks=[{"type": "section"}],
+            is_transfer=False,
+        )
+
+        # Then: 정산완료 차단 없이 승인됨
+        assert not any("정산완료" in msg["text"] for msg in writer.ephemeral_messages)
+        with fake_db.get_session() as session:
+            repo = SettlementRepository(session)
+            active = repo.get_active_by_booking_key(data.booking_key)
+            assert active is not None
+            assert active.status == SettlementStatus.APPROVED.value

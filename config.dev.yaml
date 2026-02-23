@@ -1,19 +1,28 @@
+# 승인자 슬랙 UserID
 approvers:
-  - U_DEV_APPROVER
+  - U0A5RD2NZ1D
 
+# 슬랙 채널 ID
 slack_channels:
-  transfer_reservation: "C_DEV_TRANSFER"
-  error: "C_DEV_ERROR"
-  approval: "C_DEV_APPROVAL"
-  reservation: "C_DEV_RESERVATION"
+  transfer_reservation: "C0AANUJGPAB"
+  error: "C0AANUJGPAB"
+  approval: "C0AANUJGPAB"  # 승인 전용 채널 (실제 채널 ID로 변경 필요)
+  reservation: "C0AANUJGPAB"  # 예약 채널 (정산이슈 명령 + 스레드 탐색)
 
-sync_schedule: "0 8 * * *"
+# 시트 동기화 배치 스케줄 (cron 표현식)
+sync_schedule: "0 8 * * *"  # 매일 08:00
 
+# Spread Sheet ID
+# 아래의 URL의 작업 할 시트의 id를 추출해서 작성한다
+# https://docs.google.com/spreadsheets/d/{id}
 spreadsheet:
-  id: "REPLACE_WITH_DEV_SPREADSHEET_ID"
+  id: "1AS3uLh8rKgHPsjKO_gy6sg1erNjVm_1fOOCPWr458bY"
   sheets:
     settlement:
       name: "정산"
+      # 헤더 이름 → 코드 필드 매핑
+      # 시트 헤더 이름이 바뀌면 왼쪽(헤더명)만 바꾸세요.
+      # config에 없는 필드는 시트에 기록되지 않습니다.
       columns:
         "정산기준일": settlement_day
         "이슈사항": issue_type

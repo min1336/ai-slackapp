@@ -91,7 +91,7 @@ class SettlementWriter:
         """Sheets 정산완료 상태를 DB에 반영한다."""
         with self._get_session() as session:
             repo = SettlementRepository(session)
-            existing = repo.get_by_booking_key(booking_key)
+            existing = repo.get_active_by_booking_key(booking_key)
             if existing:
                 existing.settlement_completed = True
 
@@ -107,20 +107,22 @@ class SettlementWriter:
         ):
             return
 
+        existing = repo.get_active_by_booking_key(booking_key)
+        if existing:
+            if existing.status != SettlementStatus.REQUESTED.value:
+                raise AlreadyProcessedError(
+                    message=(
+                        f"Settlement {booking_key} already processed: {existing.status}"
+                    ),
+                    details={
+                        "booking_key": booking_key,
+                        "current_status": existing.status,
+                    },
+                )
+            return
+
         if repo.has_completed_settlement(booking_key):
             raise SettlementCompletedError(
                 message=f"Settlement {booking_key} already completed",
                 details={"booking_key": booking_key, "source": "db"},
-            )
-
-        existing = repo.get_active_by_booking_key(booking_key)
-        if existing and existing.status != SettlementStatus.REQUESTED.value:
-            raise AlreadyProcessedError(
-                message=(
-                    f"Settlement {booking_key} already processed: {existing.status}"
-                ),
-                details={
-                    "booking_key": booking_key,
-                    "current_status": existing.status,
-                },
             )

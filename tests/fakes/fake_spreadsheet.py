@@ -57,12 +57,12 @@ class FakeSpreadsheet:
         self, booking_key: str, sheet_name: str | None = None
     ) -> int | None:
         """booking_key로 활성 행 번호 찾기 (정산완료 행은 제외)"""
-        if booking_key in self.completed_keys:
-            return None
         return 1 if booking_key in self.settlement_rows else None
 
     def is_settlement_completed(self, booking_key: str) -> bool:
-        return booking_key in self.completed_keys
+        has_completed = booking_key in self.completed_keys
+        has_active = booking_key in self.settlement_rows
+        return has_completed and not has_active
 
     def get_completed_booking_keys(self) -> set[str]:
         if self.should_fail:
