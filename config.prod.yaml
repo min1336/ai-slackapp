@@ -6,10 +6,10 @@ approvers:
 
 # 슬랙 채널 ID
 slack_channels:
-  transfer_reservation: "C0AANUJGPAB"
-  error: "C0AANUJGPAB"
-  approval: "C0AANUJGPAB"  # 승인 전용 채널 (실제 채널 ID로 변경 필요)
-  reservation: "C0AANUJGPAB"  # 예약 채널 (정산이슈 명령 + 스레드 탐색)
+  transfer_reservation: "C0115V08YS1" # 카모아_업체이관
+  error: "C0AANUJGPAB" # ai-test
+  approval: "C0AGV65DXMX"  # 정산이슈_확인
+  reservation: "C9P7XQAFR"  # 카모아_예약이
 
 # 시트 동기화 배치 스케줄 (cron 표현식)
 sync_schedule: "0 8 * * *"  # 매일 08:00
