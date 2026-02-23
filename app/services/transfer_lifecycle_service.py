@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from app.core import get_logger
 from app.infrastructure.database import SettlementRepository
+from app.models import TransferStatus
 
 if TYPE_CHECKING:
     from app.infrastructure.database import SessionFactory
@@ -31,27 +32,39 @@ class TransferLifecycleService:
         self._sheets = sheets
 
     def mark_transferred(self, new_booking_key: str) -> None:
-        """이관 건이면 원본 정산을 이관 처리한다."""
+        """이관 건이면 체인 전체의 기존 정산을 이관 처리한다."""
         root_booking_key = self._thread_ref_store.get_root_booking_key(new_booking_key)
         if not root_booking_key or root_booking_key == new_booking_key:
             return
 
+        chain_keys = self._thread_ref_store.get_chain_booking_keys(root_booking_key)
+        target_keys = [k for k in chain_keys if k != new_booking_key]
+        if not target_keys:
+            return
+
+        # DB 마킹 + 각 건의 기존 note 수집
+        notes_by_key: dict[str, str] = {}
         with self._get_session() as session:
             repo = SettlementRepository(session)
-            settlement = repo.get_active_by_booking_key(root_booking_key)
-            if not settlement:
-                return
+            for key in target_keys:
+                settlement = repo.get_active_by_booking_key(key)
+                if not settlement:
+                    continue
+                notes_by_key[key] = settlement.note or ""
+                repo.mark_transferred(key, new_booking_key)
 
-            original_note = settlement.note or ""
-            repo.mark_transferred(root_booking_key, new_booking_key)
-
-        new_note = f"{original_note} [이관→{new_booking_key}]".strip()
-        self._sheets.update_settlement_note(root_booking_key, new_note)
+        # Sheets 업데이트
+        for key, original_note in notes_by_key.items():
+            new_note = f"{original_note} [이관→{new_booking_key}]".strip()
+            self._sheets.update_settlement_transfer(
+                key, new_note, TransferStatus.TRANSFERRED.value
+            )
 
         logger.info(
             "transfer_marked",
             root_booking_key=root_booking_key,
             new_booking_key=new_booking_key,
+            marked_keys=list(notes_by_key.keys()),
         )
 
     def revert_transfer(self, rejected_booking_key: str) -> None:
@@ -69,7 +82,9 @@ class TransferLifecycleService:
         if original_note is None:
             return
 
-        self._sheets.update_settlement_note(root_booking_key, original_note)
+        self._sheets.update_settlement_transfer(
+            root_booking_key, original_note, TransferStatus.REVERTED.value
+        )
 
         logger.info(
             "transfer_reverted",

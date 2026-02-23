@@ -75,6 +75,23 @@ class TestFindIssueThread:
 
         assert result is None
 
+    def test_보조_예약번호로_폴백_탐색한다(self, fake_reader, service):
+        fake_reader.messages_by_text[("C_ISSUE", "BK-NEW")] = "444.444"
+
+        result = service.find_issue_thread(
+            "BK-OLD",
+            fallback_booking_keys=("BK-NEW",),
+        )
+
+        assert result == ThreadLocation(channel_id="C_ISSUE", thread_ts="444.444")
+
+    def test_예약번호_라벨_쿼리로도_폴백_탐색한다(self, fake_reader, service):
+        fake_reader.messages_by_text[("C_ISSUE", "예약번호 : BK-LABELED")] = "555.111"
+
+        result = service.find_issue_thread("BK-LABELED")
+
+        assert result == ThreadLocation(channel_id="C_ISSUE", thread_ts="555.111")
+
 
 class TestSaveThreadReference:
     def test_기본_저장(self, fake_db, service):
@@ -133,3 +150,71 @@ class TestRegisterOriginThread:
             repo = ThreadReferenceRepository(session)
             ref = repo.get_by_booking_key("BK-001")
             assert ref is not None
+
+
+class TestGetChainBookingKeys:
+    def test_체인_멤버_전체_조회(self, fake_db, store):
+        store.save("A-001", "C_ISSUE", "111.111")
+        store.save("B-001", "C_ISSUE", "111.111", root_booking_key="A-001")
+        store.save("C-001", "C_ISSUE", "111.111", root_booking_key="A-001")
+
+        keys = store.get_chain_booking_keys("A-001")
+
+        assert set(keys) == {"A-001", "B-001", "C-001"}
+
+    def test_체인_없으면_빈_리스트(self, store):
+        keys = store.get_chain_booking_keys("NONEXISTENT")
+
+        assert keys == []
+
+
+class TestTransferThreadReference:
+    def test_이관_체인_저장시_root를_최초키로_유지한다(self, fake_db, service):
+        service.save_thread_reference(
+            booking_key="A-001",
+            channel_id="C_ISSUE",
+            thread_ts="111.111",
+        )
+        service.save_thread_reference(
+            booking_key="B-001",
+            channel_id="C_ISSUE",
+            thread_ts="111.111",
+            root_booking_key="A-001",
+        )
+
+        service.save_transfer_thread_reference(
+            previous_booking_key="B-001",
+            new_booking_key="C-001",
+            channel_id="C_ISSUE",
+            thread_ts="111.111",
+        )
+
+        with fake_db.get_session() as session:
+            repo = ThreadReferenceRepository(session)
+            ref = repo.get_by_booking_key("C-001")
+            assert ref is not None
+            assert ref.root_booking_key == "A-001"
+
+    def test_fallback로_스레드_탐색해도_new_key_root가_old로_저장된다(
+        self, fake_db, fake_reader, service
+    ):
+        fake_reader.messages_by_text[("C_ISSUE", "NEW-001")] = "555.555"
+
+        thread = service.find_issue_thread(
+            "OLD-001",
+            fallback_booking_keys=("NEW-001",),
+        )
+
+        assert thread is not None
+        service.save_transfer_thread_reference(
+            previous_booking_key="OLD-001",
+            new_booking_key="NEW-001",
+            channel_id=thread.channel_id,
+            thread_ts=thread.thread_ts,
+        )
+
+        with fake_db.get_session() as session:
+            repo = ThreadReferenceRepository(session)
+            ref = repo.get_by_booking_key("NEW-001")
+            assert ref is not None
+            assert ref.root_booking_key == "OLD-001"

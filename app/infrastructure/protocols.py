@@ -26,7 +26,9 @@ class SpreadsheetGateway(Protocol):
 
     def get_completed_booking_keys(self) -> set[str]: ...
 
-    def update_settlement_note(self, booking_key: str, note: str) -> None: ...
+    def update_settlement_transfer(
+        self, booking_key: str, note: str, transfer_status: str
+    ) -> None: ...
 
 
 @runtime_checkable

@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
     from app.models import SettlementRow
+from app.models import TransferStatus
 
 
 def _parse_cost(value: str) -> int | None:
@@ -41,6 +42,7 @@ _SHARED_FIELDS: tuple[str, ...] = (
     "sales_channel",
     "description",
     "status",
+    "transfer_status",
     "approver_name",
     "thread_url",
     "note",
@@ -158,6 +160,7 @@ class SettlementRepository:
         if not settlement:
             return False
         settlement.transferred_to = transferred_to
+        settlement.transfer_status = TransferStatus.TRANSFERRED.value
         return True
 
     def clear_transferred(self, booking_key: str) -> str | None:
@@ -166,6 +169,7 @@ class SettlementRepository:
         if not settlement or not settlement.transferred_to:
             return None
         settlement.transferred_to = None
+        settlement.transfer_status = TransferStatus.REVERTED.value
         return settlement.note or ""
 
     def list_unsynced(self, limit: int = 100) -> list[Settlement]:
@@ -294,6 +298,12 @@ class ThreadReferenceRepository:
             ThreadReference.booking_key == booking_key,
         )
         return self.session.execute(stmt).scalar_one_or_none()
+
+    def list_by_root_booking_key(self, root_booking_key: str) -> list[ThreadReference]:
+        stmt = select(ThreadReference).where(
+            ThreadReference.root_booking_key == root_booking_key
+        )
+        return list(self.session.execute(stmt).scalars().all())
 
     def save(
         self,

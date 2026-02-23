@@ -35,6 +35,21 @@ class ThreadReferenceStore:
             logger.exception("thread_ref_root_lookup_failed", booking_key=booking_key)
         return None
 
+    def get_chain_booking_keys(self, root_booking_key: str) -> list[str]:
+        """root_booking_key에 속한 모든 체인 멤버의 booking_key 목록."""
+        try:
+            with self._get_session() as session:
+                refs = ThreadReferenceRepository(session).list_by_root_booking_key(
+                    root_booking_key
+                )
+                return [ref.booking_key for ref in refs]
+        except SQLAlchemyError:
+            logger.exception(
+                "thread_ref_chain_lookup_failed",
+                root_booking_key=root_booking_key,
+            )
+        return []
+
     def save(
         self,
         booking_key: str,

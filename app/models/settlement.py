@@ -21,6 +21,12 @@ class SettlementStatus(StrEnum):
     REJECTED = "반려"
 
 
+class TransferStatus(StrEnum):
+    NONE = ""
+    TRANSFERRED = "재이관"
+    REVERTED = "재이관반려"
+
+
 class SettlementData(BaseModel):
     # ── 예약 정보 (필수) ──
     user_name: str
@@ -104,6 +110,7 @@ class RowConvertible(Protocol):
     sales_channel: str
     description: str
     status: str
+    transfer_status: str
     approver_name: str
     thread_url: str
     reviewer_name: str
@@ -125,6 +132,7 @@ class SettlementRow:
     description: str
     status: str
     approver_name: str
+    transfer_status: str = TransferStatus.NONE.value
     issue_type: str = ""
     sales_channel: str = ""
     created_at: str = ""
@@ -159,6 +167,7 @@ class SettlementRow:
             sales_channel=data.seller_channel or "",
             description=data.description or "",
             status=status.value,
+            transfer_status=TransferStatus.NONE.value,
             approver_name=approver_name,
             thread_url=thread_url,
             note=data.note or "",
@@ -195,6 +204,11 @@ class SettlementRow:
             sales_channel=entity.sales_channel,
             description=entity.description,
             status=entity.status,
+            transfer_status=getattr(
+                entity,
+                "transfer_status",
+                TransferStatus.NONE.value,
+            ),
             approver_name=entity.approver_name,
             thread_url=entity.thread_url,
             created_at=entity.created_at.strftime(DateFormat.DATETIME),

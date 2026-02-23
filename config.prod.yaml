@@ -40,6 +40,7 @@ spreadsheet:
         "스레드 링크": thread_url
         "비고": note
         "처리": status
+        "재이관상태": transfer_status
         "정산완료": settlement_completed
         "작성자": user_name
     issue_log:
@@ -58,6 +59,7 @@ spreadsheet:
         "판매채널": sales_channel
         "내용": description
         "처리": status
+        "재이관상태": transfer_status
         "승인자": approver_name
         "등록시간": created_at
         "수정시간": updated_at

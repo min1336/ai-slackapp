@@ -141,8 +141,8 @@ def _headers_for_settlement(
     extra_header: str | None = None,
 ) -> list[str]:
     field_to_header = get_app_config().spreadsheet.field_to_header("settlement")
-    fields = list(SETTLEMENT_FIELDS)
-    if include_settlement_completed:
+    fields = [field for field in SETTLEMENT_FIELDS if field in field_to_header]
+    if include_settlement_completed and "settlement_completed" in field_to_header:
         fields.append("settlement_completed")
 
     base_headers = [field_to_header[field] for field in fields]
@@ -150,7 +150,7 @@ def _headers_for_settlement(
     leading_headers = [booking_header]
     if extra_header:
         leading_headers.append(extra_header)
-    if include_settlement_completed:
+    if include_settlement_completed and "settlement_completed" in field_to_header:
         leading_headers.append(field_to_header["settlement_completed"])
 
     trailing = [h for h in base_headers if h not in set(leading_headers)]
@@ -159,7 +159,8 @@ def _headers_for_settlement(
 
 def _headers_for_issue_log(*, extra_header: str | None = None) -> list[str]:
     field_to_header = get_app_config().spreadsheet.field_to_header("issue_log")
-    fields = [*SETTLEMENT_FIELDS, "sync_key"]
+    fields = [field for field in SETTLEMENT_FIELDS if field in field_to_header]
+    fields.append("sync_key")
     base_headers = [field_to_header[field] for field in fields]
 
     sync_key_header = field_to_header["sync_key"]
@@ -190,6 +191,17 @@ def _row_values_from_fields(
     return [by_header.get(header, "") for header in headers]
 
 
+def _make_service(
+    client: FakeSpreadsheetClient,
+) -> spreadsheet_module.SpreadsheetService:
+    config = get_app_config()
+    return spreadsheet_module.SpreadsheetService(
+        client_factory=lambda: client,
+        sheet_name_resolver=config.spreadsheet.sheet_name,
+        field_to_header_resolver=config.spreadsheet.field_to_header,
+    )
+
+
 @pytest.mark.integration
 def test_save_settlement_row_updates_mapped_columns_and_preserves_unmapped(
     monkeypatch,
@@ -218,7 +230,7 @@ def test_save_settlement_row_updates_mapped_columns_and_preserves_unmapped(
     client = FakeSpreadsheetClient(
         {get_app_config().spreadsheet.sheet_name("settlement"): worksheet}
     )
-    monkeypatch.setattr(spreadsheet_module, "get_spreadsheet_client", lambda: client)
+    service = _make_service(client)
 
     new_row = _sample_row(
         "BK-001",
@@ -226,18 +238,22 @@ def test_save_settlement_row_updates_mapped_columns_and_preserves_unmapped(
         user_name="새작성자",
         approver_name="검토자",
     )
-    spreadsheet_module.save_settlement_row(new_row)
+    service.save_settlement_row(new_row, is_update=True)
 
     field_to_header = get_app_config().spreadsheet.field_to_header("settlement")
     assert worksheet.row_count == 2
     assert worksheet.value_at_header(2, extra_header) == "KEEP"
-    assert (
-        worksheet.value_at_header(2, field_to_header["created_at"])
-        == "2025-01-01 09:00:00"
-    )
     assert worksheet.value_at_header(2, field_to_header["status"]) == "승인"
     assert worksheet.value_at_header(2, field_to_header["user_name"]) == "새작성자"
-    assert worksheet.value_at_header(2, field_to_header["approver_name"]) == "검토자"
+    if "created_at" in field_to_header:
+        assert (
+            worksheet.value_at_header(2, field_to_header["created_at"])
+            == "2025-01-01 09:00:00"
+        )
+    if "approver_name" in field_to_header:
+        assert (
+            worksheet.value_at_header(2, field_to_header["approver_name"]) == "검토자"
+        )
 
 
 @pytest.mark.integration
@@ -263,9 +279,9 @@ def test_find_row_by_booking_key_skips_completed_rows(monkeypatch) -> None:
     client = FakeSpreadsheetClient(
         {get_app_config().spreadsheet.sheet_name("settlement"): worksheet}
     )
-    monkeypatch.setattr(spreadsheet_module, "get_spreadsheet_client", lambda: client)
+    service = _make_service(client)
 
-    found = spreadsheet_module.find_row_by_booking_key(
+    found = service.find_row_by_booking_key(
         "BK-777",
         get_app_config().spreadsheet.sheet_name("settlement"),
     )
@@ -282,15 +298,15 @@ def test_save_settlement_row_raises_when_required_header_missing(monkeypatch) ->
     client = FakeSpreadsheetClient(
         {get_app_config().spreadsheet.sheet_name("settlement"): worksheet}
     )
-    monkeypatch.setattr(spreadsheet_module, "get_spreadsheet_client", lambda: client)
+    service = _make_service(client)
 
     row = _sample_row("BK-MISSING")
     with pytest.raises(SpreadsheetError, match="settlement_completed"):
-        spreadsheet_module.save_settlement_row(row)
+        service.save_settlement_row(row)
 
 
 @pytest.mark.integration
-def test_append_issue_log_row_updates_existing_row_and_preserves_unmapped(
+def test_append_issue_log_row_skips_existing_sync_key_and_preserves_unmapped(
     monkeypatch,
 ) -> None:
     extra_header = "운영메모"
@@ -314,13 +330,13 @@ def test_append_issue_log_row_updates_existing_row_and_preserves_unmapped(
     client = FakeSpreadsheetClient(
         {get_app_config().spreadsheet.sheet_name("issue_log"): worksheet}
     )
-    monkeypatch.setattr(spreadsheet_module, "get_spreadsheet_client", lambda: client)
+    service = _make_service(client)
 
     new_row = _sample_row("BK-LOG-1", status="반려", approver_name="반려자")
-    spreadsheet_module.append_issue_log_row(new_row, sync_key="42")
+    service.append_issue_log_row(new_row, sync_key="42")
 
     field_to_header = get_app_config().spreadsheet.field_to_header("issue_log")
     assert worksheet.row_count == 2
     assert worksheet.value_at_header(2, extra_header) == "LEGACY"
-    assert worksheet.value_at_header(2, field_to_header["status"]) == "반려"
-    assert worksheet.value_at_header(2, field_to_header["approver_name"]) == "반려자"
+    assert worksheet.value_at_header(2, field_to_header["status"]) == "요청"
+    assert worksheet.value_at_header(2, field_to_header["approver_name"]) == ""

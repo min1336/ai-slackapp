@@ -139,19 +139,20 @@ def _open_transfer_modal(body: dict, client, reader) -> None:
     parsed = ParsedTransferReservation.model_validate_json(action_value(body))
     context = message_context(body)
     user_name = reader.get_user_name(context.user_id)
+    booking_key = parsed.booking_key
 
     metadata = ModalMetadata(
         channel_id=context.channel_id,
         thread_ts=context.thread_ts,
         user_name=user_name,
-        booking_key=parsed.booking_key,
+        booking_key=booking_key,
         company_name="",
         customer_name=parsed.customer_name,
     )
 
     modal = build_registration_modal(
         user_name=user_name,
-        booking_key=parsed.booking_key,
+        booking_key=booking_key,
         company_name="",
         customer_name=parsed.customer_name,
         metadata=metadata.model_dump_json(),

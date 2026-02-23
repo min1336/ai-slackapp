@@ -35,6 +35,124 @@ def _should_process_message(message: dict) -> bool:
     return _is_bot_message(message)
 
 
+def _route_channel_message(
+    *,
+    message: dict,
+    channel_id: str,
+    transfer_channel: str,
+    reservation_channel: str,
+) -> str:
+    """메시지 라우팅 결정: 'transfer', 'reservation', 'ignore'."""
+    is_transfer_ch = bool(transfer_channel and channel_id == transfer_channel)
+    is_reservation_ch = bool(reservation_channel and channel_id == reservation_channel)
+
+    if is_transfer_ch and _should_process_message(message):
+        text = message.get("text", "")
+        if text and is_transfer_reservation_message(text):
+            return "transfer"
+
+    if is_reservation_ch:
+        return "reservation"
+
+    return "ignore"
+
+
+def _handle_transfer_message(message, say, *, discovery, reader, writer) -> None:
+    """이관 메시지 처리: 파싱 → 기존 스레드 탐색 → 포스트."""
+    text = message.get("text", "")
+    channel_id = message.get("channel")
+    message_ts = message.get("ts")
+
+    logger.info("transfer_message_detected", text_preview=text[:50])
+    parsed = parse_transfer_reservation_message(text)
+
+    logger.info(
+        "transfer_parsed",
+        booking_key=parsed.booking_key,
+        customer_name=parsed.customer_name,
+        company_sub_name=parsed.company_sub_name,
+        settlement_cost=parsed.settlement_cost,
+        carmore_cost=parsed.carmore_cost,
+    )
+
+    thread = discovery.find_issue_thread(
+        parsed.booking_key,
+        fallback_booking_keys=(parsed.new_booking_key,),
+    )
+
+    if thread:
+        transfer_msg_url = reader.get_thread_url(channel_id, message_ts)
+        try:
+            writer.post_message(
+                channel=thread.channel_id,
+                thread_ts=thread.thread_ts,
+                text="이관 예약 정보를 확인해주세요 🚗",
+                blocks=build_transfer_parsing_result_message(
+                    booking_key=parsed.booking_key,
+                    customer_name=parsed.customer_name,
+                    company_name=parsed.company_name,
+                    company_sub_name=parsed.company_sub_name,
+                    settlement_cost=parsed.settlement_cost,
+                    carmore_cost=parsed.carmore_cost,
+                    button_value=parsed.model_dump_json(),
+                    transfer_message_url=transfer_msg_url,
+                ),
+            )
+            if parsed.new_booking_key:
+                discovery.save_transfer_thread_reference(
+                    previous_booking_key=parsed.booking_key,
+                    new_booking_key=parsed.new_booking_key,
+                    channel_id=thread.channel_id,
+                    thread_ts=thread.thread_ts,
+                )
+            return
+        except SlackApiError:
+            logger.exception(
+                "issue_thread_post_failed",
+                booking_key=parsed.booking_key,
+                thread_ts=thread.thread_ts,
+            )
+
+    say(
+        text="이관 예약 정보를 확인해주세요 🚗",
+        blocks=build_transfer_parsing_result_message(
+            booking_key=parsed.booking_key,
+            customer_name=parsed.customer_name,
+            company_name=parsed.company_name,
+            company_sub_name=parsed.company_sub_name,
+            settlement_cost=parsed.settlement_cost,
+            carmore_cost=parsed.carmore_cost,
+            button_value=parsed.model_dump_json(),
+        ),
+        thread_ts=message_ts,
+    )
+
+
+def _cache_reservation_origin_thread(message: dict, discovery) -> None:
+    channel_id = message.get("channel")
+    message_ts = message.get("ts")
+    text = message.get("text", "")
+    # 부모 메시지(원문)만 캐시: 스레드 댓글은 제외
+    if not channel_id or not message_ts or not text or message.get("thread_ts"):
+        return
+
+    parsed = parse_settlement_message(text)
+    booking_key = parsed.booking_key.strip()
+    if not booking_key:
+        return
+
+    discovery.register_origin_thread(
+        booking_key=booking_key,
+        channel_id=channel_id,
+        thread_ts=message_ts,
+    )
+    logger.info(
+        "reservation_thread_cached",
+        booking_key=booking_key,
+        thread_ts=message_ts,
+    )
+
+
 def register_message_handlers(app: App, container: ServiceContainer) -> None:
     discovery = container.discovery
     reader = container.reader
@@ -95,88 +213,23 @@ def register_message_handlers(app: App, container: ServiceContainer) -> None:
     @app.message("")
     def handle_auto_detect_transfer(message, say):
         channel_id = message.get("channel")
-
-        if not transfer_channel:
-            logger.warning("transfer_channel_not_configured")
+        if not channel_id:
             return
 
-        if channel_id != transfer_channel:
-            return
+        route = _route_channel_message(
+            message=message,
+            channel_id=channel_id,
+            transfer_channel=transfer_channel,
+            reservation_channel=reservation_channel,
+        )
 
-        if not _should_process_message(message):
-            logger.debug(
-                "user_message_skipped",
-                user=message.get("user"),
-                reason="prod_bot_only",
+        if route == "transfer":
+            _handle_transfer_message(
+                message,
+                say,
+                discovery=discovery,
+                reader=reader,
+                writer=writer,
             )
-            return
-
-        text = message.get("text", "")
-        if not text:
-            return
-
-        if not is_transfer_reservation_message(text):
-            return
-
-        logger.info("transfer_message_detected", text_preview=text[:50])
-        parsed = parse_transfer_reservation_message(text)
-
-        logger.info(
-            "transfer_parsed",
-            booking_key=parsed.booking_key,
-            customer_name=parsed.customer_name,
-            company_sub_name=parsed.company_sub_name,
-            settlement_cost=parsed.settlement_cost,
-            carmore_cost=parsed.carmore_cost,
-        )
-
-        message_ts = message.get("ts")
-
-        thread = discovery.find_issue_thread(parsed.booking_key)
-
-        if thread:
-            transfer_msg_url = reader.get_thread_url(channel_id, message_ts)
-            try:
-                writer.post_message(
-                    channel=thread.channel_id,
-                    thread_ts=thread.thread_ts,
-                    text="이관 예약 정보를 확인해주세요 🚗",
-                    blocks=build_transfer_parsing_result_message(
-                        booking_key=parsed.booking_key,
-                        customer_name=parsed.customer_name,
-                        company_name=parsed.company_name,
-                        company_sub_name=parsed.company_sub_name,
-                        settlement_cost=parsed.settlement_cost,
-                        carmore_cost=parsed.carmore_cost,
-                        button_value=parsed.model_dump_json(),
-                        transfer_message_url=transfer_msg_url,
-                    ),
-                )
-                if parsed.new_booking_key:
-                    discovery.save_thread_reference(
-                        booking_key=parsed.new_booking_key,
-                        channel_id=thread.channel_id,
-                        thread_ts=thread.thread_ts,
-                        root_booking_key=parsed.booking_key,
-                    )
-                return
-            except SlackApiError:
-                logger.exception(
-                    "issue_thread_post_failed",
-                    booking_key=parsed.booking_key,
-                    thread_ts=thread.thread_ts,
-                )
-
-        say(
-            text="이관 예약 정보를 확인해주세요 🚗",
-            blocks=build_transfer_parsing_result_message(
-                booking_key=parsed.booking_key,
-                customer_name=parsed.customer_name,
-                company_name=parsed.company_name,
-                company_sub_name=parsed.company_sub_name,
-                settlement_cost=parsed.settlement_cost,
-                carmore_cost=parsed.carmore_cost,
-                button_value=parsed.model_dump_json(),
-            ),
-            thread_ts=message_ts,
-        )
+        elif route == "reservation" and _should_process_message(message):
+            _cache_reservation_origin_thread(message, discovery)

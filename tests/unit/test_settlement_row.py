@@ -81,7 +81,7 @@ class TestSettlementRow:
         assert row.updated_at != ""
 
     def test_to_dict_필드_수_확인(self):
-        """to_dict()가 20개 필드를 반환하는지 확인"""
+        """to_dict()가 21개 필드를 반환하는지 확인"""
         row = SettlementRow(
             settlement_day="2025-01-28",
             user_name="작성자",
@@ -98,7 +98,7 @@ class TestSettlementRow:
         )
 
         result = row.to_dict()
-        assert len(result) == 20
+        assert len(result) == 21
 
     def test_to_dict_키가_SETTLEMENT_FIELDS와_일치(self):
         """to_dict()의 키가 SETTLEMENT_FIELDS와 동일한지 확인"""

@@ -96,6 +96,7 @@ _BASE_COLUMNS: dict[str, str] = {
     "판매채널": "sales_channel",
     "내용": "description",
     "처리": "status",
+    "재이관상태": "transfer_status",
     "승인자": "approver_name",
     "등록시간": "created_at",
     "수정시간": "updated_at",
