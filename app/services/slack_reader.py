@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from slack_sdk import WebClient
 
 from app.infrastructure.slack_client import (
@@ -13,6 +15,9 @@ from app.infrastructure.slack_client import (
 )
 from app.infrastructure.slack_client import (
     get_user_real_name as _get_user_real_name,
+)
+from app.infrastructure.slack_client import (
+    list_channel_messages as _list_channel_messages,
 )
 
 
@@ -38,4 +43,15 @@ class SlackReader:
     ) -> str | None:
         return _find_message_by_text(
             self._client, channel_id, search_text, max_pages=max_pages
+        )
+
+    def list_channel_messages(
+        self,
+        channel_id: str,
+        *,
+        oldest: float = 0,
+        max_pages: int = 10,
+    ) -> Iterator[dict]:
+        return _list_channel_messages(
+            self._client, channel_id, oldest=oldest, max_pages=max_pages
         )

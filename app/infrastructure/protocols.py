@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
@@ -46,6 +47,14 @@ class SlackMessageReader(Protocol):
         *,
         max_pages: int = 10,
     ) -> str | None: ...
+
+    def list_channel_messages(
+        self,
+        channel_id: str,
+        *,
+        oldest: float = 0,
+        max_pages: int = 10,
+    ) -> Iterator[dict]: ...
 
 
 @runtime_checkable

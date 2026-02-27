@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
@@ -40,6 +42,35 @@ def get_thread_parent_message(
     except SlackApiError:
         pass
     return None
+
+
+def list_channel_messages(
+    client: WebClient,
+    channel_id: str,
+    *,
+    oldest: float = 0,
+    max_pages: int = 10,
+    page_size: int = 200,
+) -> Iterator[dict]:
+    """채널의 top-level 메시지를 페이지네이션하며 yield한다."""
+    cursor = None
+    for _ in range(max_pages):
+        kwargs: dict = {
+            "channel": channel_id,
+            "limit": page_size,
+            "oldest": str(oldest),
+        }
+        if cursor:
+            kwargs["cursor"] = cursor
+
+        result = client.conversations_history(**kwargs)
+
+        yield from result.get("messages", [])
+
+        metadata = result.get("response_metadata", {})
+        cursor = metadata.get("next_cursor")
+        if not cursor:
+            break
 
 
 def find_message_by_text(
