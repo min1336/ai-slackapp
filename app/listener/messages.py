@@ -139,6 +139,7 @@ def _cache_reservation_origin_thread(message: dict, discovery) -> None:
     parsed = parse_settlement_message(text)
     booking_key = parsed.booking_key.strip()
     if not booking_key:
+        logger.debug("reservation_cache_skip_no_booking_key", text_preview=text[:80])
         return
 
     discovery.register_origin_thread(
