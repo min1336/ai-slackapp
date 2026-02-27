@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from unittest.mock import Mock
+
 import pytest
+from slack_sdk.errors import SlackApiError
 
 from app.infrastructure.database.repository import ThreadReferenceRepository
 from app.models import ThreadLocation
@@ -226,15 +229,31 @@ class TestBackfillReservationThreads:
 
         assert saved == 0
 
-    def test_API_에러시_저장된_건수만_반환(self, fake_reader, service):
-        def _raise_on_iterate(*_args, **_kwargs):
-            raise RuntimeError("Slack API error")
+    def test_API_에러시_0_반환(self, fake_reader, service):
+        def _raise_on_call(*_args, **_kwargs):
+            raise SlackApiError(message="channel_not_found", response=Mock())
 
-        fake_reader.list_channel_messages = _raise_on_iterate
+        fake_reader.list_channel_messages = _raise_on_call
 
         saved = service.backfill_reservation_threads(days=7)
 
         assert saved == 0
+
+    def test_iteration_중_API_에러시_저장된_건수만_반환(
+        self, fake_db, fake_reader, service
+    ):
+        def _yield_then_raise(channel_id, *, oldest=0, max_pages=10):
+            yield {"text": "예약번호 : BK-OK\n업체명 : 성공", "ts": "100.100"}
+            raise SlackApiError(message="rate_limited", response=Mock())
+
+        fake_reader.list_channel_messages = _yield_then_raise
+
+        saved = service.backfill_reservation_threads(days=7)
+
+        assert saved == 1
+        with fake_db.get_session() as session:
+            repo = ThreadReferenceRepository(session)
+            assert repo.get_by_booking_key("BK-OK") is not None
 
 
 class TestTransferThreadReference:
