@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 
@@ -16,6 +17,7 @@ class FakeSlackReader:
         self.thread_urls: dict[tuple[str, str], str] = {}
         self.parent_messages: dict[tuple[str, str], str | None] = {}
         self.messages_by_text: dict[tuple[str, str], str | None] = {}
+        self.channel_messages: dict[str, list[dict]] = {}
 
     def get_user_name(self, user_id: str) -> str:
         return self.user_names.get(user_id, "")
@@ -34,6 +36,15 @@ class FakeSlackReader:
         max_pages: int = 10,
     ) -> str | None:
         return self.messages_by_text.get((channel_id, search_text))
+
+    def list_channel_messages(
+        self,
+        channel_id: str,
+        *,
+        oldest: float = 0,
+        max_pages: int = 10,
+    ) -> Iterator[dict]:
+        yield from self.channel_messages.get(channel_id, [])
 
 
 class FakeSlackWriter:
