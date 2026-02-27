@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from app.core import get_logger
 from app.models import ThreadLocation
+from app.services.message_parser import parse_settlement_message
 
 if TYPE_CHECKING:
     from app.infrastructure.protocols import SlackMessageReader
@@ -86,6 +88,49 @@ class ThreadDiscoveryService:
             channel_id=channel_id,
             thread_ts=thread_ts,
         )
+
+    def backfill_reservation_threads(self, days: int = 7) -> int:
+        """예약 채널의 최근 메시지를 스캔하여 ThreadReference DB를 채운다."""
+        if not self._reservation_channel:
+            return 0
+
+        oldest = time.time() - (days * 86400)
+        saved = 0
+
+        try:
+            messages = self._reader.list_channel_messages(
+                self._reservation_channel, oldest=oldest
+            )
+        except Exception:
+            logger.exception("backfill_channel_read_failed")
+            return 0
+
+        for msg in messages:
+            try:
+                text = msg.get("text", "")
+                parsed = parse_settlement_message(text)
+                booking_key = parsed.booking_key.strip()
+                if not booking_key:
+                    continue
+
+                message_ts = msg.get("ts", "")
+                if not message_ts:
+                    continue
+
+                if self._store.get_by_booking_key(booking_key):
+                    continue
+
+                self._store.save(
+                    booking_key=booking_key,
+                    channel_id=self._reservation_channel,
+                    thread_ts=message_ts,
+                )
+                saved += 1
+            except Exception:
+                logger.exception("backfill_message_error", ts=msg.get("ts"))
+
+        logger.info("backfill_completed", saved=saved)
+        return saved
 
     def save_transfer_thread_reference(
         self,

@@ -168,6 +168,75 @@ class TestGetChainBookingKeys:
         assert keys == []
 
 
+class TestBackfillReservationThreads:
+    def test_백필로_채널_메시지에서_booking_key를_캐시한다(
+        self, fake_db, fake_reader, service
+    ):
+        fake_reader.channel_messages["C_ISSUE"] = [
+            {"text": "예약번호 : BK-100\n업체명 : 테스트업체", "ts": "100.100"},
+            {"text": "예약번호 : BK-200\n업체명 : 다른업체", "ts": "200.200"},
+        ]
+
+        saved = service.backfill_reservation_threads(days=7)
+
+        assert saved == 2
+        with fake_db.get_session() as session:
+            repo = ThreadReferenceRepository(session)
+            ref1 = repo.get_by_booking_key("BK-100")
+            ref2 = repo.get_by_booking_key("BK-200")
+            assert ref1 is not None
+            assert ref1.thread_ts == "100.100"
+            assert ref1.channel_id == "C_ISSUE"
+            assert ref2 is not None
+            assert ref2.thread_ts == "200.200"
+
+    def test_이미_DB에_있는_건은_스킵한다(self, fake_db, fake_reader, service):
+        # Given — DB에 이미 있는 건
+        with fake_db.get_session() as session:
+            repo = ThreadReferenceRepository(session)
+            repo.save(
+                booking_key="BK-100",
+                channel_id="C_ISSUE",
+                thread_ts="100.100",
+            )
+
+        fake_reader.channel_messages["C_ISSUE"] = [
+            {"text": "예약번호 : BK-100\n업체명 : 테스트업체", "ts": "100.100"},
+            {"text": "예약번호 : BK-NEW\n업체명 : 신규업체", "ts": "200.200"},
+        ]
+
+        saved = service.backfill_reservation_threads(days=7)
+
+        assert saved == 1  # BK-NEW만 저장
+
+    def test_파싱_안되는_메시지는_스킵한다(self, fake_reader, service):
+        fake_reader.channel_messages["C_ISSUE"] = [
+            {"text": "아무 관련 없는 메시지", "ts": "100.100"},
+            {"text": "", "ts": "200.200"},
+        ]
+
+        saved = service.backfill_reservation_threads(days=7)
+
+        assert saved == 0
+
+    def test_채널_미설정시_0_반환(self, store, fake_reader):
+        svc = ThreadDiscoveryService(store, fake_reader, reservation_channel="")
+
+        saved = svc.backfill_reservation_threads(days=7)
+
+        assert saved == 0
+
+    def test_API_에러시_저장된_건수만_반환(self, fake_reader, service):
+        def _raise_on_iterate(*_args, **_kwargs):
+            raise RuntimeError("Slack API error")
+
+        fake_reader.list_channel_messages = _raise_on_iterate
+
+        saved = service.backfill_reservation_threads(days=7)
+
+        assert saved == 0
+
+
 class TestTransferThreadReference:
     def test_이관_체인_저장시_root를_최초키로_유지한다(self, fake_db, service):
         service.save_thread_reference(
