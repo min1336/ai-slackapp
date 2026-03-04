@@ -119,7 +119,7 @@ class SlackChannelsConfig(BaseModel):
     transfer_reservation: str = ""
     error: str = ""  # 에러 모니터링 채널
     approval: str = ""  # 승인 전용 채널
-    reservation: str = ""  # 예약 채널 (!정산이슈 + 스레드 탐색)
+    reservation: list[str] = []  # 예약 채널 목록 (!정산이슈 + 스레드 탐색)
 
     model_config = ConfigDict(populate_by_name=True)
 

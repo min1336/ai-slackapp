@@ -14,7 +14,7 @@ class TestRouteChannelMessage:
             message={"text": "이관 전 예약번호 : 7777", "ts": "1.0"},
             channel_id="C-SAME",
             transfer_channel="C-SAME",
-            reservation_channel="C-SAME",
+            reservation_channels=["C-SAME"],
         )
         assert result == "transfer"
 
@@ -23,7 +23,7 @@ class TestRouteChannelMessage:
             message={"text": "예약번호 : 1234", "ts": "1.0"},
             channel_id="C-SAME",
             transfer_channel="C-SAME",
-            reservation_channel="C-SAME",
+            reservation_channels=["C-SAME"],
         )
         assert result == "reservation"
 
@@ -32,7 +32,7 @@ class TestRouteChannelMessage:
             message={"text": "이관 전 예약번호 : 7777", "ts": "1.0"},
             channel_id="C-TRAN",
             transfer_channel="C-TRAN",
-            reservation_channel="C-RESV",
+            reservation_channels=["C-RESV"],
         )
         assert result == "transfer"
 
@@ -41,7 +41,7 @@ class TestRouteChannelMessage:
             message={"text": "예약번호 : 1234", "ts": "1.0"},
             channel_id="C-RESV",
             transfer_channel="C-TRAN",
-            reservation_channel="C-RESV",
+            reservation_channels=["C-RESV"],
         )
         assert result == "reservation"
 
@@ -50,7 +50,7 @@ class TestRouteChannelMessage:
             message={"text": "이관 전 예약번호 : 7777", "ts": "1.0"},
             channel_id="C-RESV",
             transfer_channel="",
-            reservation_channel="C-RESV",
+            reservation_channels=["C-RESV"],
         )
         assert result == "reservation"
 
@@ -59,6 +59,24 @@ class TestRouteChannelMessage:
             message={"text": "이관 전 예약번호 : 7777", "ts": "1.0"},
             channel_id="C-OTHER",
             transfer_channel="C-TRAN",
-            reservation_channel="C-RESV",
+            reservation_channels=["C-RESV"],
+        )
+        assert result == "ignore"
+
+    def test_멀티채널_중_하나에_속하면_reservation으로_라우팅(self):
+        result = _route_channel_message(
+            message={"text": "예약번호 : 1234", "ts": "1.0"},
+            channel_id="C-RESV-2",
+            transfer_channel="C-TRAN",
+            reservation_channels=["C-RESV-1", "C-RESV-2", "C-RESV-3"],
+        )
+        assert result == "reservation"
+
+    def test_reservation_미설정시_ignore로_라우팅(self):
+        result = _route_channel_message(
+            message={"text": "예약번호 : 1234", "ts": "1.0"},
+            channel_id="C-RESV",
+            transfer_channel="C-TRAN",
+            reservation_channels=[],
         )
         assert result == "ignore"

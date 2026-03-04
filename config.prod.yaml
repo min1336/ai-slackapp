@@ -9,7 +9,12 @@ slack_channels:
   transfer_reservation: "C0115V08YS1" # 카모아_업체이관
   error: "C0AANUJGPAB" # ai-test
   approval: "C0AGV65DXMX"  # 정산이슈_확인
-  reservation: "C9P7XQAFR"  # 카모아_예약이
+  reservation:
+    - "C9P7XQAFR"      # 카모아_예약이
+    - "C03BC09MB5M"    # 카모아_예약이_월구독
+    - "CD7HGH37W"      # 카모아_예약이_월렌트
+    - "C03BS2EML14"    # 카모아_월구독_조기반납
+    - "C01L1TVPHBR"    # 카모아_월렌트_조기반납
 
 # 시트 동기화 배치 스케줄 (cron 표현식)
 sync_schedule: "0 8 * * *"  # 매일 08:00

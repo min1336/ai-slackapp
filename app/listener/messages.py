@@ -40,11 +40,11 @@ def _route_channel_message(
     message: dict,
     channel_id: str,
     transfer_channel: str,
-    reservation_channel: str,
+    reservation_channels: list[str],
 ) -> str:
     """메시지 라우팅 결정: 'transfer', 'reservation', 'ignore'."""
     is_transfer_ch = bool(transfer_channel and channel_id == transfer_channel)
-    is_reservation_ch = bool(reservation_channel and channel_id == reservation_channel)
+    is_reservation_ch = channel_id in reservation_channels
 
     if is_transfer_ch and _should_process_message(message):
         text = message.get("text", "")
@@ -158,7 +158,7 @@ def register_message_handlers(app: App, container: ServiceContainer) -> None:
     discovery = container.discovery
     reader = container.reader
     writer = container.writer
-    reservation_channel = container.reservation_channel
+    reservation_channels = container.reservation_channels
     transfer_channel = container.transfer_channel
 
     @app.message(re.compile(rf"^{re.escape(Command.SETTLEMENT_ISSUE)}$"))
@@ -167,7 +167,7 @@ def register_message_handlers(app: App, container: ServiceContainer) -> None:
         thread_ts = message.get("thread_ts")
         message_ts = message.get("ts")
 
-        if reservation_channel and channel_id != reservation_channel:
+        if reservation_channels and channel_id not in reservation_channels:
             return
 
         if not thread_ts:
@@ -221,7 +221,7 @@ def register_message_handlers(app: App, container: ServiceContainer) -> None:
             message=message,
             channel_id=channel_id,
             transfer_channel=transfer_channel,
-            reservation_channel=reservation_channel,
+            reservation_channels=reservation_channels,
         )
 
         if route == "transfer":

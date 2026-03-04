@@ -4,6 +4,8 @@ import time
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
+from slack_sdk.errors import SlackApiError
+
 from app.core import get_logger
 from app.models import ThreadLocation
 from app.services.message_parser import parse_settlement_message
@@ -20,11 +22,11 @@ class ThreadDiscoveryService:
         self,
         thread_ref_store: ThreadReferenceStore,
         reader: SlackMessageReader,
-        reservation_channel: str,
+        reservation_channels: list[str],
     ) -> None:
         self._store = thread_ref_store
         self._reader = reader
-        self._reservation_channel = reservation_channel
+        self._reservation_channels = reservation_channels
 
     def find_issue_thread(
         self,
@@ -32,9 +34,8 @@ class ThreadDiscoveryService:
         *,
         fallback_booking_keys: Iterable[str] = (),
     ) -> ThreadLocation | None:
-        reservation_channel = self._reservation_channel
-        if not reservation_channel:
-            logger.warning("reservation_channel_not_configured")
+        if not self._reservation_channels:
+            logger.warning("reservation_channels_not_configured")
             return None
 
         candidate_keys = self._candidate_booking_keys(
@@ -47,14 +48,15 @@ class ThreadDiscoveryService:
         if location:
             return location
 
-        # 2단계: Slack API 폴백
-        location = self._find_issue_thread_in_slack(
-            reservation_channel=reservation_channel,
-            target_booking_key=booking_key,
-            candidate_keys=candidate_keys,
-        )
-        if location:
-            return location
+        # 2단계: Slack API 폴백 — 채널 순서대로 탐색, 첫 발견 즉시 반환
+        for ch in self._reservation_channels:
+            location = self._find_issue_thread_in_slack(
+                reservation_channel=ch,
+                target_booking_key=booking_key,
+                candidate_keys=candidate_keys,
+            )
+            if location:
+                return location
 
         logger.info(
             "thread_not_found_in_slack",
@@ -90,8 +92,8 @@ class ThreadDiscoveryService:
         )
 
     def backfill_reservation_threads(self, days: int = 7) -> int:
-        """예약 채널의 최근 메시지를 스캔하여 ThreadReference DB를 채운다."""
-        if not self._reservation_channel:
+        """예약 채널 목록을 순차 스캔하여 ThreadReference DB를 채운다."""
+        if not self._reservation_channels:
             logger.warning("backfill_skipped_no_channel")
             return 0
 
@@ -99,13 +101,11 @@ class ThreadDiscoveryService:
         saved = 0
         scanned = 0
 
-        try:
-            messages = self._reader.list_channel_messages(
-                self._reservation_channel, oldest=oldest
-            )
-            for msg in messages:
-                scanned += 1
-                try:
+        for ch in self._reservation_channels:
+            try:
+                messages = self._reader.list_channel_messages(ch, oldest=oldest)
+                for msg in messages:
+                    scanned += 1
                     text = msg.get("text", "")
                     parsed = parse_settlement_message(text)
                     booking_key = parsed.booking_key.strip()
@@ -121,14 +121,13 @@ class ThreadDiscoveryService:
 
                     self._store.save(
                         booking_key=booking_key,
-                        channel_id=self._reservation_channel,
+                        channel_id=ch,
                         thread_ts=message_ts,
                     )
                     saved += 1
-                except Exception:
-                    logger.exception("backfill_message_error", ts=msg.get("ts"))
-        except Exception:
-            logger.exception("backfill_channel_read_failed", saved_so_far=saved)
+            except SlackApiError:
+                logger.exception("backfill_channel_read_failed", channel_id=ch)
+                continue  # 한 채널 실패 시 다음 채널 계속
 
         logger.info("backfill_completed", saved=saved, scanned=scanned)
         return saved

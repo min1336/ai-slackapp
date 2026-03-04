@@ -26,12 +26,12 @@ def store(fake_db):
 
 @pytest.fixture
 def service(store, fake_reader):
-    return ThreadDiscoveryService(store, fake_reader, reservation_channel="C_ISSUE")
+    return ThreadDiscoveryService(store, fake_reader, reservation_channels=["C_ISSUE"])
 
 
 class TestFindIssueThread:
     def test_채널_미설정시_None_반환(self, store, fake_reader):
-        svc = ThreadDiscoveryService(store, fake_reader, reservation_channel="")
+        svc = ThreadDiscoveryService(store, fake_reader, reservation_channels=[])
         result = svc.find_issue_thread("BK-001")
 
         assert result is None
@@ -94,6 +94,16 @@ class TestFindIssueThread:
         result = service.find_issue_thread("BK-LABELED")
 
         assert result == ThreadLocation(channel_id="C_ISSUE", thread_ts="555.111")
+
+    def test_멀티채널_첫_채널_미스시_두번째_채널에서_발견한다(self, store, fake_reader):
+        svc = ThreadDiscoveryService(
+            store, fake_reader, reservation_channels=["C_A", "C_B"]
+        )
+        fake_reader.messages_by_text[("C_B", "BK-001")] = "222.222"
+
+        result = svc.find_issue_thread("BK-001")
+
+        assert result == ThreadLocation(channel_id="C_B", thread_ts="222.222")
 
 
 class TestSaveThreadReference:
@@ -223,7 +233,7 @@ class TestBackfillReservationThreads:
         assert saved == 0
 
     def test_채널_미설정시_0_반환(self, store, fake_reader):
-        svc = ThreadDiscoveryService(store, fake_reader, reservation_channel="")
+        svc = ThreadDiscoveryService(store, fake_reader, reservation_channels=[])
 
         saved = svc.backfill_reservation_threads(days=7)
 
@@ -249,6 +259,52 @@ class TestBackfillReservationThreads:
         fake_reader.list_channel_messages = _yield_then_raise
 
         saved = service.backfill_reservation_threads(days=7)
+
+        assert saved == 1
+        with fake_db.get_session() as session:
+            repo = ThreadReferenceRepository(session)
+            assert repo.get_by_booking_key("BK-OK") is not None
+
+    def test_멀티채널_모든_채널을_스캔한다(self, fake_db, store, fake_reader):
+        svc = ThreadDiscoveryService(
+            store, fake_reader, reservation_channels=["C_A", "C_B"]
+        )
+        fake_reader.channel_messages["C_A"] = [
+            {"text": "예약번호 : BK-A1\n업체명 : 업체A", "ts": "100.100"},
+        ]
+        fake_reader.channel_messages["C_B"] = [
+            {"text": "예약번호 : BK-B1\n업체명 : 업체B", "ts": "200.200"},
+        ]
+
+        saved = svc.backfill_reservation_threads(days=7)
+
+        assert saved == 2
+        with fake_db.get_session() as session:
+            repo = ThreadReferenceRepository(session)
+            ref_a = repo.get_by_booking_key("BK-A1")
+            ref_b = repo.get_by_booking_key("BK-B1")
+            assert ref_a is not None and ref_a.channel_id == "C_A"
+            assert ref_b is not None and ref_b.channel_id == "C_B"
+
+    def test_멀티채널_한_채널_실패시_나머지_계속_스캔한다(
+        self, fake_db, store, fake_reader
+    ):
+        svc = ThreadDiscoveryService(
+            store, fake_reader, reservation_channels=["C_FAIL", "C_OK"]
+        )
+        original_list = fake_reader.list_channel_messages
+
+        def _selective_fail(channel_id, *, oldest=0, max_pages=10):
+            if channel_id == "C_FAIL":
+                raise SlackApiError(message="channel_not_found", response=Mock())
+            return original_list(channel_id, oldest=oldest, max_pages=max_pages)
+
+        fake_reader.list_channel_messages = _selective_fail
+        fake_reader.channel_messages["C_OK"] = [
+            {"text": "예약번호 : BK-OK\n업체명 : 업체", "ts": "100.100"},
+        ]
+
+        saved = svc.backfill_reservation_threads(days=7)
 
         assert saved == 1
         with fake_db.get_session() as session:

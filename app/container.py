@@ -100,10 +100,10 @@ class ServiceContainer:
         self.discovery = ThreadDiscoveryService(
             self.thread_ref_store,
             self.reader,
-            reservation_channel=config.slack_channels.reservation,
+            reservation_channels=config.slack_channels.reservation,
         )
         self.sync_service = SyncService(self.sync_processor, _sheets)
 
         # Channels (listener에서 참조)
-        self.reservation_channel = config.slack_channels.reservation
+        self.reservation_channels = config.slack_channels.reservation
         self.transfer_channel = config.slack_channels.transfer_reservation

@@ -10,6 +10,8 @@ slack_channels:
   transfer_reservation: "C_TEST_TRANSFER"
   error: "C_TEST_ERROR"
   approval: "C_TEST_APPROVAL"
+  reservation:
+    - "C_TEST_RESERVATION"
 
 spreadsheet:
   # 반드시 테스트 전용 스프레드시트 ID로 교체하세요.
