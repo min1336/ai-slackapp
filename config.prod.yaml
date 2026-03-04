@@ -27,6 +27,7 @@ spreadsheet:
   sheets:
     settlement:
       name: "정산용(AI연동)"
+      header_row: 2  # 1행은 메모용, 2행부터 헤더
       # 헤더 이름 → 코드 필드 매핑
       # 시트 헤더 이름이 바뀌면 왼쪽(헤더명)만 바꾸세요.
       # config에 없는 필드는 시트에 기록되지 않습니다.
@@ -50,6 +51,7 @@ spreadsheet:
         "작성자": user_name
     issue_log:
       name: "CS확인용(AI연동)"
+      header_row: 1
       columns:
         "정산기준일": settlement_day
         "작성자": user_name

@@ -373,3 +373,63 @@ class TestClientRefresh:
         # 갱신 후 캐시가 클리어되어야 함
         assert svc._worksheet_cache.get("test") is None
         assert svc._mapping_cache.get("test") is None
+
+
+# ── header_row 설정 ──────────────────────────────────────────────
+
+
+class TestHeaderRow:
+    def test_header_row_2에서_헤더_읽기(self):
+        """header_row=2이면 row_values(2)에서 헤더를 읽는다."""
+        mock_ws = MagicMock(spec=Worksheet)
+        mock_ws.title = "정산"
+        mock_ws.findall.return_value = []
+
+        memo_row = ["메모: 이 시트는 봇이 관리합니다"] + [""] * (
+            len(_SETTLEMENT_HEADERS) - 1
+        )
+
+        def _row_values(row_num):
+            if row_num == 2:
+                return _SETTLEMENT_HEADERS
+            return memo_row
+
+        mock_ws.row_values.side_effect = _row_values
+
+        mock_ss = MagicMock(spec=gspread.Spreadsheet)
+        mock_ss.worksheet.return_value = mock_ws
+
+        svc = SpreadsheetService(
+            client_factory=lambda: mock_ss,
+            sheet_name_resolver=_sheet_name,
+            field_to_header_resolver=_field_to_header,
+            header_row_resolver=lambda _: 2,
+        )
+
+        row = _make_row()
+        mock_ws.append_row.return_value = None
+        svc.save_settlement_row(row)
+
+        mock_ws.row_values.assert_any_call(2)
+        mock_ws.append_row.assert_called_once()
+
+    def test_header_row_미지정시_기본값_1(self):
+        """header_row_resolver가 None이면 row_values(1)을 읽는다."""
+        mock_ws = MagicMock(spec=Worksheet)
+        mock_ws.title = "정산"
+        mock_ws.row_values.return_value = _SETTLEMENT_HEADERS
+        mock_ws.findall.return_value = []
+        mock_ws.append_row.return_value = None
+
+        mock_ss = MagicMock(spec=gspread.Spreadsheet)
+        mock_ss.worksheet.return_value = mock_ws
+
+        svc = SpreadsheetService(
+            client_factory=lambda: mock_ss,
+            sheet_name_resolver=_sheet_name,
+            field_to_header_resolver=_field_to_header,
+        )
+
+        svc.save_settlement_row(_make_row())
+
+        mock_ws.row_values.assert_any_call(1)

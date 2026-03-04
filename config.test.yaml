@@ -19,6 +19,7 @@ spreadsheet:
   sheets:
     settlement:
       name: "정산"
+      header_row: 1
       columns:
         "정산기준일": settlement_day
         "작성자": user_name
@@ -44,6 +45,7 @@ spreadsheet:
         "정산완료": settlement_completed
     issue_log:
       name: "정산이슈로그"
+      header_row: 1
       columns:
         "정산기준일": settlement_day
         "작성자": user_name

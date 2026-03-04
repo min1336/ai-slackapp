@@ -127,6 +127,7 @@ class SlackChannelsConfig(BaseModel):
 class SpreadsheetSheetConfig(BaseModel):
     name: str
     columns: dict[str, str] = Field(default_factory=dict)
+    header_row: int = 1
 
 
 class SheetsConfig(BaseModel):
@@ -158,6 +159,9 @@ class SpreadsheetConfig(BaseModel):
         """내부용: sheet_type별 field_name → header_name 매핑."""
         columns = self._sheet_config(sheet_type).columns
         return {v: k for k, v in columns.items()}
+
+    def header_row(self, sheet_type: str) -> int:
+        return self._sheet_config(sheet_type).header_row
 
 
 class AppConfig(BaseModel):

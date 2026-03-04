@@ -57,6 +57,7 @@ class ServiceContainer:
                 client_factory=_create_spreadsheet_client,
                 sheet_name_resolver=config.spreadsheet.sheet_name,
                 field_to_header_resolver=config.spreadsheet.field_to_header,
+                header_row_resolver=config.spreadsheet.header_row,
             )
         else:
             _sheets = sheets

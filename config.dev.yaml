@@ -21,6 +21,7 @@ spreadsheet:
   sheets:
     settlement:
       name: "정산"
+      header_row: 1  # 헤더가 위치한 행 번호 (1행 위에 메모 행 추가 시 2로 변경)
       # 헤더 이름 → 코드 필드 매핑
       # 시트 헤더 이름이 바뀌면 왼쪽(헤더명)만 바꾸세요.
       # config에 없는 필드는 시트에 기록되지 않습니다.
@@ -44,6 +45,7 @@ spreadsheet:
         "작성자": user_name
     issue_log:
       name: "정산이슈로그"
+      header_row: 1
       columns:
         "정산기준일": settlement_day
         "작성자": user_name

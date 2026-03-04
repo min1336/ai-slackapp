@@ -50,6 +50,7 @@ class SpreadsheetService:
         client_factory: Callable[[], gspread.Spreadsheet],
         sheet_name_resolver: Callable[[str], str],
         field_to_header_resolver: Callable[[str], dict[str, str]],
+        header_row_resolver: Callable[[str], int] | None = None,
         *,
         client_refresh_minutes: int = 55,
         cache_ttl_seconds: int = 300,
@@ -57,6 +58,7 @@ class SpreadsheetService:
         self._client_factory = client_factory
         self._sheet_name = sheet_name_resolver
         self._field_to_header = field_to_header_resolver
+        self._header_row = header_row_resolver or (lambda _: 1)
 
         self._client: gspread.Spreadsheet | None = None
         self._client_lock = Lock()
@@ -103,7 +105,7 @@ class SpreadsheetService:
         if cached is not None:
             return cached
 
-        headers = worksheet.row_values(1)
+        headers = worksheet.row_values(self._header_row(sheet_type))
         field_to_header = self._field_to_header(sheet_type)
         configured = tuple(f for f in SETTLEMENT_FIELDS if f in field_to_header)
 
@@ -346,11 +348,12 @@ class SpreadsheetService:
             mapping = self._resolve_mapping(worksheet, "settlement")
 
             all_rows = worksheet.get_all_values()
-            if len(all_rows) <= 1:
+            header_row = self._header_row("settlement")
+            if len(all_rows) <= header_row:
                 return set()
 
             completed_keys: set[str] = set()
-            for row_values in all_rows[1:]:
+            for row_values in all_rows[header_row:]:
                 data = mapping.row_to_dict(row_values)
                 if data.get("settlement_completed") == "TRUE":
                     booking_key = data.get("booking_key", "")
