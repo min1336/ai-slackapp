@@ -227,3 +227,9 @@ __marimo__/
 *.code-workspace
 
 credentials.json
+
+# Auto Claude data directory
+.auto-claude/
+
+# Git worktrees
+.worktrees/
