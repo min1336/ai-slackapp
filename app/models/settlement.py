@@ -62,14 +62,9 @@ class SettlementData(BaseModel):
             return None
         if isinstance(v, int):
             return v
-        # "-1,000,000원" → -1000000
-        text = str(v).strip()
-        negative = text.startswith("-")
-        cleaned = re.sub(r"[^\d]", "", text)
-        if not cleaned:
-            return None
-        result = int(cleaned)
-        return -result if negative else result
+        # "1,000,000원" → 1000000
+        cleaned = re.sub(r"[^\d]", "", str(v))
+        return int(cleaned) if cleaned else None
 
 
 class ModalMetadata(BaseModel):

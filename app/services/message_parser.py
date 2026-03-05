@@ -66,11 +66,7 @@ class ParsedTransferReservation(BaseModel):
     def digits_only_money(cls, v: str) -> str:
         if not isinstance(v, str) or not v:
             return v
-        negative = v.strip().startswith("-")
-        cleaned = re.sub(r"[^0-9]", "", v)
-        if not cleaned:
-            return v
-        return f"-{cleaned}" if negative else cleaned
+        return re.sub(r"[^0-9]", "", v)
 
 
 def is_transfer_reservation_message(text: str) -> bool:
@@ -94,11 +90,7 @@ def _clean_name(v: str) -> str:
 
 def _digits_only(v: str) -> str:
     v = _strip_value(v)
-    negative = v.startswith("-")
-    cleaned = re.sub(r"[^0-9]", "", v)
-    if not cleaned:
-        return v
-    return f"-{cleaned}" if negative else cleaned
+    return re.sub(r"[^0-9]", "", v)
 
 
 def _get_next_nonempty_line(lines: list[str], start: int) -> str:
@@ -123,9 +115,9 @@ _INLINE_PATTERNS: list[tuple[re.Pattern[str], str, Callable[[str], str]]] = [
     ),
     (re.compile(r"예약자명\s*[:：]\s*(.+)"), "customer_name", _clean_name),
     (re.compile(r"업체\s*[:：]\s*(.+)"), "company_sub_name", _strip_value),
-    (re.compile(r"원금\s*[:：]\s*(-?[0-9,]+)\s*원?"), "settlement_cost", _digits_only),
+    (re.compile(r"원금\s*[:：]\s*([0-9,]+)\s*원?"), "settlement_cost", _digits_only),
     (
-        re.compile(r"카모아\s*부담(?:비용|금)\s*[:：]\s*(-?[0-9,]+)\s*원?"),
+        re.compile(r"카모아\s*부담(?:비용|금)\s*[:：]\s*([0-9,]+)\s*원?"),
         "carmore_cost",
         _digits_only,
     ),
