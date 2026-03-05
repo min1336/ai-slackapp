@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.services.message_parser import (
     ParsedSettlement,
+    _digits_only,
     parse_settlement_message,
     parse_transfer_reservation_message,
 )
@@ -139,3 +140,34 @@ class TestParseTransferReservationMessage:
         assert result.company_sub_name == "(주)특별한렌트카 김포지점"
         assert result.settlement_cost == "332500"
         assert result.carmore_cost == "0"
+
+    def test_음수_금액이_포함된_이관_메시지를_파싱한다(self):
+        text = """[카모아 단기 업체이관]
+이관 전 예약번호 : 1095976
+예약번호 : 1095983
+예약자명 : 박종선
+업체 : 테스트렌트카
+
+<결제 정보>
+원금 : -332,500원
+카모아 부담금 : -10,000원
+"""
+
+        result = parse_transfer_reservation_message(text)
+
+        assert result.settlement_cost == "-332500"
+        assert result.carmore_cost == "-10000"
+
+
+class TestDigitsOnly:
+    def test_음수_금액_문자열에서_부호를_보존한다(self):
+        assert _digits_only("-332,500원") == "-332500"
+
+    def test_양수_금액_문자열은_기존처럼_동작한다(self):
+        assert _digits_only("332,500원") == "332500"
+
+    def test_빈_문자열은_빈_문자열을_반환한다(self):
+        assert _digits_only("") == ""
+
+    def test_숫자만_있으면_그대로_반환한다(self):
+        assert _digits_only("50000") == "50000"
