@@ -385,6 +385,7 @@ def _build_decision_message(
 # Re-exports — 하위 호환성 유지
 # ============================================================================
 
+
 from app.views.blocks_approval_channel import (  # noqa: E402, F401
     build_minimal_approval_message,
     build_minimal_approved_message,

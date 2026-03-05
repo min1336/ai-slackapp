@@ -10,6 +10,10 @@ from app.infrastructure import spreadsheet as spreadsheet_module
 from app.models import SETTLEMENT_FIELDS, SettlementRow
 
 
+def _spreadsheet_config():
+    return get_app_config().settlement.spreadsheet
+
+
 @dataclass
 class FakeCell:
     row: int
@@ -140,7 +144,7 @@ def _headers_for_settlement(
     include_settlement_completed: bool = True,
     extra_header: str | None = None,
 ) -> list[str]:
-    field_to_header = get_app_config().spreadsheet.field_to_header("settlement")
+    field_to_header = _spreadsheet_config().field_to_header("settlement")
     fields = [field for field in SETTLEMENT_FIELDS if field in field_to_header]
     if include_settlement_completed and "settlement_completed" in field_to_header:
         fields.append("settlement_completed")
@@ -158,7 +162,7 @@ def _headers_for_settlement(
 
 
 def _headers_for_issue_log(*, extra_header: str | None = None) -> list[str]:
-    field_to_header = get_app_config().spreadsheet.field_to_header("issue_log")
+    field_to_header = _spreadsheet_config().field_to_header("issue_log")
     fields = [field for field in SETTLEMENT_FIELDS if field in field_to_header]
     fields.append("sync_key")
     base_headers = [field_to_header[field] for field in fields]
@@ -180,7 +184,7 @@ def _row_values_from_fields(
     *,
     extra_values: dict[str, str] | None = None,
 ) -> list[str]:
-    field_to_header = get_app_config().spreadsheet.field_to_header(sheet_type)
+    field_to_header = _spreadsheet_config().field_to_header(sheet_type)
     by_header = {
         field_to_header[field_name]: value
         for field_name, value in field_values.items()
@@ -197,8 +201,8 @@ def _make_service(
     config = get_app_config()
     return spreadsheet_module.SpreadsheetService(
         client_factory=lambda: client,
-        sheet_name_resolver=config.spreadsheet.sheet_name,
-        field_to_header_resolver=config.spreadsheet.field_to_header,
+        sheet_name_resolver=config.settlement.spreadsheet.sheet_name,
+        field_to_header_resolver=config.settlement.spreadsheet.field_to_header,
     )
 
 
@@ -216,7 +220,7 @@ def test_save_settlement_row_updates_mapped_columns_and_preserves_unmapped(
     old_data["settlement_completed"] = "FALSE"
 
     worksheet = FakeWorksheet(
-        title=get_app_config().spreadsheet.sheet_name("settlement"),
+        title=_spreadsheet_config().sheet_name("settlement"),
         headers=headers,
         data_rows=[
             _row_values_from_fields(
@@ -228,7 +232,7 @@ def test_save_settlement_row_updates_mapped_columns_and_preserves_unmapped(
         ],
     )
     client = FakeSpreadsheetClient(
-        {get_app_config().spreadsheet.sheet_name("settlement"): worksheet}
+        {_spreadsheet_config().sheet_name("settlement"): worksheet}
     )
     service = _make_service(client)
 
@@ -240,7 +244,7 @@ def test_save_settlement_row_updates_mapped_columns_and_preserves_unmapped(
     )
     service.save_settlement_row(new_row, is_update=True)
 
-    field_to_header = get_app_config().spreadsheet.field_to_header("settlement")
+    field_to_header = _spreadsheet_config().field_to_header("settlement")
     assert worksheet.row_count == 2
     assert worksheet.value_at_header(2, extra_header) == "KEEP"
     assert worksheet.value_at_header(2, field_to_header["status"]) == "승인"
@@ -269,7 +273,7 @@ def test_find_row_by_booking_key_skips_completed_rows(monkeypatch) -> None:
     active_data["settlement_completed"] = "FALSE"
 
     worksheet = FakeWorksheet(
-        title=get_app_config().spreadsheet.sheet_name("settlement"),
+        title=_spreadsheet_config().sheet_name("settlement"),
         headers=headers,
         data_rows=[
             _row_values_from_fields("settlement", headers, completed_data),
@@ -277,13 +281,13 @@ def test_find_row_by_booking_key_skips_completed_rows(monkeypatch) -> None:
         ],
     )
     client = FakeSpreadsheetClient(
-        {get_app_config().spreadsheet.sheet_name("settlement"): worksheet}
+        {_spreadsheet_config().sheet_name("settlement"): worksheet}
     )
     service = _make_service(client)
 
     found = service.find_row_by_booking_key(
         "BK-777",
-        get_app_config().spreadsheet.sheet_name("settlement"),
+        _spreadsheet_config().sheet_name("settlement"),
     )
     assert found == 3
 
@@ -292,11 +296,11 @@ def test_find_row_by_booking_key_skips_completed_rows(monkeypatch) -> None:
 def test_save_settlement_row_raises_when_required_header_missing(monkeypatch) -> None:
     headers = _headers_for_settlement(include_settlement_completed=False)
     worksheet = FakeWorksheet(
-        title=get_app_config().spreadsheet.sheet_name("settlement"),
+        title=_spreadsheet_config().sheet_name("settlement"),
         headers=headers,
     )
     client = FakeSpreadsheetClient(
-        {get_app_config().spreadsheet.sheet_name("settlement"): worksheet}
+        {_spreadsheet_config().sheet_name("settlement"): worksheet}
     )
     service = _make_service(client)
 
@@ -316,7 +320,7 @@ def test_append_issue_log_row_skips_existing_sync_key_and_preserves_unmapped(
     old_data = old_row.to_dict()
     old_data["sync_key"] = "42"
     worksheet = FakeWorksheet(
-        title=get_app_config().spreadsheet.sheet_name("issue_log"),
+        title=_spreadsheet_config().sheet_name("issue_log"),
         headers=headers,
         data_rows=[
             _row_values_from_fields(
@@ -328,14 +332,14 @@ def test_append_issue_log_row_skips_existing_sync_key_and_preserves_unmapped(
         ],
     )
     client = FakeSpreadsheetClient(
-        {get_app_config().spreadsheet.sheet_name("issue_log"): worksheet}
+        {_spreadsheet_config().sheet_name("issue_log"): worksheet}
     )
     service = _make_service(client)
 
     new_row = _sample_row("BK-LOG-1", status="반려", approver_name="반려자")
     service.append_issue_log_row(new_row, sync_key="42")
 
-    field_to_header = get_app_config().spreadsheet.field_to_header("issue_log")
+    field_to_header = _spreadsheet_config().field_to_header("issue_log")
     assert worksheet.row_count == 2
     assert worksheet.value_at_header(2, extra_header) == "LEGACY"
     assert worksheet.value_at_header(2, field_to_header["status"]) == "요청"

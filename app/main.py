@@ -21,6 +21,7 @@ from app.error_handler import register_error_handler
 from app.listener.actions import register_action_handlers
 from app.listener.messages import register_message_handlers
 from app.listener.views import register_view_handlers
+from app.services.cancellation_image_service import CancellationImageService
 from app.services.sync_service import SyncService
 
 # 로깅 설정 (환경별 로그 레벨: dev=DEBUG, prod=INFO)
@@ -33,7 +34,7 @@ _stop_event = Event()
 
 def _start_sync_worker(sync_service: SyncService, cron_expr: str) -> None:
     def run() -> None:
-        cron = croniter(cron_expr)
+        cron = croniter(cron_expr, datetime.now())
         logger.info("sync_worker_started", schedule=cron_expr)
         while not _stop_event.is_set():
             next_run = cron.get_next(datetime)
@@ -70,6 +71,29 @@ def _start_sync_worker(sync_service: SyncService, cron_expr: str) -> None:
     Thread(target=run, daemon=True).start()
 
 
+def _start_cancellation_worker(
+    service: CancellationImageService, cron_expr: str
+) -> None:
+    def run() -> None:
+        cron = croniter(cron_expr, datetime.now())
+        logger.info("cancellation_worker_started", schedule=cron_expr)
+        while not _stop_event.is_set():
+            next_run = cron.get_next(datetime)
+            wait_seconds = (next_run - datetime.now()).total_seconds()
+
+            if _stop_event.wait(timeout=max(wait_seconds, 0)):
+                break
+
+            try:
+                service.poll_and_upload()
+            except Exception:
+                logger.exception("cancellation_poll_failed")
+
+        logger.info("cancellation_worker_stopped")
+
+    Thread(target=run, daemon=True).start()
+
+
 def _handle_shutdown(signum: int, frame) -> None:
     """SIGTERM/SIGINT 핸들러 - graceful shutdown 시작."""
     sig_name = signal.Signals(signum).name
@@ -98,17 +122,26 @@ def main():
     if database.is_configured:
         container.sync_service.recover_stale_sync_records()
         container.discovery.backfill_reservation_threads(days=7)
-        _start_sync_worker(container.sync_service, app_config.sync_schedule)
+        _start_sync_worker(container.sync_service, app_config.settlement.sync_schedule)
     else:
         logger.warning(
             "database_not_configured",
             consequence="sync_worker_disabled",
         )
 
-    register_error_handler(bolt_app, error_channel_id=app_config.error_channel_id)
+    error_channel = app_config.settlement.error_channel_id
+    register_error_handler(bolt_app, error_channel_id=error_channel)
     register_message_handlers(bolt_app, container)
     register_action_handlers(bolt_app, container)
     register_view_handlers(bolt_app, container)
+
+    if container.cancellation_image:
+        _start_cancellation_worker(
+            container.cancellation_image,
+            app_config.cancellation.poll_schedule,
+        )
+    else:
+        logger.info("cancellation_image_disabled")
 
     SocketModeHandler(bolt_app, slack_settings.app_token).start()
 

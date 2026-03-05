@@ -99,6 +99,10 @@ def find_message_by_text(
             text = msg.get("text", "")
             if search_text in text:
                 return msg.get("ts")
+            for att in msg.get("attachments", []):
+                for field in att.get("fields", []):
+                    if search_text in str(field.get("value", "")):
+                        return msg.get("ts")
 
         # 다음 페이지
         metadata = result.get("response_metadata", {})

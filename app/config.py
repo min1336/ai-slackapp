@@ -164,7 +164,7 @@ class SpreadsheetConfig(BaseModel):
         return self._sheet_config(sheet_type).header_row
 
 
-class AppConfig(BaseModel):
+class SettlementConfig(BaseModel):
     approvers: list[str] = []
     spreadsheet: SpreadsheetConfig
     slack_channels: SlackChannelsConfig = SlackChannelsConfig()
@@ -177,6 +177,32 @@ class AppConfig(BaseModel):
     @property
     def approval_channel_id(self) -> str:
         return self.slack_channels.approval
+
+
+class CancellationSlackChannelsConfig(BaseModel):
+    target: str = ""  # 결항 이미지 업로드 대상 채널
+
+
+class CancellationDriveConfig(BaseModel):
+    parent_folder_id: str = ""  # 이미지 폴더 부모 ID
+
+
+class CancellationSpreadsheetConfig(BaseModel):
+    id: str = ""
+    survey_sheet_name: str = ""
+    formatted_sheet_name: str = "운영현황"
+
+
+class CancellationConfig(BaseModel):
+    slack_channels: CancellationSlackChannelsConfig = CancellationSlackChannelsConfig()
+    drive: CancellationDriveConfig = CancellationDriveConfig()
+    spreadsheet: CancellationSpreadsheetConfig = CancellationSpreadsheetConfig()
+    poll_schedule: str = "*/5 * * * *"  # cron (기본: 5분마다)
+
+
+class AppConfig(BaseModel):
+    settlement: SettlementConfig
+    cancellation: CancellationConfig
 
 
 def resolve_config_path() -> Path:

@@ -58,6 +58,7 @@ class FakeSlackWriter:
         self.updated_messages: list[dict[str, Any]] = []
         self.deleted_messages: list[dict[str, Any]] = []
         self.ephemeral_messages: list[dict[str, Any]] = []
+        self.uploaded_files: list[dict[str, Any]] = []
         self._next_ts_counter: int = 1000
 
     def post_message(
@@ -118,9 +119,29 @@ class FakeSlackWriter:
             }
         )
 
+    def upload_file(
+        self,
+        *,
+        channel: str,
+        thread_ts: str,
+        content: bytes,
+        filename: str,
+        title: str = "",
+    ) -> None:
+        self.uploaded_files.append(
+            {
+                "channel": channel,
+                "thread_ts": thread_ts,
+                "content": content,
+                "filename": filename,
+                "title": title,
+            }
+        )
+
     def clear(self) -> None:
         self.posted_messages.clear()
         self.updated_messages.clear()
         self.deleted_messages.clear()
         self.ephemeral_messages.clear()
+        self.uploaded_files.clear()
         self._next_ts_counter = 1000

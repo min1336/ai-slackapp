@@ -233,3 +233,7 @@ credentials.json
 
 # Git worktrees
 .worktrees/
+
+# Google credentials
+*.json
+*.jsonl

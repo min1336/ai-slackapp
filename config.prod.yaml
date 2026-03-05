@@ -1,77 +1,88 @@
-# 승인자 슬랙 UserID
-# Nana, Mia
-approvers:
-  - U04JNUCN1KP
-  - U03EH2WJQCF
+settlement:
+  # 승인자 슬랙 UserID
+  # Nana, Mia
+  approvers:
+    - U04JNUCN1KP
+    - U03EH2WJQCF
 
-# 슬랙 채널 ID
-slack_channels:
-  transfer_reservation: "C0115V08YS1" # 카모아_업체이관
-  error: "C0AANUJGPAB" # ai-test
-  approval: "C0AGV65DXMX"  # 정산이슈_확인
-  reservation:
-    - "C9P7XQAFR"      # 카모아_예약이
-    - "C03BC09MB5M"    # 카모아_예약이_월구독
-    - "CD7HGH37W"      # 카모아_예약이_월렌트
-    - "C03BS2EML14"    # 카모아_월구독_조기반납
-    - "C01L1TVPHBR"    # 카모아_월렌트_조기반납
+  # 슬랙 채널 ID
+  slack_channels:
+    transfer_reservation: "C0115V08YS1" # 카모아_업체이관
+    error: "C0AANUJGPAB" # ai-test
+    approval: "C0AGV65DXMX"  # 정산이슈_확인
+    reservation:
+      - "C9P7XQAFR"      # 카모아_예약이
+      - "C03BC09MB5M"    # 카모아_예약이_월구독
+      - "CD7HGH37W"      # 카모아_예약이_월렌트
+      - "C03BS2EML14"    # 카모아_월구독_조기반납
+      - "C01L1TVPHBR"    # 카모아_월렌트_조기반납
 
-# 시트 동기화 배치 스케줄 (cron 표현식)
-sync_schedule: "0 8 * * *"  # 매일 08:00
+  # 시트 동기화 배치 스케줄 (cron 표현식)
+  sync_schedule: "0 8 * * *"  # 매일 08:00
 
-# Spread Sheet ID
-# 아래의 URL의 작업 할 시트의 id를 추출해서 작성한다
-# https://docs.google.com/spreadsheets/d/{id}
-spreadsheet:
-  id: "1Iw4Ez9Ow9qRpPrZr4I4qr1lEGOXuBTACax6XTyGUyIY"
-  sheets:
-    settlement:
-      name: "정산용(AI연동)"
-      header_row: 2  # 1행은 메모용, 2행부터 헤더
-      # 헤더 이름 → 코드 필드 매핑
-      # 시트 헤더 이름이 바뀌면 왼쪽(헤더명)만 바꾸세요.
-      # config에 없는 필드는 시트에 기록되지 않습니다.
-      columns:
-        "정산기준일": settlement_day
-        "이슈사항": issue_type
-        "고객명": customer_name
-        "예약번호": booking_key
-        "업체명1": company_name
-        "업체명2(대신배차)": company_sub_name
-        "정산기준금액": settlement_cost
-        "카모아 부담비용": carmore_cost
-        "고객환불금액": user_refund_cost
-        "내용": description
-        "판매채널": sales_channel
-        "스레드 링크": thread_url
-        "비고": note
-        "처리": status
-        "재이관상태": transfer_status
-        "정산완료": settlement_completed
-        "작성자": user_name
-    issue_log:
-      name: "CS확인용(AI연동)"
-      header_row: 1
-      columns:
-        "정산기준일": settlement_day
-        "작성자": user_name
-        "이슈사항": issue_type
-        "고객명": customer_name
-        "예약번호": booking_key
-        "업체명1": company_name
-        "업체명2(대신배차)": company_sub_name
-        "정산기준금액": settlement_cost
-        "카모아 부담비용": carmore_cost
-        "고객환불금액": user_refund_cost
-        "판매채널": sales_channel
-        "내용": description
-        "처리": status
-        "재이관상태": transfer_status
-        "승인자": approver_name
-        "등록시간": created_at
-        "수정시간": updated_at
-        "스레드 링크": thread_url
-        "비고": note
-        "검토자": reviewer_name
-        "반려사유": rejection_reason
-        "sync_key": sync_key
+  # Spread Sheet ID
+  # 아래의 URL의 작업 할 시트의 id를 추출해서 작성한다
+  # https://docs.google.com/spreadsheets/d/{id}
+  spreadsheet:
+    id: "1Iw4Ez9Ow9qRpPrZr4I4qr1lEGOXuBTACax6XTyGUyIY"
+    sheets:
+      settlement:
+        name: "정산용(AI연동)"
+        header_row: 2  # 1행은 메모용, 2행부터 헤더
+        # 헤더 이름 → 코드 필드 매핑
+        # 시트 헤더 이름이 바뀌면 왼쪽(헤더명)만 바꾸세요.
+        # config에 없는 필드는 시트에 기록되지 않습니다.
+        columns:
+          "정산기준일": settlement_day
+          "이슈사항": issue_type
+          "고객명": customer_name
+          "예약번호": booking_key
+          "업체명1": company_name
+          "업체명2(대신배차)": company_sub_name
+          "정산기준금액": settlement_cost
+          "카모아 부담비용": carmore_cost
+          "고객환불금액": user_refund_cost
+          "내용": description
+          "판매채널": sales_channel
+          "스레드 링크": thread_url
+          "비고": note
+          "처리": status
+          "재이관상태": transfer_status
+          "정산완료": settlement_completed
+          "작성자": user_name
+      issue_log:
+        name: "CS확인용(AI연동)"
+        header_row: 1
+        columns:
+          "정산기준일": settlement_day
+          "작성자": user_name
+          "이슈사항": issue_type
+          "고객명": customer_name
+          "예약번호": booking_key
+          "업체명1": company_name
+          "업체명2(대신배차)": company_sub_name
+          "정산기준금액": settlement_cost
+          "카모아 부담비용": carmore_cost
+          "고객환불금액": user_refund_cost
+          "판매채널": sales_channel
+          "내용": description
+          "처리": status
+          "재이관상태": transfer_status
+          "승인자": approver_name
+          "등록시간": created_at
+          "수정시간": updated_at
+          "스레드 링크": thread_url
+          "비고": note
+          "검토자": reviewer_name
+          "반려사유": rejection_reason
+          "sync_key": sync_key
+
+cancellation:
+  slack_channels:
+    target: ""
+  drive:
+    parent_folder_id: ""
+  spreadsheet:
+    id: ""
+    survey_sheet_name: ""
+  poll_schedule: "*/5 * * * *"

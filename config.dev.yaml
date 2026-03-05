@@ -1,71 +1,82 @@
-# 승인자 슬랙 UserID
-approvers:
-  - U0A5RD2NZ1D
+settlement:
+  # 승인자 슬랙 UserID
+  approvers:
+    - U0A5RD2NZ1D
 
-# 슬랙 채널 ID
-slack_channels:
-  transfer_reservation: "C0AANUJGPAB"
-  error: "C0AANUJGPAB"
-  approval: "C0AANUJGPAB"  # 승인 전용 채널 (실제 채널 ID로 변경 필요)
-  reservation:
-    - "C0AANUJGPAB"  # 예약 채널 (정산이슈 명령 + 스레드 탐색)
+  # 슬랙 채널 ID
+  slack_channels:
+    transfer_reservation: "C0AANUJGPAB"
+    error: "C0AANUJGPAB"
+    approval: "C0AANUJGPAB"  # 승인 전용 채널 (실제 채널 ID로 변경 필요)
+    reservation:
+      - "C0AANUJGPAB"  # 예약 채널 (정산이슈 명령 + 스레드 탐색)
 
-# 시트 동기화 배치 스케줄 (cron 표현식)
-sync_schedule: "0 8 * * *"  # 매일 08:00
+  # 시트 동기화 배치 스케줄 (cron 표현식)
+  sync_schedule: "0 8 * * *"  # 매일 08:00
 
-# Spread Sheet ID
-# 아래의 URL의 작업 할 시트의 id를 추출해서 작성한다
-# https://docs.google.com/spreadsheets/d/{id}
-spreadsheet:
-  id: "1AS3uLh8rKgHPsjKO_gy6sg1erNjVm_1fOOCPWr458bY"
-  sheets:
-    settlement:
-      name: "정산"
-      header_row: 1  # 헤더가 위치한 행 번호 (1행 위에 메모 행 추가 시 2로 변경)
-      # 헤더 이름 → 코드 필드 매핑
-      # 시트 헤더 이름이 바뀌면 왼쪽(헤더명)만 바꾸세요.
-      # config에 없는 필드는 시트에 기록되지 않습니다.
-      columns:
-        "정산기준일": settlement_day
-        "이슈사항": issue_type
-        "고객명": customer_name
-        "예약번호": booking_key
-        "업체명1": company_name
-        "업체명2(대신배차)": company_sub_name
-        "정산기준금액": settlement_cost
-        "카모아 부담비용": carmore_cost
-        "고객환불금액": user_refund_cost
-        "내용": description
-        "판매채널": sales_channel
-        "스레드 링크": thread_url
-        "비고": note
-        "처리": status
-        "재이관상태": transfer_status
-        "정산완료": settlement_completed
-        "작성자": user_name
-    issue_log:
-      name: "정산이슈로그"
-      header_row: 1
-      columns:
-        "정산기준일": settlement_day
-        "작성자": user_name
-        "이슈사항": issue_type
-        "고객명": customer_name
-        "예약번호": booking_key
-        "업체명1": company_name
-        "업체명2(대신배차)": company_sub_name
-        "정산기준금액": settlement_cost
-        "카모아 부담비용": carmore_cost
-        "고객환불금액": user_refund_cost
-        "판매채널": sales_channel
-        "내용": description
-        "처리": status
-        "재이관상태": transfer_status
-        "승인자": approver_name
-        "등록시간": created_at
-        "수정시간": updated_at
-        "스레드 링크": thread_url
-        "비고": note
-        "검토자": reviewer_name
-        "반려사유": rejection_reason
-        "sync_key": sync_key
+  # Spread Sheet ID
+  # 아래의 URL의 작업 할 시트의 id를 추출해서 작성한다
+  # https://docs.google.com/spreadsheets/d/{id}
+  spreadsheet:
+    id: "1AS3uLh8rKgHPsjKO_gy6sg1erNjVm_1fOOCPWr458bY"
+    sheets:
+      settlement:
+        name: "정산"
+        header_row: 1  # 헤더가 위치한 행 번호 (1행 위에 메모 행 추가 시 2로 변경)
+        # 헤더 이름 → 코드 필드 매핑
+        # 시트 헤더 이름이 바뀌면 왼쪽(헤더명)만 바꾸세요.
+        # config에 없는 필드는 시트에 기록되지 않습니다.
+        columns:
+          "정산기준일": settlement_day
+          "이슈사항": issue_type
+          "고객명": customer_name
+          "예약번호": booking_key
+          "업체명1": company_name
+          "업체명2(대신배차)": company_sub_name
+          "정산기준금액": settlement_cost
+          "카모아 부담비용": carmore_cost
+          "고객환불금액": user_refund_cost
+          "내용": description
+          "판매채널": sales_channel
+          "스레드 링크": thread_url
+          "비고": note
+          "처리": status
+          "재이관상태": transfer_status
+          "정산완료": settlement_completed
+          "작성자": user_name
+      issue_log:
+        name: "정산이슈로그"
+        header_row: 1
+        columns:
+          "정산기준일": settlement_day
+          "작성자": user_name
+          "이슈사항": issue_type
+          "고객명": customer_name
+          "예약번호": booking_key
+          "업체명1": company_name
+          "업체명2(대신배차)": company_sub_name
+          "정산기준금액": settlement_cost
+          "카모아 부담비용": carmore_cost
+          "고객환불금액": user_refund_cost
+          "판매채널": sales_channel
+          "내용": description
+          "처리": status
+          "재이관상태": transfer_status
+          "승인자": approver_name
+          "등록시간": created_at
+          "수정시간": updated_at
+          "스레드 링크": thread_url
+          "비고": note
+          "검토자": reviewer_name
+          "반려사유": rejection_reason
+          "sync_key": sync_key
+
+cancellation:
+  slack_channels:
+    target: "C0AANUJGPAB"
+  drive:
+    parent_folder_id: "1hbyjrc0wCvkltQ4mTrAL22gDfSWnnbMi"
+  spreadsheet:
+    id: "1rp-ILKY0tMenEgASbo6Je71NerDNrO8W_nRjoAA7d7s"
+    survey_sheet_name: "test"
+  poll_schedule: "*/5 * * * *"

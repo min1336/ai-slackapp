@@ -65,3 +65,20 @@ class SlackWriter:
         if thread_ts is not None:
             kwargs["thread_ts"] = thread_ts
         self._client.chat_postEphemeral(**kwargs)
+
+    def upload_file(
+        self,
+        *,
+        channel: str,
+        thread_ts: str,
+        content: bytes,
+        filename: str,
+        title: str = "",
+    ) -> None:
+        self._client.files_upload_v2(
+            channel=channel,
+            thread_ts=thread_ts,
+            content=content,
+            filename=filename,
+            title=title or filename,
+        )
