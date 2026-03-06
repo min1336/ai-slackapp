@@ -46,6 +46,21 @@ class SlackProperties(BaseSettings):
     )
 
 
+class JotformProperties(BaseSettings):
+    api_key: str = ""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_prefix="JOTFORM_",
+        extra="ignore",
+    )
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.api_key)
+
+
 class SpreadsheetProperties(BaseSettings):
     credentials_file: str = "credentials.json"
 
@@ -236,6 +251,10 @@ def get_spreadsheet_settings() -> SpreadsheetProperties:
 @lru_cache
 def get_database_settings() -> DatabaseProperties:
     return DatabaseProperties()
+
+
+def get_jotform_settings() -> JotformProperties:
+    return JotformProperties()
 
 
 @lru_cache

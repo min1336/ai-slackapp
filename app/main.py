@@ -12,6 +12,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 from app.config import (
     get_app_config,
     get_database_settings,
+    get_jotform_settings,
     get_slack_settings,
     resolve_config_path,
 )
@@ -112,9 +113,11 @@ def main():
     register_action_handlers(bolt_app, container)
     register_view_handlers(bolt_app, container)
 
-    if container.cancellation_image:
+    jotform = get_jotform_settings()
+    if container.cancellation_image and jotform.is_configured:
         start_webhook_server(
             container.cancellation_image,
+            api_key=jotform.api_key,
             port=container.cancellation_webhook_port,
         )
     else:

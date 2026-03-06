@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from contextlib import suppress
@@ -27,7 +28,8 @@ _PDF_EMOJI = "pdf"
 
 def _default_download(url: str) -> bytes:
     """URL에서 파일을 다운로드한다."""
-    with urllib.request.urlopen(url) as resp:  # noqa: S310
+    encoded_url = urllib.parse.quote(url, safe=":/?#[]@!$&'()*+,;=-._~%")
+    with urllib.request.urlopen(encoded_url) as resp:  # noqa: S310
         return resp.read()
 
 

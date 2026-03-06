@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.services.jotform_parser import parse_jotform_webhook
+from app.services.jotform_parser import parse_jotform_answers
 
 
 class TestParseJotformWebhook:
@@ -18,9 +18,9 @@ class TestParseJotformWebhook:
             },
             "17": {"answer": "추가 메모"},
         }
-        sub, file_urls = parse_jotform_webhook(
+        sub, file_urls = parse_jotform_answers(
             submission_id="99001",
-            raw_request=raw_request,
+            answers=raw_request,
         )
         assert sub.submission_id == "99001"
         assert sub.customer_name == "홍길동"
@@ -41,9 +41,9 @@ class TestParseJotformWebhook:
             "13": {"answer": {"full": ""}},
             "11": {"answer": ["https://jotform.com/uploads/a.jpg"]},
         }
-        sub, file_urls = parse_jotform_webhook(
+        sub, file_urls = parse_jotform_answers(
             submission_id="99002",
-            raw_request=raw_request,
+            answers=raw_request,
         )
         assert sub.customer_name == "김철수"
         assert sub.booking_key == "WB999"
@@ -60,8 +60,8 @@ class TestParseJotformWebhook:
             "13": {"answer": {"full": ""}},
             "11": {},
         }
-        _, file_urls = parse_jotform_webhook(
+        _, file_urls = parse_jotform_answers(
             submission_id="99003",
-            raw_request=raw_request,
+            answers=raw_request,
         )
         assert file_urls == []

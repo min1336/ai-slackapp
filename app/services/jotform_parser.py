@@ -1,6 +1,14 @@
 from __future__ import annotations
 
+import json
+import urllib.request
+
+from app.core import get_logger
 from app.models import SurveySubmission
+
+logger = get_logger(__name__)
+
+_JOTFORM_API_BASE = "https://api.jotform.com"
 
 _Q_CUSTOMER_NAME = "12"
 _Q_BOOKING_KEY = "14"
@@ -10,19 +18,27 @@ _Q_FILE_UPLOAD = "11"
 _Q_NOTE = "17"
 
 
-def parse_jotform_webhook(
+def fetch_jotform_submission(api_key: str, submission_id: str) -> dict:
+    """Jotform API에서 submission answers를 조회한다."""
+    url = f"{_JOTFORM_API_BASE}/submission/{submission_id}?apiKey={api_key}"
+    with urllib.request.urlopen(url) as resp:  # noqa: S310
+        data = json.loads(resp.read())
+    return data["content"]["answers"]
+
+
+def parse_jotform_answers(
     submission_id: str,
-    raw_request: dict,
+    answers: dict,
 ) -> tuple[SurveySubmission, list[str]]:
-    """Jotform webhook rawRequest에서 SurveySubmission + 파일 URL을 추출한다."""
+    """Jotform API answers에서 SurveySubmission + 파일 URL을 추출한다."""
 
     def _text(qid: str) -> str:
-        answer = raw_request.get(qid, {}).get("answer", "")
+        answer = answers.get(qid, {}).get("answer", "")
         if isinstance(answer, dict):
             return str(answer.get("full", ""))
         return str(answer)
 
-    file_answer = raw_request.get(_Q_FILE_UPLOAD, {}).get("answer", [])
+    file_answer = answers.get(_Q_FILE_UPLOAD, {}).get("answer", [])
     file_urls = list(file_answer) if isinstance(file_answer, list) else []
 
     submission = SurveySubmission(
