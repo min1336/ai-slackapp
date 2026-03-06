@@ -103,10 +103,6 @@ class SlackMessageWriter(Protocol):
 
 @runtime_checkable
 class SurveySheetGateway(Protocol):
-    def get_all_submissions(self) -> list[SurveySubmission]: ...
-
-    def mark_processed(self, submission_id: str) -> None: ...
-
     def write_formatted_row(self, submission: SurveySubmission) -> None: ...
 
 
