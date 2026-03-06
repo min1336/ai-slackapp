@@ -7,7 +7,6 @@ from google.oauth2.service_account import Credentials
 
 from app.config import get_app_config, get_spreadsheet_settings
 from app.infrastructure.database import SessionFactory, get_session
-from app.infrastructure.drive_client import DriveImageClient
 from app.infrastructure.spreadsheet import SCOPES, SpreadsheetService
 from app.infrastructure.survey_sheet import SurveySheetReader
 from app.services.approval_service import ApprovalService
@@ -115,10 +114,9 @@ class ServiceContainer:
         # Cancellation — 설정이 있을 때만 와이어링
         cancel_cfg = config.cancellation
         cancel_target = cancel_cfg.slack_channels.target
-        cancel_drive_id = cancel_cfg.drive.parent_folder_id
         cancel_sheet_id = cancel_cfg.spreadsheet.id
 
-        if cancel_target and cancel_drive_id and cancel_sheet_id:
+        if cancel_target and cancel_sheet_id:
 
             def _create_cancel_spreadsheet() -> gspread.Spreadsheet:
                 credentials = Credentials.from_service_account_file(
@@ -133,13 +131,8 @@ class ServiceContainer:
                 sheet_name=cancel_cfg.spreadsheet.survey_sheet_name,
                 formatted_sheet_name=cancel_cfg.spreadsheet.formatted_sheet_name,
             )
-            _drive = DriveImageClient(
-                credentials_file=spreadsheet_settings.credentials_file,
-                parent_folder_id=cancel_drive_id,
-            )
             self.cancellation_image = CancellationImageService(
                 survey_sheet=_survey,
-                drive=_drive,
                 writer=self.writer,
                 reader=self.reader,
                 target_channel=cancel_target,
@@ -147,4 +140,4 @@ class ServiceContainer:
         else:
             self.cancellation_image = None  # type: ignore[assignment]
 
-        self.cancellation_poll_schedule = cancel_cfg.poll_schedule
+        self.cancellation_webhook_port = cancel_cfg.webhook_port

@@ -74,9 +74,7 @@ settlement:
 cancellation:
   slack_channels:
     target: "C0AANUJGPAB"
-  drive:
-    parent_folder_id: "1hbyjrc0wCvkltQ4mTrAL22gDfSWnnbMi"
   spreadsheet:
     id: "1rp-ILKY0tMenEgASbo6Je71NerDNrO8W_nRjoAA7d7s"
     survey_sheet_name: "test"
-  poll_schedule: "*/5 * * * *"
+  webhook_port: 8080

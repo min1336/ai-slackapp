@@ -183,10 +183,6 @@ class CancellationSlackChannelsConfig(BaseModel):
     target: str = ""  # 결항 이미지 업로드 대상 채널
 
 
-class CancellationDriveConfig(BaseModel):
-    parent_folder_id: str = ""  # 이미지 폴더 부모 ID
-
-
 class CancellationSpreadsheetConfig(BaseModel):
     id: str = ""
     survey_sheet_name: str = ""
@@ -195,9 +191,8 @@ class CancellationSpreadsheetConfig(BaseModel):
 
 class CancellationConfig(BaseModel):
     slack_channels: CancellationSlackChannelsConfig = CancellationSlackChannelsConfig()
-    drive: CancellationDriveConfig = CancellationDriveConfig()
     spreadsheet: CancellationSpreadsheetConfig = CancellationSpreadsheetConfig()
-    poll_schedule: str = "*/5 * * * *"  # cron (기본: 5분마다)
+    webhook_port: int = 8080
 
 
 class AppConfig(BaseModel):
