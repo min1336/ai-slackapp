@@ -71,8 +71,8 @@ class _WebhookHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
         try:
-            answers = fetch_jotform_submission(self.jotform_api_key, submission_id)
-            sub, file_urls = parse_jotform_answers(submission_id, answers)
+            content = fetch_jotform_submission(self.jotform_api_key, submission_id)
+            sub, file_urls = parse_jotform_answers(submission_id, content)
             logger.info(
                 "webhook_received",
                 submission_id=sub.submission_id,
