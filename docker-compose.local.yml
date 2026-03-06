@@ -12,3 +12,5 @@ services:
       - .env
     volumes:
       - ./credentials.json:/app/credentials.json:ro
+    ports:
+      - "8080:8080"

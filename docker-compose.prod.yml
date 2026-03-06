@@ -14,6 +14,8 @@ services:
       - DATABASE_USER=${DATABASE_USER:-postgres}
       - DATABASE_PORT=${DATABASE_PORT:-5432}
       - DATABASE_DBNAME=${DATABASE_DBNAME:-postgres}
+    ports:
+      - "8080:8080"
     volumes:
       - ./credentials.json:/app/credentials.json:ro
     networks:
