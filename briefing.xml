@@ -1,0 +1,2479 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<brfit>
+  <metadata>
+    <version>0.18.0</version>
+    <path>/home/teamo2/Downloads/ai-slackapp</path>
+    <schema>
+      <tag name="metadata" description="Project metadata container" />
+      <tag name="version" description="brf.it version" />
+      <tag name="path" description="Root path of the scanned project" />
+      <tag name="tree" description="Directory tree structure" />
+      <tag name="files" description="Source files container" />
+      <tag name="file" description="Source file (path, language attributes)" />
+      <tag name="function" description="Function, method, or constructor declaration" />
+      <tag name="type" description="Type, class, interface, struct, or enum declaration" />
+      <tag name="variable" description="Variable, constant, or field declaration" />
+      <tag name="signature" description="Fallback for unknown declaration kinds" />
+      <tag name="imports" description="Import statements container" />
+      <tag name="import" description="Single import statement" />
+      <tag name="export" description="Single export statement" />
+      <tag name="doc" description="Documentation comment" />
+      <tag name="error" description="Parse error message" />
+    </schema>
+  </metadata>
+  <files>
+    <file path="/home/teamo2/Downloads/ai-slackapp/alembic/env.py" language="python">
+      <variable>config = context.config</variable>
+      <variable>db_url = os.getenv(&quot;ALEMBIC_DATABASE_URL&quot;)</variable>
+      <variable>target_metadata = Base.metadata</variable>
+      <variable>_BIGINT_TYPES = (BIGINT, BigInteger)</variable>
+      <function>def _compare_type(
+    context, inspected_column, metadata_column, inspected_type, metadata_type
+)</function>
+      <function>def run_migrations_offline() -&gt; None</function>
+      <function>def run_migrations_online() -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/alembic/versions/22932a982c3f_add_thread_references_table.py" language="python">
+      <variable>revision: str = &quot;22932a982c3f&quot;</variable>
+      <variable>down_revision: str | Sequence[str] | None = &quot;83c070e537ee&quot;</variable>
+      <variable>branch_labels: str | Sequence[str] | None = None</variable>
+      <variable>depends_on: str | Sequence[str] | None = None</variable>
+      <function>def upgrade() -&gt; None</function>
+      <function>def downgrade() -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/alembic/versions/3d3c9d6f1a2b_add_transfer_status_columns.py" language="python">
+      <variable>revision: str = &quot;3d3c9d6f1a2b&quot;</variable>
+      <variable>down_revision: str | Sequence[str] | None = &quot;f7a08a3118ab&quot;</variable>
+      <variable>branch_labels: str | Sequence[str] | None = None</variable>
+      <variable>depends_on: str | Sequence[str] | None = None</variable>
+      <function>def upgrade() -&gt; None</function>
+      <function>def downgrade() -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/alembic/versions/83c070e537ee_baseline_existing_schema.py" language="python">
+      <variable>revision: str = &quot;83c070e537ee&quot;</variable>
+      <variable>down_revision: str | Sequence[str] | None = None</variable>
+      <variable>branch_labels: str | Sequence[str] | None = None</variable>
+      <variable>depends_on: str | Sequence[str] | None = None</variable>
+      <function>def upgrade() -&gt; None</function>
+      <function>def downgrade() -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/alembic/versions/a1b2c3d4e5f6_rename_transfer_status_values_to_korean.py" language="python">
+      <variable>revision: str = &quot;a1b2c3d4e5f6&quot;</variable>
+      <variable>down_revision: str | Sequence[str] | None = &quot;3d3c9d6f1a2b&quot;</variable>
+      <variable>branch_labels: str | Sequence[str] | None = None</variable>
+      <variable>depends_on: str | Sequence[str] | None = None</variable>
+      <variable>_VALUE_MAPPING = [
+    (&quot;none&quot;, &quot;&quot;),
+    (&quot;transferred&quot;, &quot;재이관&quot;),
+    (&quot;reverted&quot;, &quot;재이관반려&quot;),
+]</variable>
+      <function>def upgrade() -&gt; None</function>
+      <function>def downgrade() -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/alembic/versions/f7a08a3118ab_add_transferred_to_to_settlements.py" language="python">
+      <variable>revision: str = &quot;f7a08a3118ab&quot;</variable>
+      <variable>down_revision: str | Sequence[str] | None = &quot;22932a982c3f&quot;</variable>
+      <variable>branch_labels: str | Sequence[str] | None = None</variable>
+      <variable>depends_on: str | Sequence[str] | None = None</variable>
+      <function>def upgrade() -&gt; None</function>
+      <function>def downgrade() -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/config.py" language="python">
+      <type>class Environment(str, Enum)</type>
+      <type>class EnvironmentConfig(BaseSettings)</type>
+      <function>def is_dev(self) -&gt; bool</function>
+      <function>def is_prod(self) -&gt; bool</function>
+      <type>class SlackProperties(BaseSettings)</type>
+      <type>class SpreadsheetProperties(BaseSettings)</type>
+      <type>class DatabaseProperties(BaseSettings)</type>
+      <function>def is_configured(self) -&gt; bool</function>
+      <function>def url(self) -&gt; str</function>
+      <variable>_BASE_COLUMNS: dict[str, str] = {
+    &quot;정산기준일&quot;: &quot;settlement_day&quot;,
+    &quot;작성자&quot;: &quot;user_name&quot;,
+    &quot;이슈사항&quot;: &quot;issue_type&quot;,
+    &quot;고객명&quot;: &quot;customer_name&quot;,
+    &quot;예약번호&quot;: &quot;booking_key&quot;,
+    &quot;업체명1&quot;: &quot;company_name&quot;,
+    &quot;업체명2(대신배차)&quot;: &quot;company_sub_name&quot;,
+    &quot;정산기준금액&quot;: &quot;settlement_cost&quot;,
+    &quot;카모아 부담비용&quot;: &quot;carmore_cost&quot;,
+    &quot;고객환불금액&quot;: &quot;user_refund_cost&quot;,
+    &quot;판매채널&quot;: &quot;sales_channel&quot;,
+    &quot;내용&quot;: &quot;description&quot;,
+    &quot;처리&quot;: &quot;status&quot;,
+    &quot;재이관상태&quot;: &quot;transfer_status&quot;,
+    &quot;승인자&quot;: &quot;approver_name&quot;,
+    &quot;등록시간&quot;: &quot;created_at&quot;,
+    &quot;수정시간&quot;: &quot;updated_at&quot;,
+    &quot;스레드 링크&quot;: &quot;thread_url&quot;,
+    &quot;비고&quot;: &quot;note&quot;,
+    &quot;반려자&quot;: &quot;reviewer_name&quot;,
+    &quot;고객 정보 오류&quot;: &quot;rejection_reason&quot;,
+}</variable>
+      <function>def _default_settlement_columns() -&gt; dict[str, str]</function>
+      <function>def _default_issue_log_columns() -&gt; dict[str, str]</function>
+      <type>class SlackChannelsConfig(BaseModel)</type>
+      <type>class SpreadsheetSheetConfig(BaseModel)</type>
+      <type>class SheetsConfig(BaseModel)</type>
+      <type>class SpreadsheetConfig(BaseModel)</type>
+      <function>def _sheet_config(self, sheet_type: str) -&gt; SpreadsheetSheetConfig</function>
+      <function>def sheet_name(self, sheet_type: str) -&gt; str</function>
+      <function>def field_to_header(self, sheet_type: str) -&gt; dict[str, str]</function>
+      <function>def header_row(self, sheet_type: str) -&gt; int</function>
+      <type>class SettlementConfig(BaseModel)</type>
+      <function>def error_channel_id(self) -&gt; str</function>
+      <function>def approval_channel_id(self) -&gt; str</function>
+      <type>class CancellationSlackChannelsConfig(BaseModel)</type>
+      <type>class CancellationDriveConfig(BaseModel)</type>
+      <type>class CancellationSpreadsheetConfig(BaseModel)</type>
+      <type>class CancellationConfig(BaseModel)</type>
+      <type>class AppConfig(BaseModel)</type>
+      <function>def resolve_config_path() -&gt; Path</function>
+      <function>def _load_app_config() -&gt; AppConfig</function>
+      <function>def get_app_config() -&gt; AppConfig</function>
+      <function>def get_slack_settings() -&gt; SlackProperties</function>
+      <function>def get_spreadsheet_settings() -&gt; SpreadsheetProperties</function>
+      <function>def get_database_settings() -&gt; DatabaseProperties</function>
+      <function>def get_env_config() -&gt; EnvironmentConfig</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/constants/__init__.py" language="python">
+      <variable>__all__ = [
+    &quot;IssueType&quot;,
+    &quot;SellerChannel&quot;,
+    &quot;Description&quot;,
+    &quot;ISSUE_TYPE_OPTIONS&quot;,
+    &quot;SELLER_CHANNEL_OPTIONS&quot;,
+    &quot;DESCRIPTION_OPTIONS&quot;,
+    &quot;ActionId&quot;,
+    &quot;BlockId&quot;,
+    &quot;CallbackId&quot;,
+    &quot;LabelText&quot;,
+    &quot;CommonText&quot;,
+    &quot;HeaderText&quot;,
+    &quot;Command&quot;,
+    &quot;find_option_by_text&quot;,
+    &quot;is_transfer_description&quot;,
+    &quot;request_type_label&quot;,
+    &quot;DateFormat&quot;,
+    &quot;TransferMessageField&quot;,
+]</variable>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/constants/options.py" language="python">
+      <type>class SlackText(TypedDict)</type>
+      <type>class SlackOption(TypedDict)</type>
+      <type>class IssueType(StrEnum)</type>
+      <function>def to_slack_option(self) -&gt; SlackOption</function>
+      <type>class SellerChannel(StrEnum)</type>
+      <function>def to_slack_option(self) -&gt; SlackOption</function>
+      <type>class Description(StrEnum)</type>
+      <function>def to_slack_option(self) -&gt; SlackOption</function>
+      <variable>ISSUE_TYPE_OPTIONS: list[SlackOption] = [x.to_slack_option() for x in IssueType]</variable>
+      <variable>SELLER_CHANNEL_OPTIONS: list[SlackOption] = [x.to_slack_option() for x in SellerChannel]</variable>
+      <variable>DESCRIPTION_OPTIONS: list[SlackOption] = [x.to_slack_option() for x in Description]</variable>
+      <function>def find_option_by_text(options: list[SlackOption], text: str) -&gt; SlackOption | None</function>
+      <variable>TRANSFER_DESCRIPTIONS = frozenset(
+    {
+        Description.TRANSFER_UNABLE_DISPATCH.value,
+        Description.TRANSFER_RESERVATION.value,
+    }
+)</variable>
+      <function>def is_transfer_description(description: str) -&gt; bool</function>
+      <function>def request_type_label(is_transfer: bool) -&gt; str</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/constants/parser_fields.py" language="python">
+      <type>class TransferMessageField(StrEnum)</type>
+      <type>class DateFormat(StrEnum)</type>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/constants/slack_ids.py" language="python">
+      <type>class ActionId(StrEnum)</type>
+      <type>class BlockId(StrEnum)</type>
+      <type>class CallbackId(StrEnum)</type>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/constants/ui_texts.py" language="python">
+      <type>class LabelText</type>
+      <type>class CommonText</type>
+      <type>class Command</type>
+      <type>class HeaderText</type>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/container.py" language="python">
+      <type>class ServiceContainer</type>
+      <function>def __init__(
+        self,
+        client: WebClient,
+        get_session_fn: SessionFactory = get_session,
+        sheets: SpreadsheetGateway | None = None,
+    ) -&gt; None</function>
+      <function>def _create_spreadsheet_client() -&gt; gspread.Spreadsheet</function>
+      <function>def _create_cancel_spreadsheet() -&gt; gspread.Spreadsheet</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/core/__init__.py" language="python">
+      <variable>__all__ = [
+    &quot;get_logger&quot;,
+    &quot;setup_logging&quot;,
+]</variable>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/core/logger.py" language="python">
+      <function>def get_log_level() -&gt; int</function>
+      <function>def setup_logging() -&gt; None</function>
+      <function>def get_logger(name: str) -&gt; structlog.stdlib.BoundLogger</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/error_handler.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <function>def extract_context_from_body(
+    body: dict[str, Any],
+) -&gt; tuple[str | None, str | None, str | None]</function>
+      <function>def is_user_error(error: Exception) -&gt; bool</function>
+      <function>def get_error_emoji_and_type(error: Exception) -&gt; tuple[str, str]</function>
+      <function>def send_monitoring_alert(
+    client: WebClient,
+    error: Exception,
+    body: dict[str, Any],
+    channel_id: str | None,
+    user_id: str | None,
+    *,
+    error_channel_id: str,
+) -&gt; None</function>
+      <function>def _handle_error_impl(
+    error: Exception,
+    body: dict[str, Any],
+    client: WebClient,
+    *,
+    error_channel_id: str,
+) -&gt; None</function>
+      <function>def register_error_handler(app: App, *, error_channel_id: str) -&gt; None</function>
+      <function>def handle_error(
+        error: Exception,
+        body: dict[str, Any],
+        client: WebClient,
+        **_kwargs,
+    ) -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/exceptions.py" language="python">
+      <type>class AppError(Exception)</type>
+      <function>def __init__(
+        self,
+        message: str,
+        user_message: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -&gt; None</function>
+      <type>class SpreadsheetError(AppError)</type>
+      <type>class SlackError(AppError)</type>
+      <type>class ValidationError(AppError)</type>
+      <type>class AlreadyProcessedError(AppError)</type>
+      <type>class SettlementCompletedError(AlreadyProcessedError)</type>
+      <type>class DatabaseError(AppError)</type>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/infrastructure/__init__.py" language="python">
+      <!-- empty -->
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/infrastructure/column_mapper.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <type>class ColumnMapping</type>
+      <function>def index_of(self, field_name: str) -&gt; int</function>
+      <function>def column_of(self, field_name: str) -&gt; int</function>
+      <function>def dict_to_row(
+        self,
+        data: dict[str, str],
+        extra: dict[str, str] | None = None,
+    ) -&gt; list[str]</function>
+      <function>def row_to_dict(self, values: list[str]) -&gt; dict[str, str]</function>
+      <type>class ColumnMapper</type>
+      <function>def __init__(self, field_to_header: dict[str, str]) -&gt; None</function>
+      <function>def resolve(
+        self,
+        actual_headers: list[str],
+        required_fields: tuple[str, ...],
+    ) -&gt; ColumnMapping</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/infrastructure/database/__init__.py" language="python">
+      <variable>__all__ = [
+    &quot;Base&quot;,
+    &quot;IssueLog&quot;,
+    &quot;IssueLogRepository&quot;,
+    &quot;Settlement&quot;,
+    &quot;SettlementRepository&quot;,
+    &quot;ThreadReference&quot;,
+    &quot;ThreadReferenceRepository&quot;,
+    &quot;SessionFactory&quot;,
+    &quot;get_session&quot;,
+    &quot;transactional&quot;,
+]</variable>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/infrastructure/database/connection.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <variable>_engine = None</variable>
+      <variable>_factory: sessionmaker[SessionWithAfterCommit] | None = None</variable>
+      <function>def get_engine()</function>
+      <type>class SessionWithAfterCommit(Session)</type>
+      <function>def __init__(self, *args, async_hooks: bool = True, **kwargs)</function>
+      <function>def after_commit(self, fn: Callable[[], None]) -&gt; None</function>
+      <function>def _execute_after_commit_hooks(self)</function>
+      <function>def _run_hook(hook: Callable[[], None]) -&gt; None</function>
+      <variable>SessionFactory = Callable[[], AbstractContextManager[SessionWithAfterCommit]]</variable>
+      <function>def _setup_listeners()</function>
+      <function>def receive_after_commit(session: SessionWithAfterCommit)</function>
+      <function>def receive_after_rollback(session: SessionWithAfterCommit, _previous_transaction)</function>
+      <function>def _get_factory() -&gt; sessionmaker[SessionWithAfterCommit]</function>
+      <function>def get_session() -&gt; AbstractContextManager[SessionWithAfterCommit]</function>
+      <function>def transactional[**P, T](fn: Callable[P, T]) -&gt; Callable[P, T]</function>
+      <function>def wrapper(*args: P.args, **kwargs: P.kwargs) -&gt; T</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/infrastructure/database/models.py" language="python">
+      <variable>_BigIntPK = BigInteger().with_variant(Integer, &quot;sqlite&quot;)</variable>
+      <type>class Base(DeclarativeBase)</type>
+      <type>class Settlement(Base)</type>
+      <type>class IssueLog(Base)</type>
+      <type>class ThreadReference(Base)</type>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/infrastructure/database/repository.py" language="python">
+      <function>def _parse_cost(value: str) -&gt; int | None</function>
+      <variable>_COST_FIELDS = frozenset({&quot;settlement_cost&quot;, &quot;carmore_cost&quot;, &quot;user_refund_cost&quot;})</variable>
+      <variable>_SHARED_FIELDS: tuple[str, ...] = (
+    &quot;settlement_day&quot;,
+    &quot;user_name&quot;,
+    &quot;customer_name&quot;,
+    &quot;company_name&quot;,
+    &quot;company_sub_name&quot;,
+    &quot;settlement_cost&quot;,
+    &quot;carmore_cost&quot;,
+    &quot;user_refund_cost&quot;,
+    &quot;issue_type&quot;,
+    &quot;sales_channel&quot;,
+    &quot;description&quot;,
+    &quot;status&quot;,
+    &quot;transfer_status&quot;,
+    &quot;approver_name&quot;,
+    &quot;thread_url&quot;,
+    &quot;note&quot;,
+    &quot;reviewer_name&quot;,
+    &quot;rejection_reason&quot;,
+)</variable>
+      <function>def _row_to_model_dict(row: SettlementRow) -&gt; dict[str, Any]</function>
+      <type>class SettlementRepository</type>
+      <function>def __init__(self, session: Session)</function>
+      <function>def save(self, row: SettlementRow) -&gt; Settlement</function>
+      <function>def add_log(
+        self,
+        row: SettlementRow,
+        settlement_id: int | None = None,
+    ) -&gt; IssueLog</function>
+      <function>def get(self, settlement_id: int) -&gt; Settlement | None</function>
+      <function>def get_by_booking_key(self, booking_key: str) -&gt; Settlement | None</function>
+      <function>def get_active_by_booking_key(self, booking_key: str) -&gt; Settlement | None</function>
+      <function>def has_completed_settlement(self, booking_key: str) -&gt; bool</function>
+      <function>def mark_completed_by_booking_keys(self, booking_keys: set[str]) -&gt; list[str]</function>
+      <function>def mark_transferred(self, booking_key: str, transferred_to: str) -&gt; bool</function>
+      <function>def clear_transferred(self, booking_key: str) -&gt; str | None</function>
+      <function>def list_unsynced(self, limit: int = 100) -&gt; list[Settlement]</function>
+      <function>def claim_unsynced(self, limit: int = 100) -&gt; list[Settlement]</function>
+      <function>def mark_synced(self, settlement_id: int) -&gt; None</function>
+      <function>def mark_sync_failed(self, settlement_id: int, error: str) -&gt; None</function>
+      <function>def recover_stale_records(self) -&gt; int</function>
+      <type>class IssueLogRepository</type>
+      <function>def __init__(self, session: Session)</function>
+      <function>def get(self, log_id: int) -&gt; IssueLog | None</function>
+      <function>def list_unsynced(self, limit: int = 100) -&gt; list[IssueLog]</function>
+      <function>def claim_unsynced(self, limit: int = 100) -&gt; list[IssueLog]</function>
+      <function>def mark_synced(self, log_id: int) -&gt; None</function>
+      <function>def mark_sync_failed(self, log_id: int, error: str) -&gt; None</function>
+      <function>def recover_stale_records(self) -&gt; int</function>
+      <type>class ThreadReferenceRepository</type>
+      <function>def __init__(self, session: Session)</function>
+      <function>def get_by_booking_key(self, booking_key: str) -&gt; ThreadReference | None</function>
+      <function>def list_by_root_booking_key(self, root_booking_key: str) -&gt; list[ThreadReference]</function>
+      <function>def save(
+        self,
+        booking_key: str,
+        channel_id: str,
+        thread_ts: str,
+        root_booking_key: str | None = None,
+    ) -&gt; ThreadReference</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/infrastructure/drive_client.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <variable>DRIVE_SCOPES = [&quot;https://www.googleapis.com/auth/drive.readonly&quot;]</variable>
+      <type>class DriveImageClient</type>
+      <function>def __init__(
+        self,
+        credentials_file: str,
+        parent_folder_id: str,
+    ) -&gt; None</function>
+      <function>def find_folder(self, folder_name: str) -&gt; str | None</function>
+      <function>def list_image_files(self, folder_id: str) -&gt; list[DriveFile]</function>
+      <function>def download_file(self, file_id: str) -&gt; bytes</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/infrastructure/protocols.py" language="python">
+      <type>class SpreadsheetGateway(Protocol)</type>
+      <function>def save_settlement_row(
+        self,
+        row: SettlementRow,
+        sheet_name: str | None = None,
+        *,
+        is_update: bool = False,
+    ) -&gt; None</function>
+      <function>def append_issue_log_row(self, row: SettlementRow, sync_key: str) -&gt; None</function>
+      <function>def find_row_by_booking_key(
+        self, booking_key: str, sheet_name: str | None = None
+    ) -&gt; int | None</function>
+      <function>def is_settlement_completed(self, booking_key: str) -&gt; bool</function>
+      <function>def get_completed_booking_keys(self) -&gt; set[str]</function>
+      <function>def update_settlement_transfer(
+        self, booking_key: str, note: str, transfer_status: str
+    ) -&gt; None</function>
+      <type>class SlackMessageReader(Protocol)</type>
+      <function>def get_user_name(self, user_id: str) -&gt; str</function>
+      <function>def get_thread_url(self, channel_id: str, thread_ts: str) -&gt; str</function>
+      <function>def get_parent_message(self, channel_id: str, thread_ts: str) -&gt; str | None</function>
+      <function>def find_message_by_text(
+        self,
+        channel_id: str,
+        search_text: str,
+        *,
+        max_pages: int = 10,
+    ) -&gt; str | None</function>
+      <function>def list_channel_messages(
+        self,
+        channel_id: str,
+        *,
+        oldest: float = 0,
+        max_pages: int = 10,
+    ) -&gt; Iterator[dict]</function>
+      <type>class SlackMessageWriter(Protocol)</type>
+      <function>def post_message(
+        self,
+        *,
+        channel: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+        thread_ts: str | None = None,
+    ) -&gt; str</function>
+      <function>def update_message(
+        self,
+        *,
+        channel: str,
+        ts: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -&gt; None</function>
+      <function>def delete_message(self, *, channel: str, ts: str) -&gt; None</function>
+      <function>def post_ephemeral(
+        self,
+        *,
+        channel: str,
+        user: str,
+        text: str,
+        thread_ts: str | None = None,
+    ) -&gt; None</function>
+      <function>def upload_file(
+        self,
+        *,
+        channel: str,
+        thread_ts: str,
+        content: bytes,
+        filename: str,
+        title: str = &quot;&quot;,
+    ) -&gt; None</function>
+      <function>def add_reaction(self, *, channel: str, timestamp: str, name: str) -&gt; None</function>
+      <type>class SurveySheetGateway(Protocol)</type>
+      <function>def get_all_submissions(self) -&gt; list[SurveySubmission]</function>
+      <function>def mark_processed(self, submission_id: str) -&gt; None</function>
+      <function>def write_formatted_row(self, submission: SurveySubmission) -&gt; None</function>
+      <type>class DriveImageGateway(Protocol)</type>
+      <function>def find_folder(self, folder_name: str) -&gt; str | None</function>
+      <function>def list_image_files(self, folder_id: str) -&gt; list[DriveFile]</function>
+      <function>def download_file(self, file_id: str) -&gt; bytes</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/infrastructure/retry.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <variable>F = TypeVar(&quot;F&quot;, bound=Callable[..., Any])</variable>
+      <function>def retry_on_rate_limit(
+    *,
+    max_retries: int = 3,
+    base_delay: float = 2.0,
+    max_delay: float = 30.0,
+    sleep_fn: Callable[[float], None] = time.sleep,
+) -&gt; Callable[[F], F]</function>
+      <function>def decorator(func: F) -&gt; F</function>
+      <function>def wrapper(*args: Any, **kwargs: Any) -&gt; Any</function>
+      <type>class TTLCache[K, V]</type>
+      <function>def __init__(
+        self,
+        ttl: float,
+        clock: Callable[[], float] = time.monotonic,
+    ) -&gt; None</function>
+      <function>def get(self, key: K) -&gt; V | None</function>
+      <function>def set(self, key: K, value: V) -&gt; None</function>
+      <function>def clear(self) -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/infrastructure/slack_client.py" language="python">
+      <function>def get_user_real_name(client: WebClient, user_id: str) -&gt; str</function>
+      <function>def get_thread_permalink(client: WebClient, channel_id: str, thread_ts: str) -&gt; str</function>
+      <function>def get_thread_parent_message(
+    client: WebClient,
+    channel_id: str,
+    thread_ts: str,
+) -&gt; str | None</function>
+      <function>def list_channel_messages(
+    client: WebClient,
+    channel_id: str,
+    *,
+    oldest: float = 0,
+    max_pages: int = 10,
+    page_size: int = 200,
+) -&gt; Iterator[dict]</function>
+      <function>def find_message_by_text(
+    client: WebClient,
+    channel_id: str,
+    search_text: str,
+    *,
+    max_pages: int = 10,
+    page_size: int = 100,
+) -&gt; str | None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/infrastructure/spreadsheet.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <variable>SCOPES = [
+    &quot;https://www.googleapis.com/auth/spreadsheets&quot;,
+]</variable>
+      <function>def _is_cell_not_found(error: Exception) -&gt; bool</function>
+      <function>def _merge_with_existing_row(
+    existing_row: list[str],
+    mapped_row: list[str],
+    mapping: ColumnMapping,
+) -&gt; list[str]</function>
+      <type>class SpreadsheetService</type>
+      <function>def __init__(
+        self,
+        client_factory: Callable[[], gspread.Spreadsheet],
+        sheet_name_resolver: Callable[[str], str],
+        field_to_header_resolver: Callable[[str], dict[str, str]],
+        header_row_resolver: Callable[[str], int] | None = None,
+        *,
+        client_refresh_minutes: int = 55,
+        cache_ttl_seconds: int = 300,
+    ) -&gt; None</function>
+      <function>def _get_client(self) -&gt; gspread.Spreadsheet</function>
+      <function>def _get_worksheet(self, sheet_name: str) -&gt; Worksheet</function>
+      <function>def _resolve_mapping(self, worksheet: Worksheet, sheet_type: str) -&gt; ColumnMapping</function>
+      <function>def save_settlement_row(
+        self,
+        row: SettlementRow,
+        sheet_name: str | None = None,
+        *,
+        is_update: bool = False,
+    ) -&gt; None</function>
+      <function>def _find_by_sync_key(
+        self, worksheet: Worksheet, mapping: ColumnMapping, sync_key: str
+    ) -&gt; bool</function>
+      <function>def append_issue_log_row(self, row: SettlementRow, sync_key: str) -&gt; None</function>
+      <function>def find_row_by_booking_key(
+        self,
+        booking_key: str,
+        sheet_name: str | None = None,
+        worksheet: Worksheet | None = None,
+        mapping: ColumnMapping | None = None,
+    ) -&gt; int | None</function>
+      <function>def is_settlement_completed(self, booking_key: str) -&gt; bool</function>
+      <function>def update_settlement_transfer(
+        self, booking_key: str, note: str, transfer_status: str
+    ) -&gt; None</function>
+      <function>def get_completed_booking_keys(self) -&gt; set[str]</function>
+      <function>def _update_settlement_row(
+        self,
+        row: SettlementRow,
+        row_number: int,
+        worksheet: Worksheet,
+        mapping: ColumnMapping,
+    ) -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/infrastructure/survey_sheet.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <variable>_FORMATTED_HEADERS = [
+    &quot;작성일자&quot;,
+    &quot;작성자&quot;,
+    &quot;예약번호&quot;,
+    &quot;연락처&quot;,
+    &quot;고객명&quot;,
+    &quot;업체명&quot;,
+    &quot;결항확인서 확인여부&quot;,
+    &quot;환불 진행여부&quot;,
+    &quot;업체 전달여부&quot;,
+]</variable>
+      <variable>_PROCESSED_COL = &quot;처리완료&quot;</variable>
+      <function>def _get_row_value(row: dict, keyword: str) -&gt; str</function>
+      <type>class SurveySheetReader</type>
+      <function>def __init__(
+        self,
+        client_factory: Callable[[], gspread.Spreadsheet],
+        sheet_name: str,
+        formatted_sheet_name: str = &quot;운영현황&quot;,
+        *,
+        client_refresh_minutes: int = 55,
+    ) -&gt; None</function>
+      <function>def _get_client(self) -&gt; gspread.Spreadsheet</function>
+      <function>def get_all_submissions(self) -&gt; list[SurveySubmission]</function>
+      <function>def mark_processed(self, submission_id: str) -&gt; None</function>
+      <function>def write_formatted_row(self, submission: SurveySubmission) -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/listener/__init__.py" language="python">
+      <!-- empty -->
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/listener/actions.py" language="python">
+      <variable>_MODAL_FIELD_EXTRACTORS = (
+    (
+        &quot;booking_key&quot;,
+        BlockId.BOOKING_KEY_BLOCK,
+        ActionId.BOOKING_KEY_INPUT,
+        extract_text_value,
+    ),
+    (
+        &quot;customer_name&quot;,
+        BlockId.CUSTOMER_NAME_BLOCK,
+        ActionId.CUSTOMER_NAME_INPUT,
+        extract_text_value,
+    ),
+    (
+        &quot;settlement_day&quot;,
+        BlockId.SETTLEMENT_DAY_BLOCK,
+        ActionId.SETTLEMENT_DAY_INPUT,
+        extract_date_value,
+    ),
+    (
+        &quot;issue_type&quot;,
+        BlockId.ISSUE_TYPE_BLOCK,
+        ActionId.ISSUE_TYPE_INPUT,
+        extract_select_value,
+    ),
+    (
+        &quot;custom_issue_type&quot;,
+        BlockId.ISSUE_TYPE_TEXT_BLOCK,
+        ActionId.ISSUE_TYPE_TEXT_INPUT,
+        extract_text_value,
+    ),
+    (
+        &quot;company_name&quot;,
+        BlockId.COMPANY_NAME_BLOCK,
+        ActionId.COMPANY_NAME_INPUT,
+        extract_text_value,
+    ),
+    (
+        &quot;company_sub_name&quot;,
+        BlockId.COMPANY_SUB_NAME_BLOCK,
+        ActionId.COMPANY_SUB_NAME_INPUT,
+        extract_text_value,
+    ),
+    (
+        &quot;settlement_cost&quot;,
+        BlockId.SETTLEMENT_COST_BLOCK,
+        ActionId.SETTLEMENT_COST_INPUT,
+        extract_text_value,
+    ),
+    (
+        &quot;carmore_cost&quot;,
+        BlockId.CARMORE_COST_BLOCK,
+        ActionId.CARMORE_COST_INPUT,
+        extract_text_value,
+    ),
+    (
+        &quot;user_refund_cost&quot;,
+        BlockId.USER_REFUND_COST_BLOCK,
+        ActionId.USER_REFUND_COST_INPUT,
+        extract_text_value,
+    ),
+    (
+        &quot;seller_channel&quot;,
+        BlockId.SELLER_CHANNEL_BLOCK,
+        ActionId.SELLER_CHANNEL_INPUT,
+        extract_select_value,
+    ),
+    (
+        &quot;description&quot;,
+        BlockId.DESCRIPTION_BLOCK,
+        ActionId.DESCRIPTION_INPUT,
+        extract_select_value,
+    ),
+    (
+        &quot;custom_description&quot;,
+        BlockId.DESCRIPTION_TEXT_BLOCK,
+        ActionId.DESCRIPTION_TEXT_INPUT,
+        extract_text_value,
+    ),
+    (&quot;note&quot;, BlockId.NOTE_BLOCK, ActionId.NOTE_INPUT, extract_text_value),
+)</variable>
+      <function>def _open_registration_modal(body: dict, client, reader) -&gt; None</function>
+      <function>def _open_transfer_modal(body: dict, client, reader) -&gt; None</function>
+      <function>def _open_rejection_modal(body: dict, client, rejection_service) -&gt; None</function>
+      <function>def _extract_current_modal_state(view: dict) -&gt; dict</function>
+      <function>def _handle_dynamic_form_change(body: dict, client) -&gt; None</function>
+      <function>def register_action_handlers(app: App, container: ServiceContainer) -&gt; None</function>
+      <function>def handle_open_registration_modal(ack, body, client)</function>
+      <function>def handle_open_transfer_modal(ack, body, client)</function>
+      <function>def handle_issue_type_change(ack, body, client)</function>
+      <function>def handle_description_change(ack, body, client)</function>
+      <function>def handle_settlement_approve(ack, body)</function>
+      <function>def handle_settlement_reject(ack, body, client)</function>
+      <function>def handle_transfer_approve(ack, body)</function>
+      <function>def handle_transfer_reject(ack, body, client)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/listener/messages.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <function>def _is_bot_message(message: dict) -&gt; bool</function>
+      <function>def _should_process_message(message: dict) -&gt; bool</function>
+      <function>def _route_channel_message(
+    *,
+    message: dict,
+    channel_id: str,
+    transfer_channel: str,
+    reservation_channels: list[str],
+) -&gt; str</function>
+      <function>def _handle_transfer_message(message, say, *, discovery, reader, writer) -&gt; None</function>
+      <function>def _cache_reservation_origin_thread(message: dict, discovery) -&gt; None</function>
+      <function>def register_message_handlers(app: App, container: ServiceContainer) -&gt; None</function>
+      <function>def handle_read(message, say)</function>
+      <function>def handle_auto_detect_transfer(message, say)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/listener/payload.py" language="python">
+      <variable>Block = dict[str, object]</variable>
+      <variable>Blocks = list[Block]</variable>
+      <type>class SlackAction(TypedDict, total=False)</type>
+      <type>class SlackUser(TypedDict, total=False)</type>
+      <type>class SlackChannel(TypedDict, total=False)</type>
+      <type>class SlackMessage(TypedDict, total=False)</type>
+      <type>class ActionBody(TypedDict, total=False)</type>
+      <type>class MessageContext</type>
+      <function>def thread_ts_or_none(self) -&gt; str | None</function>
+      <function>def extract_text_value(values: dict, block_id: str, action_id: str) -&gt; str</function>
+      <function>def extract_date_value(values: dict, block_id: str, action_id: str) -&gt; str</function>
+      <function>def extract_select_value(values: dict, block_id: str, action_id: str) -&gt; str</function>
+      <function>def action_value(body: Mapping[str, Any], default: str = &quot;{}&quot;) -&gt; str</function>
+      <function>def message_context(body: Mapping[str, Any]) -&gt; MessageContext</function>
+      <function>def _extract(key: str, subkey: str) -&gt; str</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/listener/views.py" language="python">
+      <function>def register_view_handlers(app: App, container: ServiceContainer) -&gt; None</function>
+      <function>def handle_registration_submit(ack, view, body)</function>
+      <function>def handle_rejection_submit(ack, view, body)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/main.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <variable>_stop_event = Event()</variable>
+      <function>def _start_sync_worker(sync_service: SyncService, cron_expr: str) -&gt; None</function>
+      <function>def run() -&gt; None</function>
+      <function>def _start_cancellation_worker(
+    service: CancellationImageService, cron_expr: str
+) -&gt; None</function>
+      <function>def run() -&gt; None</function>
+      <function>def _handle_shutdown(signum: int, frame) -&gt; None</function>
+      <function>def main()</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/models/__init__.py" language="python">
+      <variable>__all__ = [
+    &quot;SETTLEMENT_FIELDS&quot;,
+    &quot;DriveFile&quot;,
+    &quot;ModalMetadata&quot;,
+    &quot;RejectionMetadata&quot;,
+    &quot;SettlementData&quot;,
+    &quot;SettlementRow&quot;,
+    &quot;SettlementStatus&quot;,
+    &quot;SurveySubmission&quot;,
+    &quot;TransferStatus&quot;,
+    &quot;ThreadLocation&quot;,
+]</variable>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/models/cancellation.py" language="python">
+      <type>class SurveySubmission</type>
+      <function>def folder_name(self) -&gt; str</function>
+      <type>class DriveFile</type>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/models/settlement.py" language="python">
+      <type>class ThreadLocation</type>
+      <type>class SettlementStatus(StrEnum)</type>
+      <type>class TransferStatus(StrEnum)</type>
+      <type>class SettlementData(BaseModel)</type>
+      <function>def parse_cost(cls, v: str | int | None) -&gt; int | None</function>
+      <type>class ModalMetadata(BaseModel)</type>
+      <type>class RejectionMetadata(BaseModel)</type>
+      <function>def format_cost(value: int | None) -&gt; str</function>
+      <type>class RowConvertible(Protocol)</type>
+      <type>class SettlementRow</type>
+      <function>def from_settlement_data(
+        cls,
+        data: SettlementData,
+        status: SettlementStatus,
+        approver_name: str,
+        thread_url: str = &quot;&quot;,
+        rejection_reason: str = &quot;&quot;,
+    ) -&gt; SettlementRow</function>
+      <function>def from_entity(
+        cls,
+        entity: RowConvertible,
+        *,
+        include_updated_at: bool = True,
+    ) -&gt; SettlementRow</function>
+      <function>def to_dict(self) -&gt; dict[str, str]</function>
+      <variable>SETTLEMENT_FIELDS: tuple[str, ...] = tuple(
+    f.name for f in fields(SettlementRow) if f.name != &quot;settlement_completed&quot;
+)</variable>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/services/__init__.py" language="python">
+      <!-- empty -->
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/services/approval_service.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <variable>Approvers = frozenset[str]</variable>
+      <type>class ApprovalService</type>
+      <function>def __init__(
+        self,
+        reader: SlackMessageReader,
+        writer: SlackMessageWriter,
+        settlement_writer: SettlementWriter,
+        approvers: Approvers,
+        sheets: SpreadsheetGateway | None = None,
+    ) -&gt; None</function>
+      <function>def approve(
+        self,
+        *,
+        data: SettlementData,
+        user_id: str,
+        channel_id: str,
+        message_ts: str,
+        thread_ts: str,
+        original_blocks: list,
+        is_transfer: bool,
+    ) -&gt; None</function>
+      <function>def has_permission(
+        self,
+        *,
+        user_id: str,
+        channel_id: str,
+        thread_ts: str,
+        text: str,
+    ) -&gt; bool</function>
+      <function>def _show_processing(
+        self, channel_id: str, message_ts: str, is_transfer: bool
+    ) -&gt; None</function>
+      <function>def _update_approval_channel(
+        self,
+        channel_id: str,
+        message_ts: str,
+        data: SettlementData,
+        approver_name: str,
+        message_url: str,
+        approved_text: str,
+        is_transfer: bool,
+    ) -&gt; None</function>
+      <function>def _update_original_thread(
+        self,
+        data: SettlementData,
+        title: str,
+        approver_name: str,
+        approved_text: str,
+    ) -&gt; None</function>
+      <function>def _mention_requester(self, data: SettlementData, mention_text: str) -&gt; None</function>
+      <function>def _guard_settlement_completed(self, booking_key: str) -&gt; None</function>
+      <function>def _restore_and_notify(
+        self,
+        channel_id: str,
+        message_ts: str,
+        user_id: str,
+        original_blocks: list,
+        error_text: str,
+    ) -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/services/cancellation_image_service.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <variable>_PDF_EMOJI = &quot;pdf&quot;</variable>
+      <type>class CancellationImageService</type>
+      <function>def __init__(
+        self,
+        survey_sheet: SurveySheetGateway,
+        drive: DriveImageGateway,
+        writer: SlackMessageWriter,
+        reader: SlackMessageReader,
+        target_channel: str,
+    ) -&gt; None</function>
+      <function>def poll_and_upload(self) -&gt; None</function>
+      <function>def _process_submission(self, sub: SurveySubmission) -&gt; bool</function>
+      <function>def _convert_pdf_to_images(
+        pdf_bytes: bytes, original_name: str
+    ) -&gt; list[tuple[str, bytes]]</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/services/message_parser.py" language="python">
+      <type>class BookingMessageField(StrEnum)</type>
+      <type>class ParsedSettlement(BaseModel)</type>
+      <function>def clean_customer_name(cls, v: str) -&gt; str</function>
+      <function>def remove_markdown_bold(cls, v: str) -&gt; str</function>
+      <type>class ParsedTransferReservation(BaseModel)</type>
+      <function>def remove_markdown_bold(cls, v: str) -&gt; str</function>
+      <function>def clean_customer_name(cls, v: str) -&gt; str</function>
+      <function>def digits_only_money(cls, v: str) -&gt; str</function>
+      <function>def is_transfer_reservation_message(text: str) -&gt; bool</function>
+      <function>def _strip_value(v: str) -&gt; str</function>
+      <function>def _clean_name(v: str) -&gt; str</function>
+      <function>def _digits_only(v: str) -&gt; str</function>
+      <function>def _get_next_nonempty_line(lines: list[str], start: int) -&gt; str</function>
+      <variable>_INLINE_PATTERNS: list[tuple[re.Pattern[str], str, Callable[[str], str]]] = [
+    (
+        re.compile(r&quot;이관\s*전\s*예약번호\s*[:：]\s*([^\s]+)&quot;),
+        &quot;booking_key&quot;,
+        _strip_value,
+    ),
+    (
+        re.compile(r&quot;(?&lt;!전\s)예약번호\s*[:：]\s*([^\s]+)&quot;),
+        &quot;new_booking_key&quot;,
+        _strip_value,
+    ),
+    (re.compile(r&quot;예약자명\s*[:：]\s*(.+)&quot;), &quot;customer_name&quot;, _clean_name),
+    (re.compile(r&quot;업체\s*[:：]\s*(.+)&quot;), &quot;company_sub_name&quot;, _strip_value),
+    (re.compile(r&quot;원금\s*[:：]\s*([0-9,]+)\s*원?&quot;), &quot;settlement_cost&quot;, _digits_only),
+    (
+        re.compile(r&quot;카모아\s*부담(?:비용|금)\s*[:：]\s*([0-9,]+)\s*원?&quot;),
+        &quot;carmore_cost&quot;,
+        _digits_only,
+    ),
+]</variable>
+      <variable>_MULTILINE_FIELD_MAP: dict[str, tuple[str, Callable[[str], str]]] = {
+    TransferMessageField.BOOKING_KEY: (&quot;booking_key&quot;, _strip_value),
+    TransferMessageField.CUSTOMER_NAME: (&quot;customer_name&quot;, _clean_name),
+    TransferMessageField.COMPANY: (&quot;company_sub_name&quot;, _strip_value),
+    TransferMessageField.COMPANY_NAME: (&quot;company_sub_name&quot;, _strip_value),
+    TransferMessageField.COMPANY_SUB_NAME: (&quot;company_sub_name&quot;, _strip_value),
+}</variable>
+      <function>def parse_transfer_reservation_message(text: str) -&gt; ParsedTransferReservation</function>
+      <function>def _extract_inline_patterns(
+    result: ParsedTransferReservation, lines: list[str]
+) -&gt; None</function>
+      <function>def _extract_multiline_patterns(
+    result: ParsedTransferReservation, lines: list[str]
+) -&gt; None</function>
+      <function>def parse_settlement_message(text: str) -&gt; ParsedSettlement</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/services/rejection_service.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <variable>Approvers = frozenset[str]</variable>
+      <type>class RejectionService</type>
+      <function>def __init__(
+        self,
+        reader: SlackMessageReader,
+        writer: SlackMessageWriter,
+        settlement_writer: SettlementWriter,
+        approvers: Approvers,
+        sheets: SpreadsheetGateway | None = None,
+        transfer_lifecycle: TransferLifecycleService | None = None,
+    ) -&gt; None</function>
+      <function>def reject(
+        self,
+        *,
+        data: SettlementData,
+        metadata: RejectionMetadata,
+        rejection_reason: str,
+        rejecter_id: str,
+    ) -&gt; None</function>
+      <function>def has_permission(
+        self,
+        *,
+        user_id: str,
+        channel_id: str,
+        thread_ts: str,
+        text: str,
+    ) -&gt; bool</function>
+      <function>def _show_processing(self, metadata: RejectionMetadata, is_transfer: bool) -&gt; None</function>
+      <function>def _update_approval_channel(
+        self,
+        metadata: RejectionMetadata,
+        requester_name: str,
+        message_url: str,
+        rejecter_name: str,
+        request_type: str,
+        is_transfer: bool,
+    ) -&gt; None</function>
+      <function>def _update_original_thread(
+        self,
+        data: SettlementData,
+        metadata: RejectionMetadata,
+        title: str,
+        rejecter_name: str,
+        rejection_reason: str,
+        request_type: str,
+    ) -&gt; None</function>
+      <function>def _mention_requester(
+        self,
+        metadata: RejectionMetadata,
+        request_type: str,
+        rejection_reason: str,
+    ) -&gt; None</function>
+      <function>def _revert_transfer_safe(self, booking_key: str) -&gt; None</function>
+      <function>def _guard_settlement_completed(self, booking_key: str) -&gt; None</function>
+      <function>def _restore_rejection(
+        self,
+        metadata: RejectionMetadata | None,
+        original_blocks: list,
+        processing_shown: bool,
+    ) -&gt; None</function>
+      <function>def _notify_user_safe(self, user_id: str, message: str) -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/services/settlement_registration_service.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <type>class SettlementRegistrationService</type>
+      <function>def __init__(
+        self,
+        reader: SlackMessageReader,
+        writer: SlackMessageWriter,
+        settlement_writer: SettlementWriter,
+        approval_channel_id: str,
+        transfer_lifecycle: TransferLifecycleService | None = None,
+    ) -&gt; None</function>
+      <function>def register(
+        self,
+        *,
+        data: SettlementData,
+        channel_id: str,
+        thread_ts: str,
+        requester_id: str,
+    ) -&gt; None</function>
+      <function>def _save_to_db_safe(self, data: SettlementData, *, thread_url: str) -&gt; None</function>
+      <function>def _mark_transfer_safe(self, booking_key: str) -&gt; None</function>
+      <function>def _cleanup_detail_message(self, channel_id: str, detail_message_ts: str) -&gt; None</function>
+      <function>def _notify_user_safe(self, user_id: str, message: str) -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/services/settlement_writer.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <type>class SettlementWriter</type>
+      <function>def __init__(
+        self,
+        get_session: SessionFactory,
+        sync_processor: SyncProcessor,
+    ) -&gt; None</function>
+      <function>def save(
+        self,
+        data: SettlementData,
+        status: SettlementStatus,
+        approver_name: str,
+        thread_url: str,
+        rejection_reason: str = &quot;&quot;,
+    ) -&gt; None</function>
+      <function>def _persist(self, row: SettlementRow, status: SettlementStatus) -&gt; None</function>
+      <function>def mark_settlement_completed(self, booking_key: str) -&gt; None</function>
+      <function>def _validate_not_already_processed(
+        repo: SettlementRepository,
+        booking_key: str,
+        status: SettlementStatus,
+    ) -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/services/slack_reader.py" language="python">
+      <type>class SlackReader</type>
+      <function>def __init__(self, client: WebClient) -&gt; None</function>
+      <function>def get_user_name(self, user_id: str) -&gt; str</function>
+      <function>def get_thread_url(self, channel_id: str, thread_ts: str) -&gt; str</function>
+      <function>def get_parent_message(self, channel_id: str, thread_ts: str) -&gt; str | None</function>
+      <function>def find_message_by_text(
+        self,
+        channel_id: str,
+        search_text: str,
+        *,
+        max_pages: int = 10,
+    ) -&gt; str | None</function>
+      <function>def list_channel_messages(
+        self,
+        channel_id: str,
+        *,
+        oldest: float = 0,
+        max_pages: int = 10,
+    ) -&gt; Iterator[dict]</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/services/slack_writer.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <type>class SlackWriter</type>
+      <function>def __init__(self, client: WebClient) -&gt; None</function>
+      <function>def post_message(
+        self,
+        *,
+        channel: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+        thread_ts: str | None = None,
+    ) -&gt; str</function>
+      <function>def update_message(
+        self,
+        *,
+        channel: str,
+        ts: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -&gt; None</function>
+      <function>def delete_message(self, *, channel: str, ts: str) -&gt; None</function>
+      <function>def post_ephemeral(
+        self,
+        *,
+        channel: str,
+        user: str,
+        text: str,
+        thread_ts: str | None = None,
+    ) -&gt; None</function>
+      <function>def upload_file(
+        self,
+        *,
+        channel: str,
+        thread_ts: str,
+        content: bytes,
+        filename: str,
+        title: str = &quot;&quot;,
+    ) -&gt; None</function>
+      <function>def add_reaction(self, *, channel: str, timestamp: str, name: str) -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/services/sync_processor.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <type>class SyncProcessor</type>
+      <function>def __init__(
+        self,
+        get_session: SessionFactory,
+        sheets: SpreadsheetGateway,
+    ) -&gt; None</function>
+      <function>def sync_to_sheets(
+        self,
+        row: SettlementRow,
+        log_id: int,
+        *,
+        is_update: bool = False,
+    ) -&gt; bool</function>
+      <function>def mark_synced(self, settlement_id: int, log_id: int) -&gt; None</function>
+      <function>def mark_sync_failed(self, settlement_id: int, log_id: int, error: str) -&gt; None</function>
+      <function>def mark_sync_failed_safe(
+        self, settlement_id: int, log_id: int, error: str
+    ) -&gt; None</function>
+      <function>def after_commit(
+        self,
+        settlement_id: int,
+        log_id: int,
+        row: SettlementRow,
+        *,
+        is_update: bool = False,
+    ) -&gt; None</function>
+      <function>def claim_unsynced(
+        self, limit: int = 100
+    ) -&gt; tuple[list[Settlement], list[IssueLog]]</function>
+      <function>def recover_stale_records(self) -&gt; tuple[int, int]</function>
+      <function>def mark_settlement_synced(self, settlement_id: int) -&gt; None</function>
+      <function>def mark_settlement_failed(self, settlement_id: int, error: str) -&gt; None</function>
+      <function>def mark_log_synced(self, log_id: int) -&gt; None</function>
+      <function>def mark_log_failed(self, log_id: int, error: str) -&gt; None</function>
+      <function>def mark_settlements_completed(self, completed_keys: set[str]) -&gt; list[str]</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/services/sync_service.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <type>class SyncService</type>
+      <function>def __init__(
+        self,
+        processor: SyncProcessor,
+        sheets: SpreadsheetGateway,
+    ) -&gt; None</function>
+      <function>def recover_stale_sync_records(self) -&gt; tuple[int, int]</function>
+      <function>def sync_pending_records(
+        self,
+        *,
+        record_delay: float = 2.0,
+    ) -&gt; tuple[int, int]</function>
+      <function>def reverse_sync_settlement_completed(self) -&gt; int</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/services/thread_discovery_service.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <type>class ThreadDiscoveryService</type>
+      <function>def __init__(
+        self,
+        thread_ref_store: ThreadReferenceStore,
+        reader: SlackMessageReader,
+        reservation_channels: list[str],
+    ) -&gt; None</function>
+      <function>def find_issue_thread(
+        self,
+        booking_key: str,
+        *,
+        fallback_booking_keys: Iterable[str] = (),
+    ) -&gt; ThreadLocation | None</function>
+      <function>def save_thread_reference(
+        self,
+        booking_key: str,
+        channel_id: str,
+        thread_ts: str,
+        root_booking_key: str | None = None,
+    ) -&gt; None</function>
+      <function>def register_origin_thread(
+        self,
+        booking_key: str,
+        channel_id: str,
+        thread_ts: str,
+    ) -&gt; None</function>
+      <function>def backfill_reservation_threads(self, days: int = 7) -&gt; int</function>
+      <function>def save_transfer_thread_reference(
+        self,
+        *,
+        previous_booking_key: str,
+        new_booking_key: str,
+        channel_id: str,
+        thread_ts: str,
+    ) -&gt; None</function>
+      <function>def _candidate_booking_keys(
+        self,
+        booking_key: str,
+        fallback_booking_keys: Iterable[str],
+    ) -&gt; tuple[str, ...]</function>
+      <function>def _find_issue_thread_in_db(
+        self,
+        candidate_keys: tuple[str, ...],
+    ) -&gt; ThreadLocation | None</function>
+      <function>def _find_issue_thread_in_slack(
+        self,
+        *,
+        reservation_channel: str,
+        target_booking_key: str,
+        candidate_keys: tuple[str, ...],
+    ) -&gt; ThreadLocation | None</function>
+      <function>def _save_discovered_reference(
+        self,
+        *,
+        target_booking_key: str,
+        matched_booking_key: str,
+        channel_id: str,
+        thread_ts: str,
+    ) -&gt; None</function>
+      <function>def _find_thread_ts_by_booking_key(
+        self,
+        *,
+        reservation_channel: str,
+        booking_key: str,
+    ) -&gt; str | None</function>
+      <function>def _search_queries_for_booking_key(booking_key: str) -&gt; tuple[str, ...]</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/services/thread_reference_store.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <type>class ThreadReferenceStore</type>
+      <function>def __init__(self, get_session: SessionFactory) -&gt; None</function>
+      <function>def get_by_booking_key(self, booking_key: str) -&gt; ThreadLocation | None</function>
+      <function>def get_root_booking_key(self, booking_key: str) -&gt; str | None</function>
+      <function>def get_chain_booking_keys(self, root_booking_key: str) -&gt; list[str]</function>
+      <function>def save(
+        self,
+        booking_key: str,
+        channel_id: str,
+        thread_ts: str,
+        root_booking_key: str | None = None,
+    ) -&gt; None</function>
+      <function>def _get_ref(self, booking_key: str) -&gt; ThreadLocation | None</function>
+      <function>def _save_ref(
+        self,
+        booking_key: str,
+        channel_id: str,
+        thread_ts: str,
+        root_booking_key: str | None = None,
+    ) -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/services/transfer_lifecycle_service.py" language="python">
+      <variable>logger = get_logger(__name__)</variable>
+      <type>class TransferLifecycleService</type>
+      <function>def __init__(
+        self,
+        get_session: SessionFactory,
+        thread_ref_store: ThreadReferenceStore,
+        sheets: SpreadsheetGateway,
+    ) -&gt; None</function>
+      <function>def mark_transferred(self, new_booking_key: str) -&gt; None</function>
+      <function>def revert_transfer(self, rejected_booking_key: str) -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/views/__init__.py" language="python">
+      <!-- empty -->
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/views/blocks.py" language="python">
+      <variable>Block = dict[str, object]</variable>
+      <variable>Blocks = list[Block]</variable>
+      <variable>TextInputConfig = tuple[str, str, str, str | None, bool]</variable>
+      <function>def _display_text(value: str | None) -&gt; str</function>
+      <function>def _display_cost(value: int | None) -&gt; str</function>
+      <function>def _build_booking_header_blocks(user_name: str) -&gt; Blocks</function>
+      <function>def build_parsing_result_message(
+    booking_key: str,
+    company_name: str,
+    customer_name: str,
+    button_value: str,
+) -&gt; Blocks</function>
+      <function>def build_transfer_parsing_result_message(
+    booking_key: str,
+    customer_name: str,
+    company_name: str,
+    company_sub_name: str,
+    settlement_cost: str,
+    carmore_cost: str,
+    button_value: str,
+    transfer_message_url: str = &quot;&quot;,
+) -&gt; Blocks</function>
+      <function>def build_approval_request_message(
+    data: SettlementData,
+    *,
+    button_data: str = &quot;&quot;,
+    title: str = HeaderText.SETTLEMENT_ISSUE_REGISTER,
+    include_buttons: bool = True,
+) -&gt; Blocks</function>
+      <function>def build_approved_message(original_blocks: Blocks, approver_name: str) -&gt; Blocks</function>
+      <function>def build_rejected_message(
+    original_blocks: Blocks,
+    rejecter_name: str,
+    rejection_reason: str = &quot;&quot;,
+) -&gt; Blocks</function>
+      <function>def _build_decision_message(
+    *,
+    original_blocks: Blocks,
+    header_text: str,
+    actor_label: str,
+    actor_name: str,
+    rejection_reason: str = &quot;&quot;,
+) -&gt; Blocks</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/views/blocks_approval_channel.py" language="python">
+      <function>def _build_minimal_base_blocks(
+    requester_name: str,
+    thread_url: str,
+    request_type: str,
+    *,
+    is_pending: bool = False,
+) -&gt; Blocks</function>
+      <function>def build_minimal_approval_message(
+    requester_name: str,
+    thread_url: str,
+    button_data: str,
+    is_transfer: bool = False,
+) -&gt; Blocks</function>
+      <function>def build_minimal_approved_message(
+    requester_name: str,
+    thread_url: str,
+    approver_name: str,
+    is_transfer: bool = False,
+) -&gt; Blocks</function>
+      <function>def build_minimal_processing_message(
+    is_transfer: bool = False,
+) -&gt; Blocks</function>
+      <function>def build_minimal_rejected_message(
+    requester_name: str,
+    thread_url: str,
+    rejecter_name: str,
+    is_transfer: bool = False,
+) -&gt; Blocks</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/app/views/blocks_modals.py" language="python">
+      <function>def _add_text_inputs(blocks: Blocks, configs: list[TextInputConfig]) -&gt; None</function>
+      <function>def _add_select_with_initial(
+    blocks: Blocks,
+    block_id: str,
+    label_text: str,
+    action_id: str,
+    placeholder_text: str,
+    options: list[SlackOption],
+    initial_option: SlackOption | None = None,
+    is_required: bool = True,
+    dispatch_action: bool = False,
+) -&gt; None</function>
+      <function>def _add_text_input(
+    blocks: Blocks,
+    block_id: str,
+    label_text: str,
+    action_id: str,
+    initial_value: str | None = None,
+    is_optional: bool = False,
+) -&gt; None</function>
+      <function>def _add_multiline_text_input(
+    blocks: Blocks,
+    block_id: str,
+    label_text: str,
+    action_id: str,
+    initial_value: str | None = None,
+    is_optional: bool = True,
+) -&gt; None</function>
+      <function>def _add_datepicker_with_initial(
+    blocks: Blocks,
+    block_id: str,
+    label_text: str,
+    action_id: str,
+    placeholder_text: str,
+    initial_date: str | None = None,
+) -&gt; None</function>
+      <function>def build_registration_modal(
+    user_name: str,
+    booking_key: str,
+    company_name: str,
+    customer_name: str,
+    metadata: str,
+    settlement_day: str = &quot;&quot;,
+    issue_type: str = &quot;&quot;,
+    company_sub_name: str = &quot;&quot;,
+    settlement_cost: str = &quot;&quot;,
+    carmore_cost: str = &quot;&quot;,
+    user_refund_cost: str = &quot;&quot;,
+    seller_channel: str = &quot;&quot;,
+    description: str = &quot;&quot;,
+    note: str = &quot;&quot;,
+    # 동적 폼 상태
+    show_issue_type_text: bool = False,
+    show_description_text: bool = False,
+    custom_issue_type: str = &quot;&quot;,
+    custom_description: str = &quot;&quot;,
+) -&gt; dict</function>
+      <function>def build_rejection_modal(metadata: str) -&gt; dict</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/__init__.py" language="python">
+      <!-- empty -->
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/conftest.py" language="python">
+      <function>def sample_settlement_data() -&gt; SettlementData</function>
+      <function>def sample_settlement_row(sample_settlement_data: SettlementData) -&gt; SettlementRow</function>
+      <function>def fake_spreadsheet() -&gt; FakeSpreadsheet</function>
+      <function>def fake_db() -&gt; FakeDatabase</function>
+      <function>def fake_reader() -&gt; FakeSlackReader</function>
+      <function>def fake_writer() -&gt; FakeSlackWriter</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/factories.py" language="python">
+      <type>class SettlementDataFactory</type>
+      <function>def create(cls, **overrides) -&gt; SettlementData</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/fakes/__init__.py" language="python">
+      <!-- empty -->
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/fakes/fake_database.py" language="python">
+      <type>class FakeDatabase</type>
+      <function>def __init__(self)</function>
+      <function>def get_session(self) -&gt; AbstractContextManager[SessionWithAfterCommit]</function>
+      <function>def clear(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/fakes/fake_drive.py" language="python">
+      <type>class FakeDriveClient</type>
+      <function>def __init__(self) -&gt; None</function>
+      <function>def find_folder(self, folder_name: str) -&gt; str | None</function>
+      <function>def list_image_files(self, folder_id: str) -&gt; list[DriveFile]</function>
+      <function>def download_file(self, file_id: str) -&gt; bytes</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/fakes/fake_slack.py" language="python">
+      <type>class FakeSlackReader</type>
+      <function>def __init__(self) -&gt; None</function>
+      <function>def get_user_name(self, user_id: str) -&gt; str</function>
+      <function>def get_thread_url(self, channel_id: str, thread_ts: str) -&gt; str</function>
+      <function>def get_parent_message(self, channel_id: str, thread_ts: str) -&gt; str | None</function>
+      <function>def find_message_by_text(
+        self,
+        channel_id: str,
+        search_text: str,
+        *,
+        max_pages: int = 10,
+    ) -&gt; str | None</function>
+      <function>def list_channel_messages(
+        self,
+        channel_id: str,
+        *,
+        oldest: float = 0,
+        max_pages: int = 10,
+    ) -&gt; Iterator[dict]</function>
+      <type>class FakeSlackWriter</type>
+      <function>def __init__(self) -&gt; None</function>
+      <function>def post_message(
+        self,
+        *,
+        channel: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+        thread_ts: str | None = None,
+    ) -&gt; str</function>
+      <function>def update_message(
+        self,
+        *,
+        channel: str,
+        ts: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -&gt; None</function>
+      <function>def delete_message(self, *, channel: str, ts: str) -&gt; None</function>
+      <function>def post_ephemeral(
+        self,
+        *,
+        channel: str,
+        user: str,
+        text: str,
+        thread_ts: str | None = None,
+    ) -&gt; None</function>
+      <function>def upload_file(
+        self,
+        *,
+        channel: str,
+        thread_ts: str,
+        content: bytes,
+        filename: str,
+        title: str = &quot;&quot;,
+    ) -&gt; None</function>
+      <function>def add_reaction(self, *, channel: str, timestamp: str, name: str) -&gt; None</function>
+      <function>def clear(self) -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/fakes/fake_spreadsheet.py" language="python">
+      <type>class FakeSpreadsheet</type>
+      <function>def __init__(self)</function>
+      <function>def save_settlement_row(
+        self,
+        row: SettlementRow,
+        sheet_name: str | None = None,
+        *,
+        is_update: bool = False,
+    ) -&gt; None</function>
+      <function>def append_issue_log_row(self, row: SettlementRow, sync_key: str) -&gt; None</function>
+      <function>def find_row_by_booking_key(
+        self, booking_key: str, sheet_name: str | None = None
+    ) -&gt; int | None</function>
+      <function>def is_settlement_completed(self, booking_key: str) -&gt; bool</function>
+      <function>def get_completed_booking_keys(self) -&gt; set[str]</function>
+      <function>def update_settlement_transfer(
+        self, booking_key: str, note: str, transfer_status: str
+    ) -&gt; None</function>
+      <function>def clear(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/fakes/fake_survey.py" language="python">
+      <type>class FakeSurveySheet</type>
+      <function>def __init__(self, submissions: list[SurveySubmission] | None = None) -&gt; None</function>
+      <function>def get_all_submissions(self) -&gt; list[SurveySubmission]</function>
+      <function>def mark_processed(self, submission_id: str) -&gt; None</function>
+      <function>def write_formatted_row(self, submission: SurveySubmission) -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/integration/__init__.py" language="python">
+      <!-- empty -->
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/integration/test_spreadsheet_integration.py" language="python">
+      <function>def _spreadsheet_config()</function>
+      <type>class FakeCell</type>
+      <type>class FakeWorksheet</type>
+      <function>def __init__(
+        self,
+        title: str,
+        headers: list[str],
+        data_rows: list[list[str]] | None = None,
+    ) -&gt; None</function>
+      <function>def row_count(self) -&gt; int</function>
+      <function>def row_values(self, row: int) -&gt; list[str]</function>
+      <function>def append_row(self, values: list[str]) -&gt; None</function>
+      <function>def cell(self, row: int, col: int) -&gt; FakeCell</function>
+      <function>def range(
+        self,
+        row_start: int,
+        col_start: int,
+        row_end: int,
+        col_end: int,
+    ) -&gt; list[FakeCell]</function>
+      <function>def update_cells(self, cells: list[FakeCell]) -&gt; None</function>
+      <function>def findall(self, query: str) -&gt; list[FakeCell]</function>
+      <function>def value_at_header(self, row_number: int, header: str) -&gt; str</function>
+      <function>def _get_value(self, row: int, col: int) -&gt; str</function>
+      <function>def _set_value(self, row: int, col: int, value: str) -&gt; None</function>
+      <type>class FakeSpreadsheetClient</type>
+      <function>def __init__(self, worksheets: dict[str, FakeWorksheet]) -&gt; None</function>
+      <function>def worksheet(self, name: str) -&gt; FakeWorksheet</function>
+      <function>def _sample_row(
+    booking_key: str,
+    *,
+    status: str = &quot;요청&quot;,
+    user_name: str = &quot;요청자&quot;,
+    approver_name: str = &quot;&quot;,
+) -&gt; SettlementRow</function>
+      <function>def _headers_for_settlement(
+    *,
+    include_settlement_completed: bool = True,
+    extra_header: str | None = None,
+) -&gt; list[str]</function>
+      <function>def _headers_for_issue_log(*, extra_header: str | None = None) -&gt; list[str]</function>
+      <function>def _row_values_from_fields(
+    sheet_type: str,
+    headers: list[str],
+    field_values: dict[str, str],
+    *,
+    extra_values: dict[str, str] | None = None,
+) -&gt; list[str]</function>
+      <function>def _make_service(
+    client: FakeSpreadsheetClient,
+) -&gt; spreadsheet_module.SpreadsheetService</function>
+      <function>def test_save_settlement_row_updates_mapped_columns_and_preserves_unmapped(
+    monkeypatch,
+) -&gt; None</function>
+      <function>def test_find_row_by_booking_key_skips_completed_rows(monkeypatch) -&gt; None</function>
+      <function>def test_save_settlement_row_raises_when_required_header_missing(monkeypatch) -&gt; None</function>
+      <function>def test_append_issue_log_row_skips_existing_sync_key_and_preserves_unmapped(
+    monkeypatch,
+) -&gt; None</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/__init__.py" language="python">
+      <!-- empty -->
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/listener/__init__.py" language="python">
+      <!-- empty -->
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/listener/test_actions_transfer_modal.py" language="python">
+      <type>class _FakeClient</type>
+      <function>def __init__(self) -&gt; None</function>
+      <function>def views_open(self, *, trigger_id: str, view: dict) -&gt; None</function>
+      <function>def _make_body(value: str) -&gt; dict</function>
+      <function>def _find_booking_key_initial_value(view: dict) -&gt; str</function>
+      <type>class TestOpenTransferModal</type>
+      <function>def test_이관전_예약번호가_기본값으로_사용된다(self)</function>
+      <function>def test_이관후_예약번호가_없어도_이관전_예약번호를_사용한다(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/listener/test_messages_reservation_cache.py" language="python">
+      <type>class _FakeDiscovery</type>
+      <function>def __init__(self) -&gt; None</function>
+      <function>def register_origin_thread(
+        self,
+        *,
+        booking_key: str,
+        channel_id: str,
+        thread_ts: str,
+    ) -&gt; None</function>
+      <type>class TestCacheReservationOriginThread</type>
+      <function>def test_예약_원본_메시지면_thread_reference를_저장한다(self)</function>
+      <function>def test_스레드_댓글은_캐시하지_않는다(self)</function>
+      <function>def test_예약번호가_없으면_캐시하지_않는다(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/listener/test_messages_transfer_routing.py" language="python">
+      <type>class TestRouteChannelMessage</type>
+      <function>def test_동일채널_이관메시지는_transfer로_라우팅(self)</function>
+      <function>def test_동일채널_일반메시지는_reservation으로_라우팅(self)</function>
+      <function>def test_다른채널_이관메시지는_transfer로_라우팅(self)</function>
+      <function>def test_다른채널_예약메시지는_reservation으로_라우팅(self)</function>
+      <function>def test_transfer_미설정시_reservation으로_라우팅(self)</function>
+      <function>def test_무관한채널은_ignore로_라우팅(self)</function>
+      <function>def test_멀티채널_중_하나에_속하면_reservation으로_라우팅(self)</function>
+      <function>def test_reservation_미설정시_ignore로_라우팅(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_approval_service.py" language="python">
+      <function>def fake_reader()</function>
+      <function>def fake_writer()</function>
+      <function>def settlement_writer(fake_db, fake_spreadsheet)</function>
+      <function>def service(fake_reader, fake_writer, settlement_writer)</function>
+      <function>def sample_data()</function>
+      <type>class TestHasPermission</type>
+      <function>def test_승인자는_True(self, service)</function>
+      <function>def test_비승인자는_False_ephemeral_전송(self, service, fake_writer)</function>
+      <type>class TestApprove</type>
+      <function>def test_권한_없으면_조기_반환(self, service, fake_writer, sample_data)</function>
+      <function>def test_승인_성공시_메시지_업데이트(self, service, fake_writer, sample_data)</function>
+      <function>def test_AlreadyProcessedError시_원본_블록_복원(
+        self, service, fake_writer, settlement_writer, sample_data
+    )</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_blocks.py" language="python">
+      <variable>_make_data = SettlementDataFactory.create</variable>
+      <type>class TestApprovalRequestMessage</type>
+      <function>def test_이관_설명일_때_transfer_action_id를_사용한다(self)</function>
+      <function>def test_빈_필드는_none_text로_표시한다(self)</function>
+      <type>class TestDecisionMessage</type>
+      <function>def test_승인_메시지는_header_context를_갱신한다(self)</function>
+      <function>def test_반려_메시지는_header_context를_갱신한다(self)</function>
+      <function>def test_헤더가_없어도_결정_메시지를_생성한다(self)</function>
+      <type>class TestModalBuilders</type>
+      <function>def test_registration_modal_빈_user_name은_대시로_표시한다(self)</function>
+      <function>def test_통합_모달에서_대신배차_prefill_설정가능(self)</function>
+      <function>def test_비고_필드는_optional로_렌더링한다(self)</function>
+      <function>def test_동적폼_기타_선택시_텍스트_입력_블록으로_전환(self)</function>
+      <type>class TestApprovalRequestMessageWithNote</type>
+      <function>def test_비고_필드가_표시된다(self)</function>
+      <type>class TestRejectionModal</type>
+      <function>def test_반려_모달은_사유_입력_필드를_포함한다(self)</function>
+      <type>class TestRejectedMessageWithReason</type>
+      <function>def test_반려_메시지에_사유가_표시된다(self)</function>
+      <type>class TestMinimalApprovalMessage</type>
+      <function>def test_정산이슈_승인요청은_settlement_action_id를_사용한다(self)</function>
+      <function>def test_업체이관_승인요청은_transfer_action_id를_사용한다(self)</function>
+      <function>def test_요청자_이름이_표시된다(self)</function>
+      <function>def test_스레드_링크가_표시된다(self)</function>
+      <function>def test_헤더에_요청_유형이_표시된다(self)</function>
+      <type>class TestMinimalApprovedMessage</type>
+      <function>def test_승인_완료_메시지에_취소선이_적용된다(self)</function>
+      <function>def test_승인자_이름이_표시된다(self)</function>
+      <function>def test_버튼이_없다(self)</function>
+      <function>def test_업체이관_승인_완료_메시지(self)</function>
+      <type>class TestMinimalRejectedMessage</type>
+      <function>def test_반려_완료_메시지에_취소선이_적용된다(self)</function>
+      <function>def test_반려자_이름이_표시된다(self)</function>
+      <function>def test_버튼이_없다(self)</function>
+      <function>def test_업체이관_반려_완료_메시지(self)</function>
+      <type>class TestApprovalRequestMessageIncludeButtons</type>
+      <function>def test_include_buttons_false일때_버튼이_없다(self)</function>
+      <function>def test_include_buttons_true일때_버튼이_있다(self)</function>
+      <type>class TestMinimalProcessingMessage</type>
+      <function>def test_정산이슈_처리중_메시지(self)</function>
+      <function>def test_업체이관_처리중_메시지(self)</function>
+      <function>def test_버튼이_없다(self)</function>
+      <function>def test_블록_구조는_header와_section만_포함한다(self)</function>
+      <type>class TestTransferParsingResultMessage</type>
+      <function>def test_기본_호출시_context_블록_없음(self)</function>
+      <function>def test_transfer_message_url_있으면_context_블록_추가(self)</function>
+      <function>def test_actions_블록은_항상_마지막(self)</function>
+      <function>def test_빈_url은_context_블록_추가_안함(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_cancellation_image_service.py" language="python">
+      <variable>TARGET_CH = &quot;C-CANCEL&quot;</variable>
+      <function>def _make_service(
+    *,
+    survey: FakeSurveySheet | None = None,
+    drive: FakeDriveClient | None = None,
+    writer: FakeSlackWriter | None = None,
+    reader: FakeSlackReader | None = None,
+) -&gt; CancellationImageService</function>
+      <function>def _submission(
+    sid: str = &quot;1001&quot;,
+    name: str = &quot;홍길동&quot;,
+    key: str = &quot;R12345&quot;,
+    **kwargs,
+) -&gt; SurveySubmission</function>
+      <type>class TestPollAndUpload</type>
+      <function>def test_새_응답_이미지_업로드(self)</function>
+      <function>def test_이미_처리된_응답은_건너뜀(self)</function>
+      <function>def test_스레드_없으면_건너뜀(self)</function>
+      <function>def test_폴더_없으면_건너뜀(self)</function>
+      <function>def test_이미지_없으면_업로드_안함(self)</function>
+      <function>def test_빈_설문_무동작(self)</function>
+      <function>def test_여러_이미지_모두_업로드(self)</function>
+      <function>def test_업로드_실패해도_나머지_계속_처리(self)</function>
+      <function>def _failing_upload(**kwargs)</function>
+      <type>class TestSheetBasedTracking</type>
+      <function>def test_성공_시_시트에_처리완료_기록(self)</function>
+      <function>def test_실패_시_처리완료_기록_안함(self)</function>
+      <function>def test_시트_기반_중복_방지_재시작_후에도_유지(self)</function>
+      <type>class TestFormattedSheet</type>
+      <function>def test_성공_시_포맷_시트에_행_추가(self)</function>
+      <function>def test_실패_시_포맷_시트에_기록_안함(self)</function>
+      <function>def _make_pdf_bytes(pages: int = 1) -&gt; bytes</function>
+      <type>class TestPdfConversion</type>
+      <function>def test_pdf_파일_이미지로_변환_업로드(self)</function>
+      <function>def test_pdf와_이미지_혼합_폴더(self)</function>
+      <function>def test_다페이지_pdf_모든_페이지_업로드(self)</function>
+      <function>def test_pdf_업로드_시_리액션_추가(self)</function>
+      <function>def test_이미지만_있으면_pdf_리액션_없음(self)</function>
+      <function>def test_pdf_변환_실패_시_다음_파일_계속(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_column_mapper.py" language="python">
+      <variable>SAMPLE_FIELD_TO_HEADER = {
+    &quot;settlement_day&quot;: &quot;정산기준일&quot;,
+    &quot;user_name&quot;: &quot;작성자&quot;,
+    &quot;booking_key&quot;: &quot;예약번호&quot;,
+    &quot;status&quot;: &quot;처리&quot;,
+}</variable>
+      <variable>REQUIRED = (&quot;settlement_day&quot;, &quot;user_name&quot;, &quot;booking_key&quot;, &quot;status&quot;)</variable>
+      <type>class TestColumnMapping</type>
+      <function>def test_index_of_0based(self)</function>
+      <function>def test_column_of_1based(self)</function>
+      <function>def test_dict_to_row_기본(self)</function>
+      <function>def test_dict_to_row_extra(self)</function>
+      <function>def test_dict_to_row_컬럼_재배치(self)</function>
+      <function>def test_row_to_dict_기본(self)</function>
+      <function>def test_row_to_dict_짧은_행(self)</function>
+      <type>class TestColumnMapper</type>
+      <function>def test_정상_해석(self)</function>
+      <function>def test_컬럼_재배치_대응(self)</function>
+      <function>def test_필수_헤더_누락시_에러(self)</function>
+      <function>def test_필수_필드가_config에_없으면_에러(self)</function>
+      <function>def test_추가_헤더는_무시(self)</function>
+      <function>def test_선택_필드_누락은_에러_아님(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_config_path.py" language="python">
+      <variable>PROJECT_ROOT = Path(__file__).parent.parent.parent</variable>
+      <type>class TestResolveConfigPath</type>
+      <function>def test_default_is_dev(self, monkeypatch)</function>
+      <function>def test_environment_selects_file(self, monkeypatch)</function>
+      <function>def test_environment_test(self, monkeypatch)</function>
+      <function>def test_app_config_file_is_ignored(self, monkeypatch)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_drive_client.py" language="python">
+      <type>class TestFakeDriveClient</type>
+      <function>def test_폴더_검색_성공(self)</function>
+      <function>def test_폴더_검색_실패시_None(self)</function>
+      <function>def test_이미지_파일_목록(self)</function>
+      <function>def test_빈_폴더_빈_리스트(self)</function>
+      <function>def test_파일_다운로드(self)</function>
+      <function>def test_없는_파일_빈_바이트(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_error_handler.py" language="python">
+      <function>def _make_client() -&gt; MagicMock</function>
+      <function>def _make_body(
+    *,
+    channel_id: str | None = None,
+    user_id: str | None = None,
+    thread_ts: str | None = None,
+) -&gt; dict</function>
+      <type>class TestExtractContextFromBody</type>
+      <function>def test_action_body에서_컨텍스트_추출(self)</function>
+      <function>def test_message_event_body에서_컨텍스트_추출(self)</function>
+      <function>def test_message_event_with_thread_ts(self)</function>
+      <function>def test_view_submission_body에서_user_id_추출(self)</function>
+      <function>def test_빈_body에서_None_반환(self)</function>
+      <function>def test_user_as_string(self)</function>
+      <function>def test_message_ts_fallback(self)</function>
+      <type>class TestGetErrorEmojiAndType</type>
+      <function>def test_validation_error(self)</function>
+      <function>def test_spreadsheet_error(self)</function>
+      <function>def test_slack_error(self)</function>
+      <function>def test_app_error(self)</function>
+      <function>def test_unknown_error(self)</function>
+      <type>class TestIsUserError</type>
+      <function>def test_validation_error는_user_error(self)</function>
+      <function>def test_spreadsheet_error는_system_error(self)</function>
+      <function>def test_slack_error는_system_error(self)</function>
+      <function>def test_app_error는_system_error(self)</function>
+      <function>def test_unknown_error는_system_error(self)</function>
+      <type>class TestSendMonitoringAlert</type>
+      <function>def test_시스템에러_알림전송(self)</function>
+      <function>def test_에러채널_미설정시_skip(self)</function>
+      <function>def test_상세정보_포함(self)</function>
+      <function>def test_채널정보_포함(self)</function>
+      <function>def test_slack_api_실패시_로깅만(self)</function>
+      <type>class TestHandleErrorImpl</type>
+      <function>def test_user_error시_info로그_모니터링미전송(self)</function>
+      <function>def test_system_error시_exception로그_모니터링전송(self)</function>
+      <function>def test_사용자_에페메랄_전송(self)</function>
+      <function>def test_채널없으면_에페메랄_미전송(self)</function>
+      <function>def test_user_id없으면_에페메랄_미전송(self)</function>
+      <function>def test_에페메랄_실패시_로깅만(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_exceptions.py" language="python">
+      <type>class TestExceptionHierarchy</type>
+      <function>def test_all_exceptions_inherit_from_app_error(self)</function>
+      <function>def test_app_error_has_default_user_message(self)</function>
+      <function>def test_spreadsheet_error_has_specific_user_message(self)</function>
+      <function>def test_slack_error_has_specific_user_message(self)</function>
+      <function>def test_validation_error_has_specific_user_message(self)</function>
+      <function>def test_database_error_has_specific_user_message(self)</function>
+      <function>def test_already_processed_error_has_specific_user_message(self)</function>
+      <function>def test_custom_user_message_overrides_default(self)</function>
+      <function>def test_details_are_stored(self)</function>
+      <function>def test_empty_details_returns_empty_dict(self)</function>
+      <function>def test_message_is_accessible(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_find_message_by_text.py" language="python">
+      <function>def _make_history_response(messages, next_cursor=&quot;&quot;)</function>
+      <type>class _FakeSlackClient</type>
+      <function>def __init__(
+        self,
+        responses: list[dict] | None = None,
+        *,
+        error: Exception | None = None,
+    ) -&gt; None</function>
+      <function>def conversations_history(self, **kwargs)</function>
+      <type>class _FakeSlackResponse</type>
+      <function>def __getattr__(self, _name)</function>
+      <function>def __str__(self)</function>
+      <type>class TestFindMessageByText</type>
+      <function>def test_첫_페이지에서_발견(self)</function>
+      <function>def test_두번째_페이지에서_발견(self)</function>
+      <function>def test_max_pages_초과시_None(self)</function>
+      <function>def test_빈_채널은_None(self)</function>
+      <function>def test_SlackApiError_발생시_None(self)</function>
+      <function>def test_cursor_없으면_다음_페이지_요청_안함(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_message_filter.py" language="python">
+      <type>class TestIsBotMessage</type>
+      <function>def test_bot_id_present(self)</function>
+      <function>def test_subtype_bot_message(self)</function>
+      <function>def test_normal_user_message(self)</function>
+      <function>def test_empty_dict(self)</function>
+      <type>class TestShouldProcessMessage</type>
+      <function>def _clear_cache(self)</function>
+      <function>def test_dev_processes_user_message(self, monkeypatch)</function>
+      <function>def test_dev_processes_bot_message(self, monkeypatch)</function>
+      <function>def test_prod_skips_user_message(self, monkeypatch)</function>
+      <function>def test_prod_processes_bot_message(self, monkeypatch)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_message_parser.py" language="python">
+      <type>class TestParseSettlementMessage</type>
+      <function>def test_모든_필드가_있는_메시지를_파싱한다(self)</function>
+      <function>def test_일부_필드만_있는_메시지를_파싱한다(self)</function>
+      <function>def test_빈_텍스트를_파싱하면_빈_객체를_반환한다(self)</function>
+      <function>def test_공백이_포함된_메시지를_파싱한다(self)</function>
+      <function>def test_알수없는_필드는_무시한다(self)</function>
+      <function>def test_형식에_맞지않는_줄은_무시한다(self)</function>
+      <function>def test_예약자명_뒤에_추가정보가_있으면_이름만_추출한다(self)</function>
+      <type>class TestParsedSettlementValidator</type>
+      <function>def test_customer_name_괄호_앞_이름만_추출한다(self)</function>
+      <function>def test_customer_name_괄호_없으면_그대로_유지한다(self)</function>
+      <function>def test_customer_name_빈값이면_빈값_유지한다(self)</function>
+      <function>def test_customer_name_복잡한_괄호도_처리한다(self)</function>
+      <type>class TestParseTransferReservationMessage</type>
+      <function>def test_이관_예약_메시지에서_원하는_필드들을_추출한다(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_modal_metadata.py" language="python">
+      <type>class TestModalMetadataSerialization</type>
+      <function>def test_JSON_직렬화_역직렬화_round_trip(self)</function>
+      <function>def test_빈_필드도_직렬화_가능하다(self)</function>
+      <function>def test_모든_필드가_있는_경우_직렬화(self)</function>
+      <function>def test_Slack_모달_private_metadata로_사용시_정상_동작(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_rejection_service.py" language="python">
+      <function>def fake_reader()</function>
+      <function>def fake_writer()</function>
+      <function>def settlement_writer(fake_db, fake_spreadsheet)</function>
+      <function>def service(fake_reader, fake_writer, settlement_writer)</function>
+      <function>def sample_data()</function>
+      <function>def sample_metadata()</function>
+      <type>class TestHasPermission</type>
+      <function>def test_반려자는_True(self, service)</function>
+      <function>def test_비권한자는_False_ephemeral_전송(self, service, fake_writer)</function>
+      <type>class TestReject</type>
+      <function>def test_반려_성공시_3단계_업데이트(
+        self, service, fake_writer, sample_data, sample_metadata
+    )</function>
+      <function>def test_AlreadyProcessedError시_원본_블록_복원(
+        self, service, fake_writer, sample_data, sample_metadata
+    )</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_repository.py" language="python">
+      <function>def fake_db()</function>
+      <function>def sample_row()</function>
+      <type>class TestSettlementRepository</type>
+      <function>def test_save_새로운_정산을_저장한다(self, fake_db, sample_row)</function>
+      <function>def test_save_금액_필드를_정수로_변환한다(self, fake_db, sample_row)</function>
+      <function>def test_save_동일_booking_key는_업데이트한다(self, fake_db, sample_row)</function>
+      <function>def test_add_log는_항상_새_로그를_추가한다(self, fake_db, sample_row)</function>
+      <function>def test_트랜잭션_롤백_테스트(self, fake_db, sample_row)</function>
+      <function>def test_mark_synced_동기화_완료_표시(self, fake_db, sample_row)</function>
+      <function>def test_list_unsynced_동기화_안된_정산_조회(self, fake_db, sample_row)</function>
+      <function>def test_get_ID로_정산_조회(self, fake_db, sample_row)</function>
+      <function>def test_get_by_booking_key_예약번호로_조회(self, fake_db, sample_row)</function>
+      <function>def test_save_정산완료된_booking_key는_새행을_생성한다(self, fake_db, sample_row)</function>
+      <function>def test_get_active_by_booking_key_활성건만_조회한다(self, fake_db, sample_row)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_retry.py" language="python">
+      <function>def _make_api_error(status_code: int) -&gt; APIError</function>
+      <type>class TestRetryOnRateLimit</type>
+      <function>def test_success_no_retry(self)</function>
+      <function>def succeed()</function>
+      <function>def test_429_then_success(self)</function>
+      <function>def fail_once()</function>
+      <function>def test_max_retries_exceeded(self)</function>
+      <function>def always_429()</function>
+      <function>def test_non_429_api_error_not_retried(self)</function>
+      <function>def fail_403()</function>
+      <function>def test_non_api_error_not_retried(self)</function>
+      <function>def fail_value()</function>
+      <function>def test_sleep_fn_called_with_valid_delay(self)</function>
+      <function>def fail_twice()</function>
+      <type>class TestTTLCache</type>
+      <function>def test_get_set(self)</function>
+      <function>def test_ttl_expiry(self)</function>
+      <function>def clock() -&gt; float</function>
+      <function>def test_clear(self)</function>
+      <function>def test_overwrite(self)</function>
+      <function>def test_overwrite_resets_ttl(self)</function>
+      <function>def clock() -&gt; float</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_settlement_completed_check.py" language="python">
+      <function>def fake_sheets()</function>
+      <function>def _make_writer(fake_db)</function>
+      <function>def _save_as_requested(fake_db, data)</function>
+      <function>def _mark_completed_in_db(fake_db, booking_key)</function>
+      <type>class TestWriterDBCheck</type>
+      <function>def test_DB에_정산완료_있으면_SettlementCompletedError(
+        self, fake_db, sample_settlement_data
+    )</function>
+      <function>def test_REJECTED_상태에서도_정산완료_체크(self, fake_db, sample_settlement_data)</function>
+      <function>def test_REQUESTED_상태에서는_체크_스킵(self, fake_db, sample_settlement_data)</function>
+      <function>def test_DB_completed_False이면_정상진행(self, fake_db, sample_settlement_data)</function>
+      <function>def test_완료_히스토리와_활성요청이_공존하면_승인_허용(
+        self, fake_db, sample_settlement_data
+    )</function>
+      <type>class TestOrchestratorSheetsGuard</type>
+      <function>def data(self)</function>
+      <function>def reader(self)</function>
+      <function>def test_승인시_Sheets_정산완료이면_차단_및_DB반영(
+        self, fake_db, fake_sheets, reader, data
+    )</function>
+      <function>def test_반려시_Sheets_정산완료이면_차단_및_DB반영(
+        self, fake_db, fake_sheets, reader, data
+    )</function>
+      <function>def test_Sheets_미완료이면_정상_승인(self, fake_db, fake_sheets, reader, data)</function>
+      <function>def test_sheets_None이면_체크_스킵(self, fake_db, reader, data)</function>
+      <function>def test_승인시_시트에_TRUE_히스토리_있어도_활성행이_있으면_허용(
+        self, fake_db, fake_sheets, reader, data
+    )</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_settlement_data.py" language="python">
+      <type>class TestSettlementDataSerialization</type>
+      <function>def test_JSON_직렬화_역직렬화_round_trip(self)</function>
+      <function>def test_필수_필드_누락시_ValidationError_발생(self)</function>
+      <function>def test_모든_필드가_있는_경우_직렬화(self, sample_settlement_data)</function>
+      <function>def test_Slack_버튼_value로_사용시_정상_동작(self)</function>
+      <type>class TestSettlementDataCostValidator</type>
+      <function>def test_문자열_금액을_정수로_변환한다(self)</function>
+      <function>def test_콤마_포함_금액을_변환한다(self)</function>
+      <function>def test_원_단위_포함_금액을_변환한다(self)</function>
+      <function>def test_빈_문자열은_None이_된다(self)</function>
+      <function>def test_None은_None_그대로_유지한다(self)</function>
+      <function>def test_정수값은_그대로_유지한다(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_settlement_registration_service.py" language="python">
+      <variable>_APPROVAL_CHANNEL = &quot;C-APPROVAL&quot;</variable>
+      <variable>_CHANNEL = &quot;C-TEST&quot;</variable>
+      <variable>_THREAD_TS = &quot;111.222&quot;</variable>
+      <variable>_REQUESTER_ID = &quot;U-REQ&quot;</variable>
+      <type>class FakeSettlementWriter</type>
+      <function>def __init__(self, *, should_fail: bool = False) -&gt; None</function>
+      <function>def save(
+        self,
+        data: SettlementData,
+        status: SettlementStatus,
+        approver_name: str,
+        thread_url: str,
+        rejection_reason: str = &quot;&quot;,
+    ) -&gt; None</function>
+      <function>def _make_reader(
+    *,
+    user_name: str = &quot;테스터&quot;,
+    thread_url: str = &quot;https://slack.com/test/thread&quot;,
+) -&gt; FakeSlackReader</function>
+      <function>def _make_service(
+    *,
+    reader: FakeSlackReader | None = None,
+    writer: FakeSlackWriter | None = None,
+    settlement_writer: FakeSettlementWriter | None = None,
+)</function>
+      <function>def _slack_error() -&gt; SlackApiError</function>
+      <type>class TestRegister</type>
+      <function>def test_정상등록(self)</function>
+      <function>def test_DB저장실패시_계속진행(self)</function>
+      <function>def test_SlackApiError_발생시_cleanup_및_알림(self)</function>
+      <function>def post_message_with_error(**kwargs)</function>
+      <function>def test_이관건등록(self)</function>
+      <type>class TestCleanupDetailMessage</type>
+      <function>def test_메시지ts없으면skip(self)</function>
+      <function>def test_삭제성공(self)</function>
+      <type>class TestNotifyUserSafe</type>
+      <function>def test_user_id없으면skip(self)</function>
+      <function>def test_알림실패시무시(self)</function>
+      <function>def post_with_error(**kwargs)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_settlement_row.py" language="python">
+      <type>class TestSettlementRow</type>
+      <function>def test_to_dict_키를_확인한다(self)</function>
+      <function>def test_to_dict_settlement_completed_제외(self)</function>
+      <function>def test_from_settlement_data_타임스탬프_생성(self)</function>
+      <function>def test_to_dict_필드_수_확인(self)</function>
+      <function>def test_to_dict_키가_SETTLEMENT_FIELDS와_일치(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_settlement_service.py" language="python">
+      <function>def fake_sheets()</function>
+      <function>def writer(fake_db, fake_sheets)</function>
+      <type>class TestSettlementWriterSave</type>
+      <function>def test_승인시_DB에_저장한다(self, fake_db, writer, sample_settlement_data)</function>
+      <function>def test_반려시_DB에_저장한다(self, fake_db, writer, sample_settlement_data)</function>
+      <function>def test_승인시_settlement과_issue_log_모두_저장한다(
+        self, fake_db, writer, sample_settlement_data
+    )</function>
+      <function>def test_저장된_데이터에_승인자_이름이_포함된다(
+        self, fake_db, writer, sample_settlement_data
+    )</function>
+      <function>def test_sheets_동기화_성공시_synced_True(
+        self, fake_db, fake_sheets, sample_settlement_data
+    )</function>
+      <function>def test_sheets_동기화_실패시_synced_False(self, fake_db, sample_settlement_data)</function>
+      <function>def test_요청시_DB에_저장한다(self, fake_db, writer, sample_settlement_data)</function>
+      <function>def test_요청시_sheets_동기화_실행된다(
+        self, fake_db, fake_sheets, sample_settlement_data
+    )</function>
+      <function>def test_반려시_sheets_동기화_실행된다(
+        self, fake_db, fake_sheets, sample_settlement_data
+    )</function>
+      <function>def test_rejection_reason_저장된다(self, fake_db, writer, sample_settlement_data)</function>
+      <function>def test_reviewer_name_저장된다(self, fake_db, writer, sample_settlement_data)</function>
+      <function>def test_요청시_reviewer_name_비어있다(
+        self, fake_db, writer, sample_settlement_data
+    )</function>
+      <function>def test_sheets_동기화_실패시_sync_error_기록(
+        self, fake_db, sample_settlement_data
+    )</function>
+      <type>class TestRaceCondition</type>
+      <function>def writer(self, fake_db)</function>
+      <function>def _save_as_requested(self, fake_db, sample_settlement_data) -&gt; None</function>
+      <function>def _save_as_approved(self, fake_db, sample_settlement_data) -&gt; None</function>
+      <function>def test_이미_승인된_건에_승인하면_AlreadyProcessedError(
+        self, fake_db, writer, sample_settlement_data
+    )</function>
+      <function>def test_이미_반려된_건에_반려하면_AlreadyProcessedError(
+        self, fake_db, writer, sample_settlement_data
+    )</function>
+      <function>def test_이미_승인된_건에_반려하면_AlreadyProcessedError(
+        self, fake_db, writer, sample_settlement_data
+    )</function>
+      <function>def test_이미_반려된_건에_승인하면_AlreadyProcessedError(
+        self, fake_db, writer, sample_settlement_data
+    )</function>
+      <function>def test_요청_상태에서_승인은_정상_처리(
+        self, fake_db, writer, sample_settlement_data
+    )</function>
+      <type>class TestExceptionTransformation</type>
+      <function>def test_save_transforms_sqlalchemy_error(self, sample_settlement_data)</function>
+      <function>def test_save_transforms_integrity_error(self, sample_settlement_data)</function>
+      <function>def test_mark_sync_failed_safe_never_raises(self, fake_db)</function>
+      <function>def test_sync_after_commit_catches_spreadsheet_error(
+        self, fake_db, sample_settlement_row
+    )</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_slack_client.py" language="python">
+      <type>class TestExtractTextValue</type>
+      <function>def test_정상적인_값_추출(self)</function>
+      <function>def test_block_id가_없으면_빈문자열_반환(self)</function>
+      <function>def test_action_id가_없으면_빈문자열_반환(self)</function>
+      <function>def test_value가_None이면_빈문자열_반환(self)</function>
+      <function>def test_value키가_없으면_빈문자열_반환(self)</function>
+      <type>class TestExtractDateValue</type>
+      <function>def test_정상적인_날짜_추출(self)</function>
+      <function>def test_block_id가_없으면_빈문자열_반환(self)</function>
+      <function>def test_selected_date가_None이면_빈문자열_반환(self)</function>
+      <type>class TestExtractSelectText</type>
+      <function>def test_정상적인_선택값_추출(self)</function>
+      <function>def test_block_id가_없으면_빈문자열_반환(self)</function>
+      <function>def test_selected_option이_None이면_빈문자열_반환(self)</function>
+      <function>def test_selected_option이_빈딕셔너리면_빈문자열_반환(self)</function>
+      <function>def test_text_중첩구조에서_정상_추출(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_slack_client_functions.py" language="python">
+      <function>def _slack_error(msg: str = &quot;error&quot;) -&gt; SlackApiError</function>
+      <type>class TestGetUserRealName</type>
+      <function>def test_정상_사용자명_반환(self)</function>
+      <function>def test_SlackApiError시_빈문자열_반환(self)</function>
+      <function>def test_응답에_user키_없으면_빈문자열_반환(self)</function>
+      <type>class TestGetThreadPermalink</type>
+      <function>def test_정상_permalink_반환(self)</function>
+      <function>def test_thread_ts_빈문자열이면_API_미호출_빈문자열(self)</function>
+      <function>def test_SlackApiError시_빈문자열_반환(self)</function>
+      <function>def test_응답에_permalink_없으면_빈문자열(self)</function>
+      <type>class TestGetThreadParentMessage</type>
+      <function>def test_정상_부모메시지_텍스트_반환(self)</function>
+      <function>def test_messages_빈리스트면_None(self)</function>
+      <function>def test_messages_키_없으면_None(self)</function>
+      <function>def test_text_키_없으면_빈문자열(self)</function>
+      <function>def test_SlackApiError시_None(self)</function>
+      <type>class TestFindMessageByTextEdgeCases</type>
+      <function>def _response(messages, next_cursor=&quot;&quot;)</function>
+      <function>def test_messages_빈리스트면_다음페이지_탐색(self)</function>
+      <function>def test_max_pages_1이면_한페이지만_탐색(self)</function>
+      <function>def test_text_부분문자열_매칭(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_slack_reader.py" language="python">
+      <type>class TestSlackReader</type>
+      <function>def test_get_user_name_위임(self)</function>
+      <function>def test_get_thread_url_위임(self)</function>
+      <function>def test_get_parent_message_위임(self)</function>
+      <function>def test_find_message_by_text_위임(self)</function>
+      <function>def test_find_message_by_text_max_pages_전달(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_slack_writer.py" language="python">
+      <function>def _slack_error(msg: str = &quot;error&quot;) -&gt; SlackApiError</function>
+      <function>def mock_client()</function>
+      <function>def writer(mock_client)</function>
+      <type>class TestPostMessage</type>
+      <function>def test_기본_메시지_전송_ts_반환(self, writer, mock_client)</function>
+      <function>def test_blocks_포함시_kwargs에_blocks_추가(self, writer, mock_client)</function>
+      <function>def test_blocks_None이면_kwargs에_미포함(self, writer, mock_client)</function>
+      <function>def test_thread_ts_포함시_kwargs에_추가(self, writer, mock_client)</function>
+      <function>def test_thread_ts_None이면_kwargs에_미포함(self, writer, mock_client)</function>
+      <function>def test_응답에_ts_없으면_빈문자열_반환(self, writer, mock_client)</function>
+      <function>def test_SlackApiError_그대로_전파(self, writer, mock_client)</function>
+      <type>class TestUpdateMessage</type>
+      <function>def test_기본_업데이트(self, writer, mock_client)</function>
+      <function>def test_blocks_포함시_전달(self, writer, mock_client)</function>
+      <function>def test_blocks_None이면_미포함(self, writer, mock_client)</function>
+      <function>def test_SlackApiError_전파(self, writer, mock_client)</function>
+      <type>class TestDeleteMessage</type>
+      <function>def test_삭제_호출(self, writer, mock_client)</function>
+      <function>def test_SlackApiError_전파(self, writer, mock_client)</function>
+      <type>class TestPostEphemeral</type>
+      <function>def test_기본_에페메랄_전송(self, writer, mock_client)</function>
+      <function>def test_thread_ts_포함시_전달(self, writer, mock_client)</function>
+      <function>def test_thread_ts_None이면_미포함(self, writer, mock_client)</function>
+      <function>def test_SlackApiError_전파(self, writer, mock_client)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_spreadsheet_service.py" language="python">
+      <variable>_FIELD_TO_HEADER: dict[str, str] = {
+    &quot;settlement_day&quot;: &quot;정산기준일&quot;,
+    &quot;user_name&quot;: &quot;작성자&quot;,
+    &quot;customer_name&quot;: &quot;고객명&quot;,
+    &quot;booking_key&quot;: &quot;예약번호&quot;,
+    &quot;company_name&quot;: &quot;업체명1&quot;,
+    &quot;company_sub_name&quot;: &quot;업체명2(대신배차)&quot;,
+    &quot;settlement_cost&quot;: &quot;정산기준금액&quot;,
+    &quot;carmore_cost&quot;: &quot;카모아 부담비용&quot;,
+    &quot;user_refund_cost&quot;: &quot;고객환불금액&quot;,
+    &quot;description&quot;: &quot;내용&quot;,
+    &quot;status&quot;: &quot;처리&quot;,
+    &quot;approver_name&quot;: &quot;승인자&quot;,
+    &quot;issue_type&quot;: &quot;이슈사항&quot;,
+    &quot;sales_channel&quot;: &quot;판매채널&quot;,
+    &quot;created_at&quot;: &quot;등록시간&quot;,
+    &quot;updated_at&quot;: &quot;수정시간&quot;,
+    &quot;thread_url&quot;: &quot;스레드 링크&quot;,
+    &quot;note&quot;: &quot;비고&quot;,
+    &quot;reviewer_name&quot;: &quot;반려자&quot;,
+    &quot;rejection_reason&quot;: &quot;고객 정보 오류&quot;,
+}</variable>
+      <variable>_SETTLEMENT_HEADERS: list[str] = [
+    *_FIELD_TO_HEADER.values(),
+    &quot;정산완료&quot;,
+]</variable>
+      <variable>_ISSUE_LOG_HEADERS: list[str] = [
+    *_FIELD_TO_HEADER.values(),
+    &quot;sync_key&quot;,
+]</variable>
+      <function>def _field_to_header(sheet_type: str) -&gt; dict[str, str]</function>
+      <function>def _sheet_name(sheet_type: str) -&gt; str</function>
+      <function>def _make_row() -&gt; SettlementRow</function>
+      <function>def mock_worksheet()</function>
+      <function>def mock_spreadsheet(mock_worksheet)</function>
+      <function>def service(mock_spreadsheet)</function>
+      <type>class TestSaveSettlementRow</type>
+      <function>def test_신규_행_append_row_호출(self, service, mock_worksheet)</function>
+      <function>def test_업데이트_행_update_cells_호출(self, service, mock_worksheet)</function>
+      <function>def _row_values(row_num)</function>
+      <function>def test_업데이트_행_미발견시_폴백_INSERT(self, service, mock_worksheet)</function>
+      <function>def test_GSpreadException을_SpreadsheetError로_래핑(self, service, mock_worksheet)</function>
+      <function>def test_sheet_name_기본값은_settlement(self, service, mock_spreadsheet)</function>
+      <type>class TestAppendIssueLogRow</type>
+      <function>def _setup_issue_log_ws(self, mock_spreadsheet)</function>
+      <function>def test_신규_로그_append_row_호출(self, service)</function>
+      <function>def test_중복_sync_key는_skip(self, service)</function>
+      <function>def test_GSpreadException을_SpreadsheetError로_래핑(self, service)</function>
+      <type>class TestFindRowByBookingKey</type>
+      <function>def test_활성_행_번호_반환(self, service, mock_worksheet)</function>
+      <function>def _row_values(row_num)</function>
+      <function>def test_정산완료_행은_None_반환(self, service, mock_worksheet)</function>
+      <function>def _row_values(row_num)</function>
+      <function>def test_미존재시_None_반환(self, service, mock_worksheet)</function>
+      <type>class TestMergeWithExistingRow</type>
+      <function>def test_매핑_안된_컬럼_보존(self)</function>
+      <function>def test_기존_행이_짧으면_확장(self)</function>
+      <type>class TestClientRefresh</type>
+      <function>def test_TTL_만료시_클라이언트_갱신(self)</function>
+      <function>def _factory()</function>
+      <function>def test_TTL_내에서는_갱신_안함(self)</function>
+      <function>def _factory()</function>
+      <function>def test_갱신시_캐시_클리어(self)</function>
+      <type>class TestHeaderRow</type>
+      <function>def test_header_row_2에서_헤더_읽기(self)</function>
+      <function>def _row_values(row_num)</function>
+      <function>def test_header_row_미지정시_기본값_1(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_survey_sheet_reader.py" language="python">
+      <type>class TestFakeSurveySheet</type>
+      <function>def test_빈_시트_빈_리스트_반환(self)</function>
+      <function>def test_submissions_반환(self)</function>
+      <function>def test_반환값은_원본의_복사본(self)</function>
+      <type>class TestSurveySubmissionModel</type>
+      <function>def test_folder_name_프로퍼티(self)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_sync_processor.py" language="python">
+      <function>def fake_sheets()</function>
+      <function>def processor(fake_db, fake_sheets)</function>
+      <function>def _make_row(sample_settlement_data) -&gt; SettlementRow</function>
+      <function>def _create_records(fake_db, row: SettlementRow) -&gt; tuple[int, int]</function>
+      <type>class TestSyncToSheets</type>
+      <function>def test_정상_동기화(self, processor, fake_sheets, sample_settlement_data)</function>
+      <function>def test_is_update_플래그_전달(
+        self, processor, fake_sheets, sample_settlement_data
+    )</function>
+      <type>class TestMarkSynced</type>
+      <function>def test_정상_synced_마킹(self, fake_db, processor, sample_settlement_data)</function>
+      <type>class TestMarkSyncFailed</type>
+      <function>def test_정상_실패_마킹(self, fake_db, processor, sample_settlement_data)</function>
+      <type>class TestMarkSyncFailedSafe</type>
+      <function>def test_정상_실패_마킹(self, fake_db, processor, sample_settlement_data)</function>
+      <function>def test_내부예외_삼킴_로깅만(self, processor, monkeypatch)</function>
+      <function>def _raise(*_args, **_kwargs)</function>
+      <type>class TestAfterCommit</type>
+      <function>def test_성공시_mark_synced(self, fake_db, processor, sample_settlement_data)</function>
+      <function>def test_SpreadsheetError시_mark_sync_failed_safe(
+        self, fake_db, processor, fake_sheets, sample_settlement_data
+    )</function>
+      <function>def test_SQLAlchemyError시_mark_sync_failed_safe(
+        self, fake_db, processor, sample_settlement_data, monkeypatch
+    )</function>
+      <function>def _raise(*_args, **_kwargs)</function>
+      <type>class TestClaimUnsynced</type>
+      <function>def test_미동기화_레코드_반환(self, fake_db, processor, sample_settlement_data)</function>
+      <function>def test_빈결과(self, processor)</function>
+      <type>class TestRecoverStaleRecords</type>
+      <function>def test_stale_레코드_복구(self, fake_db, processor, sample_settlement_data)</function>
+      <function>def test_복구할_레코드_없음(self, processor)</function>
+      <type>class TestBatchMarkMethods</type>
+      <function>def test_mark_settlement_synced(self, fake_db, processor, sample_settlement_data)</function>
+      <function>def test_mark_settlement_failed(self, fake_db, processor, sample_settlement_data)</function>
+      <function>def test_mark_log_synced(self, fake_db, processor, sample_settlement_data)</function>
+      <function>def test_mark_log_failed(self, fake_db, processor, sample_settlement_data)</function>
+      <type>class TestMarkSettlementsCompleted</type>
+      <function>def test_정상_일괄_완료(self, fake_db, processor, sample_settlement_data)</function>
+      <function>def test_빈_집합이면_빈_리스트(self, processor)</function>
+      <function>def test_이미_완료된_건_스킵(self, fake_db, processor, sample_settlement_data)</function>
+      <function>def test_DB에_없는_키_무시(self, processor)</function>
+      <function>def test_여러_건_일괄_처리(self, fake_db, processor)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_sync_service.py" language="python">
+      <function>def fake_sheets()</function>
+      <function>def sync_processor(fake_db, fake_sheets)</function>
+      <function>def sync_service(sync_processor, fake_sheets)</function>
+      <function>def _create_records(fake_db, row: SettlementRow) -&gt; tuple[int, int]</function>
+      <function>def test_sync_pending_records_success(fake_db, sync_service, sample_settlement_data)</function>
+      <function>def test_sync_pending_records_all_failure(fake_db, fake_sheets, sample_settlement_data)</function>
+      <function>def test_sync_pending_records_settlement_only_failure(fake_db, sample_settlement_data)</function>
+      <type>class SettlementOnlyFailSheet(FakeSpreadsheet)</type>
+      <function>def save_settlement_row(self, row, sheet_name=None, *, is_update=False)</function>
+      <type>class TestReverseSyncSettlementCompleted</type>
+      <function>def test_정상_역동기화(
+        self, fake_db, sync_service, fake_sheets, sample_settlement_data
+    )</function>
+      <function>def test_이미_완료된_건_재처리_안됨(
+        self, fake_db, sync_service, fake_sheets, sample_settlement_data
+    )</function>
+      <function>def test_빈_시트_0_반환(self, sync_service)</function>
+      <function>def test_DB에_없는_booking_key_무시(self, sync_service, fake_sheets)</function>
+      <function>def test_Sheets_실패시_0_반환(self, sync_service, fake_sheets)</function>
+      <function>def test_여러_건_일괄_처리(self, fake_db, sync_service, fake_sheets)</function>
+      <function>def test_from_entity_settlement_completed_변환(fake_db, sample_settlement_data)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_thread_discovery_service.py" language="python">
+      <function>def fake_reader()</function>
+      <function>def store(fake_db)</function>
+      <function>def service(store, fake_reader)</function>
+      <type>class TestFindIssueThread</type>
+      <function>def test_채널_미설정시_None_반환(self, store, fake_reader)</function>
+      <function>def test_DB에_있으면_즉시_반환(self, fake_db, service)</function>
+      <function>def test_DB_미스시_Slack_API_폴백(self, fake_reader, service)</function>
+      <function>def test_Slack_API_폴백_후_DB에_캐시_저장(self, fake_db, fake_reader, service)</function>
+      <function>def test_Slack_API에서도_못_찾으면_None(self, service)</function>
+      <function>def test_보조_예약번호로_폴백_탐색한다(self, fake_reader, service)</function>
+      <function>def test_예약번호_라벨_쿼리로도_폴백_탐색한다(self, fake_reader, service)</function>
+      <function>def test_멀티채널_첫_채널_미스시_두번째_채널에서_발견한다(self, store, fake_reader)</function>
+      <type>class TestSaveThreadReference</type>
+      <function>def test_기본_저장(self, fake_db, service)</function>
+      <function>def test_root_booking_key_지정(self, fake_db, service)</function>
+      <type>class TestRegisterOriginThread</type>
+      <function>def test_최초_스레드_등록(self, fake_db, service)</function>
+      <function>def test_중복_등록은_안전하게_무시된다(self, fake_db, service)</function>
+      <type>class TestGetChainBookingKeys</type>
+      <function>def test_체인_멤버_전체_조회(self, fake_db, store)</function>
+      <function>def test_체인_없으면_빈_리스트(self, store)</function>
+      <type>class TestBackfillReservationThreads</type>
+      <function>def test_백필로_채널_메시지에서_booking_key를_캐시한다(
+        self, fake_db, fake_reader, service
+    )</function>
+      <function>def test_이미_DB에_있는_건은_스킵한다(self, fake_db, fake_reader, service)</function>
+      <function>def test_파싱_안되는_메시지는_스킵한다(self, fake_reader, service)</function>
+      <function>def test_채널_미설정시_0_반환(self, store, fake_reader)</function>
+      <function>def test_API_에러시_0_반환(self, fake_reader, service)</function>
+      <function>def _raise_on_call(*_args, **_kwargs)</function>
+      <function>def test_iteration_중_API_에러시_저장된_건수만_반환(
+        self, fake_db, fake_reader, service
+    )</function>
+      <function>def _yield_then_raise(channel_id, *, oldest=0, max_pages=10)</function>
+      <function>def test_멀티채널_모든_채널을_스캔한다(self, fake_db, store, fake_reader)</function>
+      <function>def test_멀티채널_한_채널_실패시_나머지_계속_스캔한다(
+        self, fake_db, store, fake_reader
+    )</function>
+      <function>def _selective_fail(channel_id, *, oldest=0, max_pages=10)</function>
+      <type>class TestTransferThreadReference</type>
+      <function>def test_이관_체인_저장시_root를_최초키로_유지한다(self, fake_db, service)</function>
+      <function>def test_fallback로_스레드_탐색해도_new_key_root가_old로_저장된다(
+        self, fake_db, fake_reader, service
+    )</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_thread_reference.py" language="python">
+      <function>def fake_db()</function>
+      <type>class TestThreadReferenceRepository</type>
+      <function>def test_save_새로운_레퍼런스를_저장한다(self, fake_db)</function>
+      <function>def test_save_root_booking_key를_지정할_수_있다(self, fake_db)</function>
+      <function>def test_save_동일_booking_key는_기존_레코드를_반환한다(self, fake_db)</function>
+      <function>def test_get_by_booking_key_존재하는_키_조회(self, fake_db)</function>
+      <function>def test_get_by_booking_key_없는_키는_None(self, fake_db)</function>
+      <function>def test_이관_체인_A_B_C_추적(self, fake_db)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_thread_reference_store.py" language="python">
+      <type>class TestGetByBookingKey</type>
+      <function>def test_존재하는_키_ThreadLocation_반환(self, fake_db)</function>
+      <function>def test_없는_키_None_반환(self, fake_db)</function>
+      <function>def test_SQLAlchemyError시_None_반환(self, fake_db, monkeypatch)</function>
+      <function>def _raise(*_args, **_kwargs)</function>
+      <type>class TestSave</type>
+      <function>def test_신규_저장(self, fake_db)</function>
+      <function>def test_root_booking_key_지정(self, fake_db)</function>
+      <function>def test_동일키_저장시_기존_유지(self, fake_db)</function>
+      <function>def test_SQLAlchemyError시_예외_미전파(self, fake_db, monkeypatch)</function>
+      <function>def _raise(*_args, **_kwargs)</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_transfer_lifecycle_service.py" language="python">
+      <function>def _make_row(
+    booking_key: str = &quot;A0001&quot;,
+    note: str = &quot;&quot;,
+) -&gt; SettlementRow</function>
+      <function>def fake_db()</function>
+      <function>def fake_sheets()</function>
+      <function>def thread_store(fake_db)</function>
+      <function>def service(fake_db, thread_store, fake_sheets)</function>
+      <type>class TestMarkTransferred</type>
+      <function>def test_이관건이면_root의_transferred_to_설정_및_Sheets_비고_업데이트(
+        self, service, fake_db, thread_store, fake_sheets
+    )</function>
+      <function>def test_ThreadRef_없으면_no_op(self, service, fake_db, fake_sheets)</function>
+      <function>def test_root가_자기자신이면_no_op(
+        self, service, fake_db, thread_store, fake_sheets
+    )</function>
+      <function>def test_A_B_C_체인에서_C_등록시_A와_B_모두_재이관_마킹(
+        self, service, fake_db, thread_store, fake_sheets
+    )</function>
+      <function>def test_root의_활성_Settlement_없으면_no_op(
+        self, service, fake_db, thread_store, fake_sheets
+    )</function>
+      <type>class TestRevertTransfer</type>
+      <function>def test_반려시_root의_transferred_to_해제_및_Sheets_비고_복구(
+        self, service, fake_db, thread_store, fake_sheets
+    )</function>
+      <function>def test_root가_이관상태_아니면_no_op(
+        self, service, fake_db, thread_store, fake_sheets
+    )</function>
+    </file>
+    <file path="/home/teamo2/Downloads/ai-slackapp/tests/unit/test_transfer_reservation.py" language="python">
+      <type>class TestIsTransferReservationMessage</type>
+      <function>def test_이관_예약_메시지_패턴_감지(self)</function>
+      <function>def test_일반_메시지는_False_반환(self)</function>
+      <function>def test_빈_문자열은_False_반환(self)</function>
+      <function>def test_부분_문자열_포함시_True(self)</function>
+      <function>def test_줄바꿈_포함된_메시지에서_감지(self)</function>
+      <type>class TestParsedTransferReservationValidators</type>
+      <function>def test_remove_markdown_bold_일반_볼드_제거(self)</function>
+      <function>def test_remove_markdown_bold_볼드_없으면_그대로(self)</function>
+      <function>def test_remove_markdown_bold_여러개_볼드_제거(self)</function>
+      <function>def test_remove_markdown_bold_공백_트림(self)</function>
+      <function>def test_clean_customer_name_괄호_앞_이름만_추출(self)</function>
+      <function>def test_clean_customer_name_괄호_없으면_그대로(self)</function>
+      <function>def test_clean_customer_name_빈값이면_빈값_유지(self)</function>
+      <function>def test_clean_customer_name_볼드와_괄호_모두_처리(self)</function>
+      <function>def test_digits_only_money_콤마_제거(self)</function>
+      <function>def test_digits_only_money_원_단위_제거(self)</function>
+      <function>def test_digits_only_money_숫자만_있으면_그대로(self)</function>
+      <function>def test_digits_only_money_빈값이면_빈값_유지(self)</function>
+      <function>def test_digits_only_money_0원_처리(self)</function>
+      <function>def test_digits_only_money_공백_포함_처리(self)</function>
+      <type>class TestParseTransferReservationMessageEdgeCases</type>
+      <function>def test_인라인_패턴_기본_파싱(self)</function>
+      <function>def test_인라인_패턴_fullwidth_콜론_지원(self)</function>
+      <function>def test_멀티라인_패턴_파싱(self)</function>
+      <function>def test_예약자명_괄호_제거(self)</function>
+      <function>def test_업체명_추출(self)</function>
+      <function>def test_원금_콤마_제거하여_추출(self)</function>
+      <function>def test_카모아_부담비용_추출(self)</function>
+      <function>def test_카모아_부담금_추출(self)</function>
+      <function>def test_볼드_마크업_포함_메시지_파싱(self)</function>
+      <function>def test_빈_메시지는_빈_결과_반환(self)</function>
+      <function>def test_복합_메시지_전체_필드_파싱(self)</function>
+      <function>def test_인라인과_멀티라인_혼합시_인라인_우선(self)</function>
+      <function>def test_빈줄_포함된_멀티라인_메시지(self)</function>
+      <function>def test_업체명_변형_업체명2_대신배차(self)</function>
+      <function>def test_company_name은_항상_빈값(self)</function>
+      <function>def test_이관후_예약번호_추출(self)</function>
+      <function>def test_이관후_예약번호_없으면_빈값(self)</function>
+      <function>def test_실제_이관_메시지_전체_파싱(self)</function>
+    </file>
+  </files>
+</brfit>
