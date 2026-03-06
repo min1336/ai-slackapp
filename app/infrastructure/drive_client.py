@@ -60,9 +60,11 @@ class DriveImageClient:
         return folder_id
 
     def list_image_files(self, folder_id: str) -> list[DriveFile]:
-        """폴더 내 이미지 파일 목록을 반환한다."""
+        """폴더 내 이미지 및 PDF 파일 목록을 반환한다."""
         query = (
-            f"'{folder_id}' in parents and mimeType contains 'image/' and trashed=false"
+            f"'{folder_id}' in parents"
+            f" and (mimeType contains 'image/' or mimeType='application/pdf')"
+            f" and trashed=false"
         )
         results = (
             self._service.files()

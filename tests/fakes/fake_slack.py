@@ -59,6 +59,7 @@ class FakeSlackWriter:
         self.deleted_messages: list[dict[str, Any]] = []
         self.ephemeral_messages: list[dict[str, Any]] = []
         self.uploaded_files: list[dict[str, Any]] = []
+        self.reactions: list[dict[str, Any]] = []
         self._next_ts_counter: int = 1000
 
     def post_message(
@@ -138,10 +139,16 @@ class FakeSlackWriter:
             }
         )
 
+    def add_reaction(self, *, channel: str, timestamp: str, name: str) -> None:
+        self.reactions.append(
+            {"channel": channel, "timestamp": timestamp, "name": name}
+        )
+
     def clear(self) -> None:
         self.posted_messages.clear()
         self.updated_messages.clear()
         self.deleted_messages.clear()
         self.ephemeral_messages.clear()
         self.uploaded_files.clear()
+        self.reactions.clear()
         self._next_ts_counter = 1000

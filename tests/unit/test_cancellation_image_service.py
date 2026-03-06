@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pymupdf
+
 from app.models import DriveFile, SurveySubmission
 from app.services.cancellation_image_service import CancellationImageService
 from tests.fakes.fake_drive import FakeDriveClient
@@ -295,3 +297,154 @@ class TestFormattedSheet:
         svc.poll_and_upload()
 
         assert len(survey.formatted_rows) == 0
+
+
+def _make_pdf_bytes(pages: int = 1) -> bytes:
+    """테스트용 최소 PDF 바이너리 생성."""
+    doc = pymupdf.open()
+    for _ in range(pages):
+        doc.new_page(width=100, height=100)
+    pdf_bytes = doc.tobytes()
+    doc.close()
+    return pdf_bytes
+
+
+class TestPdfConversion:
+    """PDF 파일을 이미지로 변환하여 업로드하는 테스트."""
+
+    def test_pdf_파일_이미지로_변환_업로드(self):
+        sub = _submission()
+        survey = FakeSurveySheet([sub])
+
+        reader = FakeSlackReader()
+        reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
+
+        drive = FakeDriveClient()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="cert.pdf", mime_type="application/pdf"),
+        ]
+        drive.file_contents["f1"] = _make_pdf_bytes()
+
+        writer = FakeSlackWriter()
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
+
+        assert len(writer.uploaded_files) == 1
+        uploaded = writer.uploaded_files[0]
+        assert uploaded["filename"] == "cert.png"
+        assert uploaded["content"][:4] == b"\x89PNG"  # PNG 시그니처
+
+    def test_pdf와_이미지_혼합_폴더(self):
+        sub = _submission()
+        survey = FakeSurveySheet([sub])
+
+        reader = FakeSlackReader()
+        reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
+
+        drive = FakeDriveClient()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="photo.jpg", mime_type="image/jpeg"),
+            DriveFile(id="f2", name="cert.pdf", mime_type="application/pdf"),
+        ]
+        drive.file_contents["f1"] = b"\xff\xd8"
+        drive.file_contents["f2"] = _make_pdf_bytes()
+
+        writer = FakeSlackWriter()
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
+
+        assert len(writer.uploaded_files) == 2
+        filenames = [f["filename"] for f in writer.uploaded_files]
+        assert "photo.jpg" in filenames
+        assert "cert.png" in filenames
+
+    def test_다페이지_pdf_모든_페이지_업로드(self):
+        sub = _submission()
+        survey = FakeSurveySheet([sub])
+
+        reader = FakeSlackReader()
+        reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
+
+        drive = FakeDriveClient()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="multi.pdf", mime_type="application/pdf"),
+        ]
+        drive.file_contents["f1"] = _make_pdf_bytes(pages=3)
+
+        writer = FakeSlackWriter()
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
+
+        assert len(writer.uploaded_files) == 3
+        filenames = [f["filename"] for f in writer.uploaded_files]
+        assert filenames == ["multi_p1.png", "multi_p2.png", "multi_p3.png"]
+
+    def test_pdf_업로드_시_리액션_추가(self):
+        sub = _submission()
+        survey = FakeSurveySheet([sub])
+
+        reader = FakeSlackReader()
+        reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
+
+        drive = FakeDriveClient()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="cert.pdf", mime_type="application/pdf"),
+        ]
+        drive.file_contents["f1"] = _make_pdf_bytes()
+
+        writer = FakeSlackWriter()
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
+
+        assert len(writer.reactions) == 1
+        reaction = writer.reactions[0]
+        assert reaction["channel"] == TARGET_CH
+        assert reaction["timestamp"] == "1.0"
+        assert reaction["name"] == "pdf"
+
+    def test_이미지만_있으면_pdf_리액션_없음(self):
+        sub = _submission()
+        survey = FakeSurveySheet([sub])
+
+        reader = FakeSlackReader()
+        reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
+
+        drive = FakeDriveClient()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="photo.jpg", mime_type="image/jpeg"),
+        ]
+        drive.file_contents["f1"] = b"\xff\xd8"
+
+        writer = FakeSlackWriter()
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
+
+        assert len(writer.reactions) == 0
+
+    def test_pdf_변환_실패_시_다음_파일_계속(self):
+        sub = _submission()
+        survey = FakeSurveySheet([sub])
+
+        reader = FakeSlackReader()
+        reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
+
+        drive = FakeDriveClient()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="broken.pdf", mime_type="application/pdf"),
+            DriveFile(id="f2", name="ok.jpg", mime_type="image/jpeg"),
+        ]
+        drive.file_contents["f1"] = b"not-a-real-pdf"
+        drive.file_contents["f2"] = b"\xff\xd8"
+
+        writer = FakeSlackWriter()
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
+
+        assert len(writer.uploaded_files) == 1
+        assert writer.uploaded_files[0]["filename"] == "ok.jpg"

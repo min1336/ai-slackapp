@@ -82,3 +82,6 @@ class SlackWriter:
             filename=filename,
             title=title or filename,
         )
+
+    def add_reaction(self, *, channel: str, timestamp: str, name: str) -> None:
+        self._client.reactions_add(channel=channel, timestamp=timestamp, name=name)

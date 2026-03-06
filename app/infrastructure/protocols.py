@@ -98,6 +98,8 @@ class SlackMessageWriter(Protocol):
         title: str = "",
     ) -> None: ...
 
+    def add_reaction(self, *, channel: str, timestamp: str, name: str) -> None: ...
+
 
 @runtime_checkable
 class SurveySheetGateway(Protocol):

@@ -15,10 +15,9 @@ def setup_logging() -> None:
     is_dev = get_env_config().is_dev
     level = get_log_level()
 
-    # stdlib 로깅 기본 설정 (Slack Bolt 등 외부 라이브러리용)
-    logging.basicConfig(level=level, format="%(message)s")
-    logging.getLogger("slack_bolt").setLevel(logging.WARNING)
-    logging.getLogger("slack_sdk").setLevel(logging.WARNING)
+    # stdlib 로깅 — 외부 라이브러리는 WARNING 이상만 출력
+    logging.basicConfig(level=logging.WARNING, format="%(message)s")
+    logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
 
     # structlog 설정
     shared_processors: list[structlog.types.Processor] = [

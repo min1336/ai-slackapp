@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from contextlib import suppress
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
+
+import pymupdf
+from slack_sdk.errors import SlackApiError
 
 from app.core import get_logger
 
@@ -14,6 +19,8 @@ if TYPE_CHECKING:
     from app.models import SurveySubmission
 
 logger = get_logger(__name__)
+
+_PDF_EMOJI = "pdf"
 
 
 class CancellationImageService:
@@ -82,16 +89,35 @@ class CancellationImageService:
             return False
 
         uploaded = 0
+        has_pdf = False
         for file in files:
             try:
                 content = self._drive.download_file(file.id)
-                self._writer.upload_file(
-                    channel=self._target_channel,
-                    thread_ts=thread_ts,
-                    content=content,
-                    filename=file.name,
-                )
-                uploaded += 1
+                if file.mime_type == "application/pdf":
+                    images = self._convert_pdf_to_images(content, file.name)
+                    logger.info(
+                        "cancellation_pdf_converted",
+                        file_name=file.name,
+                        pages=len(images),
+                        booking_key=sub.booking_key,
+                    )
+                    for img_name, img_bytes in images:
+                        self._writer.upload_file(
+                            channel=self._target_channel,
+                            thread_ts=thread_ts,
+                            content=img_bytes,
+                            filename=img_name,
+                        )
+                        uploaded += 1
+                    has_pdf = True
+                else:
+                    self._writer.upload_file(
+                        channel=self._target_channel,
+                        thread_ts=thread_ts,
+                        content=content,
+                        filename=file.name,
+                    )
+                    uploaded += 1
             except Exception:
                 logger.exception(
                     "cancellation_upload_failed",
@@ -102,9 +128,36 @@ class CancellationImageService:
         if uploaded == 0:
             return False
 
+        if has_pdf:
+            with suppress(SlackApiError):
+                self._writer.add_reaction(
+                    channel=self._target_channel,
+                    timestamp=thread_ts,
+                    name=_PDF_EMOJI,
+                )
+
         logger.info(
-            "cancellation_images_uploaded",
+            "cancellation_uploaded",
             booking_key=sub.booking_key,
             count=uploaded,
+            has_pdf=has_pdf,
         )
         return True
+
+    @staticmethod
+    def _convert_pdf_to_images(
+        pdf_bytes: bytes, original_name: str
+    ) -> list[tuple[str, bytes]]:
+        """PDF를 페이지별 PNG 이미지로 변환한다."""
+        stem = PurePosixPath(original_name).stem
+        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+        try:
+            pages = len(doc)
+            result = []
+            for i, page in enumerate(doc, 1):
+                pix = page.get_pixmap(dpi=150)
+                img_name = f"{stem}_p{i}.png" if pages > 1 else f"{stem}.png"
+                result.append((img_name, pix.tobytes("png")))
+            return result
+        finally:
+            doc.close()
