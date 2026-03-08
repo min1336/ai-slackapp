@@ -21,20 +21,20 @@ class TestExtractSubmissionId:
         boundary = "----TestBoundary"
         content_type = f"multipart/form-data; boundary={boundary}"
         body = (
-            f"------TestBoundary\r\n"
-            f'Content-Disposition: form-data; name="submissionID"\r\n\r\n'
-            f"12345\r\n"
-            f"------TestBoundary--\r\n"
-        ).encode()
+            b"------TestBoundary\r\n"
+            b'Content-Disposition: form-data; name="submissionID"\r\n\r\n'
+            b"12345\r\n"
+            b"------TestBoundary--\r\n"
+        )
         assert extract_submission_id(body, content_type) == "12345"
 
     def test_multipart_submissionID_없으면_None(self):
         boundary = "----TestBoundary"
         content_type = f"multipart/form-data; boundary={boundary}"
         body = (
-            f"------TestBoundary\r\n"
-            f'Content-Disposition: form-data; name="formID"\r\n\r\n'
-            f"99999\r\n"
-            f"------TestBoundary--\r\n"
-        ).encode()
+            b"------TestBoundary\r\n"
+            b'Content-Disposition: form-data; name="formID"\r\n\r\n'
+            b"99999\r\n"
+            b"------TestBoundary--\r\n"
+        )
         assert extract_submission_id(body, content_type) is None
