@@ -79,8 +79,8 @@ settlement:
 
 cancellation:
   slack_channels:
-    target: ""
+    target: "C03ACLFMAFN"
   spreadsheet:
-    id: ""
-    survey_sheet_name: ""
+    id: "1Ew0wPosttqLcaQjaCloQmHYq2E4UxdjO8vN2Qg5Crg4"
+    survey_sheet_name: "결항 자동화 시트"
   webhook_port: 8080
