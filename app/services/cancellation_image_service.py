@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
@@ -57,12 +58,54 @@ class CancellationImageService:
         reader: SlackMessageReader,
         target_channel: str,
         file_downloader: Callable[[str], bytes] = _default_download,
+        thread_max_retries: int = 5,
+        thread_retry_interval: float = 30.0,
+        sleep_fn: Callable[[float], object] = time.sleep,
     ) -> None:
         self._survey_sheet = survey_sheet
         self._writer = writer
         self._reader = reader
         self._target_channel = target_channel
         self._download = file_downloader
+        self._thread_max_retries = thread_max_retries
+        self._thread_retry_interval = thread_retry_interval
+        self._sleep = sleep_fn
+
+    def _find_thread_with_retry(self, booking_key: str) -> str | None:
+        """Slack 스레드를 검색하고, 없으면 재시도한다.
+
+        Jotform webhook이 Slack 메시지보다 먼저 도착하는 race condition 대응.
+        """
+        thread_ts = self._reader.find_message_by_text(self._target_channel, booking_key)
+        if thread_ts:
+            return thread_ts
+
+        for attempt in range(1, self._thread_max_retries + 1):
+            logger.info(
+                "cancellation_thread_retry",
+                booking_key=booking_key,
+                attempt=attempt,
+                max_retries=self._thread_max_retries,
+                interval=self._thread_retry_interval,
+            )
+            self._sleep(self._thread_retry_interval)
+            thread_ts = self._reader.find_message_by_text(
+                self._target_channel, booking_key
+            )
+            if thread_ts:
+                logger.info(
+                    "cancellation_thread_found_after_retry",
+                    booking_key=booking_key,
+                    attempt=attempt,
+                )
+                return thread_ts
+
+        logger.warning(
+            "cancellation_thread_not_found",
+            booking_key=booking_key,
+            total_retries=self._thread_max_retries,
+        )
+        return None
 
     def handle_webhook(self, sub: SurveySubmission, file_urls: list[str]) -> bool:
         """Jotform webhook에서 받은 파일 URL을 Slack 스레드에 업로드한다."""
@@ -74,11 +117,8 @@ class CancellationImageService:
             file_count=len(file_urls),
         )
 
-        thread_ts = self._reader.find_message_by_text(
-            self._target_channel, sub.booking_key
-        )
+        thread_ts = self._find_thread_with_retry(sub.booking_key)
         if not thread_ts:
-            logger.info("cancellation_no_thread", booking_key=sub.booking_key)
             return False
 
         if not file_urls:

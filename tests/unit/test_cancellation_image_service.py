@@ -23,6 +23,7 @@ def _make_service(
         reader=reader or FakeSlackReader(),
         target_channel=TARGET_CH,
         file_downloader=downloader or (lambda url: b"\xff\xd8"),
+        sleep_fn=lambda _: None,
     )
 
 
@@ -249,6 +250,89 @@ class TestPdfConversion:
 
         assert len(writer.uploaded_files) == 1
         assert writer.uploaded_files[0]["filename"] == "ok.jpg"
+
+
+class TestThreadRetry:
+    """Jotform webhook이 Slack 메시지보다 먼저 도착할 때 재시도 테스트."""
+
+    def test_처음_못찾고_재시도_후_스레드_발견(self):
+        sub = _submission()
+        writer = FakeSlackWriter()
+        survey = FakeSurveySheet()
+
+        call_count = 0
+
+        class _DelayedReader(FakeSlackReader):
+            def find_message_by_text(self, channel_id, search_text, **kwargs):
+                nonlocal call_count
+                call_count += 1
+                if call_count < 3:
+                    return None
+                return "1.0"
+
+        reader = _DelayedReader()
+        sleep_calls: list[float] = []
+        svc = CancellationImageService(
+            survey_sheet=survey,
+            writer=writer,
+            reader=reader,
+            target_channel=TARGET_CH,
+            file_downloader=lambda url: b"\xff\xd8",
+            sleep_fn=lambda s: sleep_calls.append(s),
+        )
+        result = svc.handle_webhook(sub, file_urls=["https://example.com/img.jpg"])
+
+        assert result is True
+        assert call_count == 3
+        assert len(sleep_calls) == 2
+        assert len(writer.uploaded_files) == 1
+
+    def test_최대_재시도_초과_시_False(self):
+        sub = _submission()
+        writer = FakeSlackWriter()
+        survey = FakeSurveySheet()
+        reader = FakeSlackReader()
+        # messages_by_text에 아무것도 없으므로 항상 None 반환
+
+        sleep_calls: list[float] = []
+        svc = CancellationImageService(
+            survey_sheet=survey,
+            writer=writer,
+            reader=reader,
+            target_channel=TARGET_CH,
+            file_downloader=lambda url: b"\xff\xd8",
+            thread_max_retries=3,
+            thread_retry_interval=10.0,
+            sleep_fn=lambda s: sleep_calls.append(s),
+        )
+        result = svc.handle_webhook(sub, file_urls=["https://example.com/img.jpg"])
+
+        assert result is False
+        assert len(sleep_calls) == 3
+        assert all(s == 10.0 for s in sleep_calls)
+        assert len(writer.uploaded_files) == 0
+        assert len(survey.formatted_rows) == 0
+
+    def test_즉시_찾으면_재시도_없이_성공(self):
+        sub = _submission()
+        reader = FakeSlackReader()
+        reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
+        writer = FakeSlackWriter()
+
+        sleep_calls: list[float] = []
+        svc = CancellationImageService(
+            survey_sheet=FakeSurveySheet(),
+            writer=writer,
+            reader=reader,
+            target_channel=TARGET_CH,
+            file_downloader=lambda url: b"\xff\xd8",
+            sleep_fn=lambda s: sleep_calls.append(s),
+        )
+        result = svc.handle_webhook(sub, file_urls=["https://example.com/img.jpg"])
+
+        assert result is True
+        assert len(sleep_calls) == 0
+        assert len(writer.uploaded_files) == 1
 
 
 class TestFormattedSheet:

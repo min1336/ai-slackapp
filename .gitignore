@@ -237,3 +237,6 @@ credentials.json
 # Google credentials
 *.json
 *.jsonl
+
+# Plans
+docs/plans/
