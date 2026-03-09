@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 from email.parser import BytesParser
 from email.policy import default as _email_policy
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 from typing import TYPE_CHECKING
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlparse
 
 from app.core import get_logger
 from app.services.jotform_parser import fetch_jotform_submission, parse_jotform_answers
@@ -49,26 +50,43 @@ class _WebhookHandler(BaseHTTPRequestHandler):
     cancellation_service: CancellationImageService | None = None
     jotform_api_key: str = ""
 
+    def _send_json_response(self, code: int, body: dict) -> None:
+        """JSON 응답을 전송한다."""
+        payload = json.dumps(body).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
     def do_POST(self):
-        if self.path != "/webhook/cancellation":
-            self.send_response(404)
-            self.end_headers()
+        if urlparse(self.path).path != "/webhook/cancellation":
+            logger.warning("webhook_unknown_path", path=self.path, method="POST")
+            self._send_json_response(404, {"error": "Not Found", "path": self.path})
             return
 
-        content_length = int(self.headers.get("Content-Length", 0))
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+        except (ValueError, TypeError):
+            self._send_json_response(400, {"error": "Invalid Content-Length"})
+            return
         body = self.rfile.read(content_length)
         content_type = self.headers.get("Content-Type", "")
 
         submission_id = extract_submission_id(body, content_type)
         if not submission_id:
-            logger.warning("webhook_missing_submission_id")
-            self.send_response(400)
-            self.end_headers()
+            logger.warning(
+                "webhook_missing_submission_id",
+                path=self.path,
+                content_type=content_type,
+            )
+            self._send_json_response(400, {"error": "Missing submissionID"})
             return
 
         # 즉시 200 응답 후 비동기 처리 (Jotform 타임아웃 방지)
-        self.send_response(200)
-        self.end_headers()
+        self._send_json_response(
+            200, {"status": "accepted", "submission_id": submission_id}
+        )
 
         try:
             content = fetch_jotform_submission(self.jotform_api_key, submission_id)
@@ -99,8 +117,7 @@ def start_webhook_server(
         cancellation_service = service
         jotform_api_key = api_key
 
-    HTTPServer.allow_reuse_address = True
-    server = HTTPServer(("0.0.0.0", port), Handler)
+    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     logger.info("webhook_server_started", port=port)
