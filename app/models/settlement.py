@@ -229,10 +229,13 @@ class SettlementRow:
         return {
             f.name: getattr(self, f.name)
             for f in fields(self)
-            if f.name != "settlement_completed"
+            if f.name not in _SHEET_STATE_FIELDS
         }
 
 
+# 시트 전용 상태 필드 — to_dict()에서 제외, save_settlement_row()에서 extra로 주입
+_SHEET_STATE_FIELDS: frozenset[str] = frozenset({"settlement_completed"})
+
 SETTLEMENT_FIELDS: tuple[str, ...] = tuple(
-    f.name for f in fields(SettlementRow) if f.name != "settlement_completed"
+    f.name for f in fields(SettlementRow) if f.name not in _SHEET_STATE_FIELDS
 )

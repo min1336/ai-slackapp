@@ -13,6 +13,8 @@ from app.infrastructure.database import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from app.infrastructure.database import SessionFactory
     from app.infrastructure.database.models import IssueLog, Settlement
     from app.infrastructure.protocols import SpreadsheetGateway
@@ -26,22 +28,14 @@ class SyncProcessor:
         self,
         get_session: SessionFactory,
         sheets: SpreadsheetGateway,
+        *,
+        on_sync_failed: Callable[[str, str], None] | None = None,
     ) -> None:
         self._get_session = get_session
         self._sheets = sheets
+        self._on_sync_failed = on_sync_failed
 
-    # ── after_commit 즉시 동기화 (기존) ──
-
-    def sync_to_sheets(
-        self,
-        row: SettlementRow,
-        log_id: int,
-        *,
-        is_update: bool = False,
-    ) -> bool:
-        self._sheets.save_settlement_row(row, is_update=is_update)
-        self._sheets.append_issue_log_row(row, str(log_id))
-        return True
+    # ── after_commit 즉시 동기화 ──
 
     def mark_synced(self, settlement_id: int, log_id: int) -> None:
         with self._get_session() as session:
@@ -58,13 +52,41 @@ class SyncProcessor:
     ) -> None:
         try:
             self.mark_sync_failed(settlement_id, log_id, error)
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(
                 "mark_sync_failed_error",
                 settlement_id=settlement_id,
                 log_id=log_id,
                 error=str(e),
             )
+
+    def _mark_settlement_synced_safe(self, settlement_id: int) -> None:
+        try:
+            self.mark_settlement_synced(settlement_id)
+        except SQLAlchemyError as e:
+            logger.error(
+                "mark_settlement_synced_error",
+                settlement_id=settlement_id,
+                error=str(e),
+            )
+
+    def _mark_log_failed_safe(self, log_id: int, error: str) -> None:
+        try:
+            self.mark_log_failed(log_id, error)
+        except SQLAlchemyError as e:
+            logger.error(
+                "mark_log_failed_error",
+                log_id=log_id,
+                error=str(e),
+            )
+
+    def _notify_sync_failed(self, booking_key: str, error: str) -> None:
+        if not self._on_sync_failed:
+            return
+        try:
+            self._on_sync_failed(booking_key, error)
+        except Exception:  # 외부 콜백 — 실패해도 동기화 로직에 영향 없음
+            logger.warning("sync_failed_notification_error", booking_key=booking_key)
 
     def after_commit(
         self,
@@ -74,8 +96,11 @@ class SyncProcessor:
         *,
         is_update: bool = False,
     ) -> None:
+        settlement_ok = False
         try:
-            self.sync_to_sheets(row, log_id, is_update=is_update)
+            self._sheets.save_settlement_row(row, is_update=is_update)
+            settlement_ok = True
+            self._sheets.append_issue_log_row(row, str(log_id))
             self.mark_synced(settlement_id, log_id)
             logger.info("sheets_sync_completed", booking_key=row.booking_key)
         except (SpreadsheetError, APIError) as e:
@@ -84,13 +109,19 @@ class SyncProcessor:
                 booking_key=row.booking_key,
                 error=str(e),
             )
-            self.mark_sync_failed_safe(settlement_id, log_id, str(e))
+            if settlement_ok:
+                self._mark_settlement_synced_safe(settlement_id)
+                self._mark_log_failed_safe(log_id, str(e))
+            else:
+                self.mark_sync_failed_safe(settlement_id, log_id, str(e))
+            self._notify_sync_failed(row.booking_key, str(e))
         except SQLAlchemyError as e:
             logger.exception(
                 "sheets_sync_unexpected_error",
                 booking_key=row.booking_key,
             )
             self.mark_sync_failed_safe(settlement_id, log_id, f"Unexpected: {e}")
+            self._notify_sync_failed(row.booking_key, str(e))
 
     # ── 배치 동기화용 (SyncService에서 위임) ──
 

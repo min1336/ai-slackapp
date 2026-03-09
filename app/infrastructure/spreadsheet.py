@@ -230,6 +230,7 @@ class SpreadsheetService:
                 },
             ) from e
 
+    @retry_on_rate_limit()
     def find_row_by_booking_key(
         self,
         booking_key: str,
@@ -347,20 +348,22 @@ class SpreadsheetService:
             worksheet = self._get_worksheet(sheet_name)
             mapping = self._resolve_mapping(worksheet, "settlement")
 
-            all_rows = worksheet.get_all_values()
+            booking_col = mapping.column_of("booking_key")
+            completed_col = mapping.column_of("settlement_completed")
             header_row = self._header_row("settlement")
-            if len(all_rows) <= header_row:
-                return set()
 
-            completed_keys: set[str] = set()
-            for row_values in all_rows[header_row:]:
-                data = mapping.row_to_dict(row_values)
-                if data.get("settlement_completed") == "TRUE":
-                    booking_key = data.get("booking_key", "")
-                    if booking_key:
-                        completed_keys.add(booking_key)
+            booking_values = worksheet.col_values(booking_col)
+            completed_values = worksheet.col_values(completed_col)
 
-            return completed_keys
+            # 헤더 행 이후 데이터만 사용
+            booking_values = booking_values[header_row:]
+            completed_values = completed_values[header_row:]
+
+            return {
+                bk
+                for bk, comp in zip(booking_values, completed_values, strict=False)
+                if bk and comp == "TRUE"
+            }
         except (APIError, GSpreadException, ValueError, KeyError) as e:
             logger.warning("get_completed_booking_keys_failed", error=str(e))
             return set()

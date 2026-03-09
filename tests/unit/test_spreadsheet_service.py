@@ -280,7 +280,65 @@ class TestFindRowByBookingKey:
         assert result is None
 
 
-# ── _merge_with_existing_row ─────────────────────────────────────────
+# ── get_completed_booking_keys ─────────────────────────────────────
+
+
+class TestGetCompletedBookingKeys:
+    def test_정산완료_키만_반환(self, service, mock_worksheet):
+        booking_col = _SETTLEMENT_HEADERS.index("예약번호") + 1
+        completed_col = _SETTLEMENT_HEADERS.index("정산완료") + 1
+
+        def _col_values(col):
+            if col == booking_col:
+                return ["예약번호", "BK-001", "BK-002", "BK-003"]
+            if col == completed_col:
+                return ["정산완료", "TRUE", "FALSE", "TRUE"]
+            return []
+
+        mock_worksheet.col_values.side_effect = _col_values
+
+        result = service.get_completed_booking_keys()
+
+        assert result == {"BK-001", "BK-003"}
+        assert mock_worksheet.col_values.call_count == 2
+
+    def test_빈_시트_빈_결과(self, service, mock_worksheet):
+        booking_col = _SETTLEMENT_HEADERS.index("예약번호") + 1
+        completed_col = _SETTLEMENT_HEADERS.index("정산완료") + 1
+
+        def _col_values(col):
+            if col == booking_col:
+                return ["예약번호"]
+            if col == completed_col:
+                return ["정산완료"]
+            return []
+
+        mock_worksheet.col_values.side_effect = _col_values
+
+        result = service.get_completed_booking_keys()
+
+        assert result == set()
+
+    def test_completed_컬럼_짧으면_나머지_무시(self, service, mock_worksheet):
+        """completed 컬럼이 booking 컬럼보다 짧으면 나머지는 미완료로 처리."""
+        booking_col = _SETTLEMENT_HEADERS.index("예약번호") + 1
+        completed_col = _SETTLEMENT_HEADERS.index("정산완료") + 1
+
+        def _col_values(col):
+            if col == booking_col:
+                return ["예약번호", "BK-001", "BK-002", "BK-003"]
+            if col == completed_col:
+                return ["정산완료", "TRUE"]  # BK-002, BK-003는 값 없음
+            return []
+
+        mock_worksheet.col_values.side_effect = _col_values
+
+        result = service.get_completed_booking_keys()
+
+        assert result == {"BK-001"}
+
+
+# ── _merge_with_existing_row ─────────────────────────────────────
 
 
 class TestMergeWithExistingRow:

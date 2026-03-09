@@ -44,29 +44,6 @@ def _create_records(fake_db, row: SettlementRow) -> tuple[int, int]:
         return settlement.id, log.id
 
 
-# ── sync_to_sheets ──────────────────────────────
-
-
-class TestSyncToSheets:
-    def test_정상_동기화(self, processor, fake_sheets, sample_settlement_data):
-        row = _make_row(sample_settlement_data)
-
-        result = processor.sync_to_sheets(row, log_id=1)
-
-        assert result is True
-        assert row.booking_key in fake_sheets.settlement_rows
-        assert "1" in fake_sheets.issue_logs
-
-    def test_is_update_플래그_전달(
-        self, processor, fake_sheets, sample_settlement_data
-    ):
-        row = _make_row(sample_settlement_data)
-
-        result = processor.sync_to_sheets(row, log_id=2, is_update=True)
-
-        assert result is True
-
-
 # ── mark_synced ─────────────────────────────────
 
 
@@ -119,16 +96,27 @@ class TestMarkSyncFailedSafe:
             s = SettlementRepository(session).get(s_id)
             assert s.sheets_sync_error == "에러"
 
-    def test_내부예외_삼킴_로깅만(self, processor, monkeypatch):
-        """mark_sync_failed 내부에서 예외 발생 시 삼키고 로깅."""
+    def test_SQLAlchemyError_삼킴_로깅만(self, processor, monkeypatch):
+        """mark_sync_failed 내부에서 SQLAlchemyError 발생 시 삼키고 로깅."""
 
         def _raise(*_args, **_kwargs):
-            raise RuntimeError("DB 연결 끊김")
+            raise SQLAlchemyError("DB 연결 끊김")
 
         monkeypatch.setattr(processor, "mark_sync_failed", _raise)
 
         # 예외가 전파되지 않아야 함
         processor.mark_sync_failed_safe(999, 999, "원본 에러")
+
+    def test_비_SQLAlchemy_예외는_전파(self, processor, monkeypatch):
+        """SQLAlchemyError 외 예외는 전파되어야 함."""
+
+        def _raise(*_args, **_kwargs):
+            raise RuntimeError("프로그래밍 버그")
+
+        monkeypatch.setattr(processor, "mark_sync_failed", _raise)
+
+        with pytest.raises(RuntimeError, match="프로그래밍 버그"):
+            processor.mark_sync_failed_safe(999, 999, "원본 에러")
 
 
 # ── after_commit ────────────────────────────────
@@ -160,6 +148,23 @@ class TestAfterCommit:
             assert s.sheets_synced is False
             assert s.sheets_sync_error is not None
 
+    def test_settlement_성공_log_실패시_부분_동기화(
+        self, fake_db, processor, fake_sheets, sample_settlement_data
+    ):
+        row = _make_row(sample_settlement_data)
+        s_id, l_id = _create_records(fake_db, row)
+        fake_sheets.should_fail_log = True
+
+        processor.after_commit(s_id, l_id, row)
+
+        with fake_db.get_session() as session:
+            s = SettlementRepository(session).get(s_id)
+            lg = IssueLogRepository(session).get(l_id)
+            assert s.sheets_synced is True
+            assert s.sync_status == "completed"
+            assert lg.sheets_synced is False
+            assert lg.sheets_sync_error is not None
+
     def test_SQLAlchemyError시_mark_sync_failed_safe(
         self, fake_db, processor, sample_settlement_data, monkeypatch
     ):
@@ -176,6 +181,37 @@ class TestAfterCommit:
         with fake_db.get_session() as session:
             s = SettlementRepository(session).get(s_id)
             assert "Unexpected" in (s.sheets_sync_error or "")
+
+    def test_동기화_실패시_콜백_호출(
+        self, fake_db, fake_sheets, sample_settlement_data
+    ):
+        notified: list[tuple[str, str]] = []
+
+        def _on_failed(booking_key: str, error: str) -> None:
+            notified.append((booking_key, error))
+
+        proc = SyncProcessor(
+            fake_db.get_session, fake_sheets, on_sync_failed=_on_failed
+        )
+        row = _make_row(sample_settlement_data)
+        s_id, l_id = _create_records(fake_db, row)
+        fake_sheets.should_fail = True
+
+        proc.after_commit(s_id, l_id, row)
+
+        assert len(notified) == 1
+        assert notified[0][0] == row.booking_key
+
+    def test_콜백_미설정시_에러_없음(
+        self, fake_db, fake_sheets, sample_settlement_data
+    ):
+        proc = SyncProcessor(fake_db.get_session, fake_sheets)
+        row = _make_row(sample_settlement_data)
+        s_id, l_id = _create_records(fake_db, row)
+        fake_sheets.should_fail = True
+
+        # on_sync_failed 미설정 — 에러 없이 정상 종료
+        proc.after_commit(s_id, l_id, row)
 
 
 # ── claim_unsynced ──────────────────────────────

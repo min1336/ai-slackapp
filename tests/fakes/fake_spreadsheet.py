@@ -18,6 +18,7 @@ class FakeSpreadsheet:
         self.issue_logs: dict[str, dict[str, str]] = {}
         self.completed_keys: set[str] = set()
         self.should_fail: bool = False
+        self.should_fail_log: bool = False
 
     def save_settlement_row(
         self,
@@ -42,9 +43,9 @@ class FakeSpreadsheet:
         """이슈 로그는 sync_key 기준으로 upsert
 
         Raises:
-            SpreadsheetError: If should_fail is True
+            SpreadsheetError: If should_fail or should_fail_log is True
         """
-        if self.should_fail:
+        if self.should_fail or self.should_fail_log:
             raise SpreadsheetError(
                 message="Fake spreadsheet failure",
                 details={"booking_key": row.booking_key},
@@ -88,3 +89,4 @@ class FakeSpreadsheet:
         self.issue_logs.clear()
         self.completed_keys.clear()
         self.should_fail = False
+        self.should_fail_log = False
