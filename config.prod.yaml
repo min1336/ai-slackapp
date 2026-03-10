@@ -79,7 +79,7 @@ settlement:
 
 cancellation:
   slack_channels:
-    target: "C0AANUJGPAB"  # ai-test (원래: C03ACLFMAFN)
+    target: "C03ACLFMAFN"  # 카모아_알림_결항확인서
   spreadsheet:
     id: "1Ew0wPosttqLcaQjaCloQmHYq2E4UxdjO8vN2Qg5Crg4"
     survey_sheet_name: "결항 자동화 시트"
