@@ -79,3 +79,4 @@ cancellation:
   spreadsheet:
     id: "1rp-ILKY0tMenEgASbo6Je71NerDNrO8W_nRjoAA7d7s"
     survey_sheet_name: "test"
+    formatted_sheet_name: "운영현황"

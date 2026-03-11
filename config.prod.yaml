@@ -81,7 +81,8 @@ cancellation:
   slack_channels:
     target: "C03ACLFMAFN"  # 카모아_알림_결항확인서
   drive:
-    parent_folder_id: ""
+    parent_folder_id: "1_AitMUZJuTgck-WBqoetbY6Ib2kVZBFZ"
   spreadsheet:
-    id: "1Ew0wPosttqLcaQjaCloQmHYq2E4UxdjO8vN2Qg5Crg4"
-    survey_sheet_name: "결항 자동화 시트"
+    id: "1E8FSB3ju9I8YuiNErsw-z3VKlXpXxGu4eDTX0EBBvVQ"
+    survey_sheet_name: "결항 데이터"
+    formatted_sheet_name: "결항관리"
