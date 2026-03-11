@@ -23,6 +23,36 @@ _FORMATTED_HEADERS = [
     "업체 전달여부",
 ]
 
+_PROCESSED_COL = "처리완료"
+
+_DATE_FORMATS = (
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d",
+    "%m/%d/%Y %I:%M:%S %p",
+    "%m/%d/%Y %H:%M:%S",
+    "%m/%d/%Y",
+)
+
+
+def _normalize_date(raw: str) -> str:
+    """날짜 문자열을 YYYY-MM-DD 형태로 정규화한다."""
+    if not raw:
+        return ""
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(raw.strip(), fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return raw.split(" ")[0]
+
+
+def _get_row_value(row: dict, keyword: str) -> str:
+    """헤더에 keyword가 포함된 컬럼의 값을 반환한다 (공백 차이 무시)."""
+    for key, value in row.items():
+        if keyword in str(key):
+            return str(value)
+    return ""
+
 
 class SurveySheetReader:
     """Jotform 설문 스프레드시트에서 응답을 읽고, 처리 상태를 기록한다."""
@@ -59,6 +89,84 @@ class SurveySheetReader:
                 logger.debug("survey_sheet_client_refreshed")
             return self._client  # type: ignore[return-value]
 
+    def get_all_submissions(self) -> list[SurveySubmission]:
+        """시트의 미처리 설문 응답을 반환한다 (처리완료 == TRUE 제외)."""
+        worksheet = self._get_client().worksheet(self._sheet_name)
+        rows = worksheet.get_all_records()
+        submissions: list[SurveySubmission] = []
+
+        for row in rows:
+            if str(row.get(_PROCESSED_COL, "")).strip().upper() == "TRUE":
+                continue
+
+            submission_id = str(row.get("Submission ID", "")).strip()
+            customer_name = str(row.get("1. 운전자 성함을 입력해주세요.", "")).strip()
+            booking_key = str(
+                row.get("2. 취소 및 환불 접수하실 예약번호를 입력해주세요.", "")
+            ).strip()
+
+            if not (submission_id and customer_name and booking_key):
+                continue
+
+            submission_date = str(row.get("Submission Date", "")).strip()
+            company_name = str(_get_row_value(row, "업체명")).strip()
+            phone = str(_get_row_value(row, "전화번호")).strip()
+            image_url = str(_get_row_value(row, "결항확인서")).strip()
+            note = str(_get_row_value(row, "추가적으로 상담")).strip()
+
+            submissions.append(
+                SurveySubmission(
+                    submission_id=submission_id,
+                    customer_name=customer_name,
+                    booking_key=booking_key,
+                    submission_date=submission_date,
+                    company_name=company_name,
+                    phone=phone,
+                    image_url=image_url,
+                    note=note,
+                )
+            )
+
+        logger.info(
+            "survey_submissions_loaded",
+            count=len(submissions),
+        )
+        return submissions
+
+    def mark_processed(self, submission_id: str) -> None:
+        """원본 시트에서 해당 submission_id 행의 처리완료 컬럼에 TRUE를 기록한다."""
+        worksheet = self._get_client().worksheet(self._sheet_name)
+        headers = worksheet.row_values(1)
+
+        # 처리완료 컬럼 찾기 (없으면 추가)
+        if _PROCESSED_COL in headers:
+            col_idx = headers.index(_PROCESSED_COL) + 1
+        else:
+            col_idx = len(headers) + 1
+            worksheet.update_cell(1, col_idx, _PROCESSED_COL)
+
+        # submission_id로 행 찾기
+        try:
+            cell = worksheet.find(submission_id)
+        except Exception as e:
+            if e.__class__.__name__ == "CellNotFound":
+                logger.warning(
+                    "survey_mark_processed_not_found",
+                    submission_id=submission_id,
+                )
+                return
+            raise
+
+        if cell is None:
+            return
+
+        worksheet.update_cell(cell.row, col_idx, "TRUE")
+        logger.info(
+            "survey_marked_processed",
+            submission_id=submission_id,
+            row=cell.row,
+        )
+
     def write_formatted_row(self, submission: SurveySubmission) -> None:
         """운영현황 시트에 포맷된 행을 추가한다."""
         spreadsheet = self._get_client()
@@ -91,8 +199,7 @@ class SurveySheetReader:
                 )
                 return
 
-        date_part = submission.submission_date
-        date_str = date_part.split(" ")[0] if date_part else ""
+        date_str = _normalize_date(submission.submission_date)
 
         row_data = [
             date_str,  # 작성일자

@@ -46,21 +46,6 @@ class SlackProperties(BaseSettings):
     )
 
 
-class JotformProperties(BaseSettings):
-    api_key: str = ""
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        env_prefix="JOTFORM_",
-        extra="ignore",
-    )
-
-    @property
-    def is_configured(self) -> bool:
-        return bool(self.api_key)
-
-
 class SpreadsheetProperties(BaseSettings):
     credentials_file: str = "credentials.json"
 
@@ -204,10 +189,15 @@ class CancellationSpreadsheetConfig(BaseModel):
     formatted_sheet_name: str = "운영현황"
 
 
+class CancellationDriveConfig(BaseModel):
+    parent_folder_id: str = ""
+
+
 class CancellationConfig(BaseModel):
     slack_channels: CancellationSlackChannelsConfig = CancellationSlackChannelsConfig()
+    drive: CancellationDriveConfig = CancellationDriveConfig()
     spreadsheet: CancellationSpreadsheetConfig = CancellationSpreadsheetConfig()
-    webhook_port: int = 8080
+    poll_schedule: str = "*/5 * * * *"
 
 
 class AppConfig(BaseModel):
@@ -251,10 +241,6 @@ def get_spreadsheet_settings() -> SpreadsheetProperties:
 @lru_cache
 def get_database_settings() -> DatabaseProperties:
     return DatabaseProperties()
-
-
-def get_jotform_settings() -> JotformProperties:
-    return JotformProperties()
 
 
 @lru_cache

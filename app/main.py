@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import atexit
 import os
 import signal
 from datetime import datetime
+from pathlib import Path
 from threading import Event, Thread
 
 from croniter import croniter
@@ -12,7 +14,6 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 from app.config import (
     get_app_config,
     get_database_settings,
-    get_jotform_settings,
     get_slack_settings,
     resolve_config_path,
 )
@@ -22,7 +23,6 @@ from app.error_handler import register_error_handler
 from app.listener.actions import register_action_handlers
 from app.listener.messages import register_message_handlers
 from app.listener.views import register_view_handlers
-from app.listener.webhook import start_webhook_server
 from app.services.sync_service import SyncService
 
 # 로깅 설정 (환경별 로그 레벨: dev=DEBUG, prod=INFO)
@@ -72,6 +72,37 @@ def _start_sync_worker(sync_service: SyncService, cron_expr: str) -> None:
     Thread(target=run, daemon=True).start()
 
 
+_PID_FILE = Path(__file__).parent.parent / ".pid"
+
+
+def _kill_previous_instance() -> None:
+    """이전 인스턴스가 실행 중이면 종료한다."""
+    if not _PID_FILE.exists():
+        return
+
+    try:
+        old_pid = int(_PID_FILE.read_text().strip())
+    except (ValueError, OSError):
+        _PID_FILE.unlink(missing_ok=True)
+        return
+
+    if old_pid == os.getpid():
+        return
+
+    try:
+        os.kill(old_pid, signal.SIGTERM)
+        logger.info("previous_instance_killed", pid=old_pid)
+    except ProcessLookupError:
+        pass  # 이미 종료됨
+    finally:
+        _PID_FILE.unlink(missing_ok=True)
+
+
+def _write_pid() -> None:
+    _PID_FILE.write_text(str(os.getpid()))
+    atexit.register(lambda: _PID_FILE.unlink(missing_ok=True))
+
+
 def _handle_shutdown(signum: int, frame) -> None:
     """SIGTERM/SIGINT 핸들러 - graceful shutdown 시작."""
     sig_name = signal.Signals(signum).name
@@ -80,6 +111,10 @@ def _handle_shutdown(signum: int, frame) -> None:
 
 
 def main():
+    # 이전 인스턴스 정리 + PID 기록
+    _kill_previous_instance()
+    _write_pid()
+
     # 시그널 핸들러 등록
     signal.signal(signal.SIGTERM, _handle_shutdown)
     signal.signal(signal.SIGINT, _handle_shutdown)
@@ -113,15 +148,13 @@ def main():
     register_action_handlers(bolt_app, container)
     register_view_handlers(bolt_app, container)
 
-    jotform = get_jotform_settings()
-    if container.cancellation_image and jotform.is_configured:
-        start_webhook_server(
-            container.cancellation_image,
-            api_key=jotform.api_key,
-            port=container.cancellation_webhook_port,
+    if container.cancellation_image:
+        logger.info(
+            "cancellation_event_driven",
+            channel=container.cancellation_target_channel,
         )
     else:
-        logger.info("cancellation_webhook_disabled")
+        logger.info("cancellation_image_disabled")
 
     SocketModeHandler(bolt_app, slack_settings.app_token).start()
 

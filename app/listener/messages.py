@@ -154,12 +154,41 @@ def _cache_reservation_origin_thread(message: dict, discovery) -> None:
     )
 
 
+_cancellation_poll_running = False
+
+
+def _trigger_cancellation_poll(service, channel_id: str) -> None:
+    """백그라운드 스레드에서 결항 이미지 폴링을 실행한다."""
+    global _cancellation_poll_running  # noqa: PLW0603
+    from threading import Thread
+    from time import sleep
+
+    if _cancellation_poll_running:
+        logger.info("cancellation_poll_already_running", channel=channel_id)
+        return
+
+    def _run() -> None:
+        global _cancellation_poll_running  # noqa: PLW0603
+        _cancellation_poll_running = True
+        sleep(5)  # Jotform→Sheet/Drive 동기화 대기
+        try:
+            service.poll_and_upload()
+        except Exception:
+            logger.exception("cancellation_poll_triggered_failed", channel=channel_id)
+        finally:
+            _cancellation_poll_running = False
+
+    Thread(target=_run, daemon=True).start()
+
+
 def register_message_handlers(app: App, container: ServiceContainer) -> None:
     discovery = container.discovery
     reader = container.reader
     writer = container.writer
     reservation_channels = container.reservation_channels
     transfer_channel = container.transfer_channel
+    cancellation_channel = container.cancellation_target_channel
+    cancellation_service = container.cancellation_image
 
     @app.message(re.compile(rf"^{re.escape(Command.SETTLEMENT_ISSUE)}$"))
     def handle_read(message, say):
@@ -217,6 +246,14 @@ def register_message_handlers(app: App, container: ServiceContainer) -> None:
         if not channel_id:
             return
 
+        logger.info(
+            "message_received",
+            channel=channel_id,
+            ts=message.get("ts"),
+            subtype=message.get("subtype"),
+            text_preview=message.get("text", "")[:30],
+        )
+
         route = _route_channel_message(
             message=message,
             channel_id=channel_id,
@@ -234,3 +271,16 @@ def register_message_handlers(app: App, container: ServiceContainer) -> None:
             )
         elif route == "reservation" and _should_process_message(message):
             _cache_reservation_origin_thread(message, discovery)
+
+        if (
+            cancellation_service
+            and cancellation_channel
+            and channel_id == cancellation_channel
+            and not message.get("thread_ts")  # 부모 메시지만
+        ):
+            logger.info(
+                "cancellation_message_detected",
+                channel=channel_id,
+                ts=message.get("ts"),
+            )
+            _trigger_cancellation_poll(cancellation_service, channel_id)

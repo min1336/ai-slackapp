@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pymupdf
 
-from app.models import SurveySubmission
+from app.models import DriveFile, SurveySubmission
 from app.services.cancellation_image_service import CancellationImageService
 from tests.fakes.fake_slack import FakeSlackReader, FakeSlackWriter
 from tests.fakes.fake_survey import FakeSurveySheet
@@ -10,21 +10,22 @@ from tests.fakes.fake_survey import FakeSurveySheet
 TARGET_CH = "C-CANCEL"
 
 
-def _make_service(
-    *,
-    survey: FakeSurveySheet | None = None,
-    writer: FakeSlackWriter | None = None,
-    reader: FakeSlackReader | None = None,
-    downloader=None,
-) -> CancellationImageService:
-    return CancellationImageService(
-        survey_sheet=survey or FakeSurveySheet(),
-        writer=writer or FakeSlackWriter(),
-        reader=reader or FakeSlackReader(),
-        target_channel=TARGET_CH,
-        file_downloader=downloader or (lambda url: b"\xff\xd8"),
-        sleep_fn=lambda _: None,
-    )
+class FakeDrive:
+    """DriveImageGateway Protocol 호환 Fake."""
+
+    def __init__(self):
+        self.folders: dict[str, str] = {}  # folder_name → folder_id
+        self.files: dict[str, list[DriveFile]] = {}  # folder_id → files
+        self.file_contents: dict[str, bytes] = {}  # file_id → bytes
+
+    def find_folder(self, folder_name: str) -> str | None:
+        return self.folders.get(folder_name)
+
+    def list_image_files(self, folder_id: str) -> list[DriveFile]:
+        return self.files.get(folder_id, [])
+
+    def download_file(self, file_id: str) -> bytes:
+        return self.file_contents[file_id]
 
 
 def _submission(
@@ -41,123 +42,149 @@ def _submission(
     )
 
 
-class TestHandleWebhook:
-    def test_파일_URL에서_다운로드_후_업로드(self):
+def _make_service(
+    *,
+    survey: FakeSurveySheet | None = None,
+    drive: FakeDrive | None = None,
+    writer: FakeSlackWriter | None = None,
+    reader: FakeSlackReader | None = None,
+) -> CancellationImageService:
+    return CancellationImageService(
+        survey_sheet=survey or FakeSurveySheet(),
+        drive=drive or FakeDrive(),
+        writer=writer or FakeSlackWriter(),
+        reader=reader or FakeSlackReader(),
+        target_channel=TARGET_CH,
+    )
+
+
+class TestPollAndUpload:
+    def test_미처리_건_처리_후_마킹(self):
         sub = _submission()
         survey = FakeSurveySheet()
+        survey.submissions = [sub]
+
+        drive = FakeDrive()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="img.jpg", mime_type="image/jpeg")
+        ]
+        drive.file_contents["f1"] = b"\xff\xd8"
+
         reader = FakeSlackReader()
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
-
         writer = FakeSlackWriter()
-        svc = _make_service(survey=survey, writer=writer, reader=reader)
-        result = svc.handle_webhook(sub, file_urls=["https://example.com/img.jpg"])
 
-        assert result is True
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
+
         assert len(writer.uploaded_files) == 1
-        assert writer.uploaded_files[0]["filename"] == "img.jpg"
-        assert writer.uploaded_files[0]["thread_ts"] == "1.0"
+        assert survey.processed_ids == ["1001"]
+        assert len(survey.formatted_rows) == 1
 
-    def test_스레드_없으면_업로드_안함(self):
-        sub = _submission()
+    def test_빈_submissions이면_아무것도_안함(self):
         survey = FakeSurveySheet()
         writer = FakeSlackWriter()
 
         svc = _make_service(survey=survey, writer=writer)
-        result = svc.handle_webhook(sub, file_urls=["https://example.com/img.jpg"])
+        svc.poll_and_upload()
 
-        assert result is False
         assert len(writer.uploaded_files) == 0
+        assert len(survey.processed_ids) == 0
+
+    def test_스레드_없으면_마킹_안함(self):
+        sub = _submission()
+        survey = FakeSurveySheet()
+        survey.submissions = [sub]
+        # reader에 스레드 없음
+
+        svc = _make_service(survey=survey)
+        svc.poll_and_upload()
+
+        assert len(survey.processed_ids) == 0
         assert len(survey.formatted_rows) == 0
 
-    def test_빈_파일_URL이면_업로드_안함(self):
-        sub = _submission()
-        reader = FakeSlackReader()
-        reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
-        writer = FakeSlackWriter()
-        survey = FakeSurveySheet()
-
-        svc = _make_service(survey=survey, writer=writer, reader=reader)
-        result = svc.handle_webhook(sub, file_urls=[])
-
-        assert result is False
-        assert len(writer.uploaded_files) == 0
-
-    def test_성공_시_운영현황_시트_작성(self):
+    def test_Drive_폴더_없으면_마킹_안함(self):
         sub = _submission()
         survey = FakeSurveySheet()
+        survey.submissions = [sub]
+
         reader = FakeSlackReader()
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
+        drive = FakeDrive()  # 폴더 없음
 
-        svc = _make_service(survey=survey, reader=reader)
-        svc.handle_webhook(sub, file_urls=["https://example.com/a.jpg"])
+        svc = _make_service(survey=survey, drive=drive, reader=reader)
+        svc.poll_and_upload()
 
-        assert len(survey.formatted_rows) == 1
-        assert survey.formatted_rows[0].booking_key == "R12345"
+        assert len(survey.processed_ids) == 0
 
+    def test_Drive_파일_없으면_마킹_안함(self):
+        sub = _submission()
+        survey = FakeSurveySheet()
+        survey.submissions = [sub]
+
+        reader = FakeSlackReader()
+        reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
+        drive = FakeDrive()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = []  # 파일 없음
+
+        svc = _make_service(survey=survey, drive=drive, reader=reader)
+        svc.poll_and_upload()
+
+        assert len(survey.processed_ids) == 0
+
+
+class TestProcessSubmission:
     def test_여러_파일_모두_업로드(self):
         sub = _submission()
+        survey = FakeSurveySheet()
+        survey.submissions = [sub]
+
         reader = FakeSlackReader()
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
         writer = FakeSlackWriter()
 
-        svc = _make_service(writer=writer, reader=reader)
-        svc.handle_webhook(
-            sub,
-            file_urls=[
-                "https://example.com/a.jpg",
-                "https://example.com/b.png",
-                "https://example.com/c.jpg",
-            ],
-        )
+        drive = FakeDrive()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="a.jpg", mime_type="image/jpeg"),
+            DriveFile(id="f2", name="b.png", mime_type="image/png"),
+        ]
+        drive.file_contents["f1"] = b"\xff\xd8"
+        drive.file_contents["f2"] = b"\x89PNG"
 
-        assert len(writer.uploaded_files) == 3
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
+
+        assert len(writer.uploaded_files) == 2
 
     def test_다운로드_실패해도_나머지_계속(self):
         sub = _submission()
+        survey = FakeSurveySheet()
+        survey.submissions = [sub]
+
         reader = FakeSlackReader()
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
         writer = FakeSlackWriter()
 
-        call_count = 0
+        drive = FakeDrive()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="bad.jpg", mime_type="image/jpeg"),
+            DriveFile(id="f2", name="ok.jpg", mime_type="image/jpeg"),
+        ]
+        # f1은 contents 없음 → KeyError
+        drive.file_contents["f2"] = b"\xff\xd8"
 
-        def _failing_downloader(url):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise RuntimeError("download failed")
-            return b"\xff\xd8"
-
-        svc = _make_service(
-            writer=writer, reader=reader, downloader=_failing_downloader
-        )
-        svc.handle_webhook(
-            sub,
-            file_urls=[
-                "https://example.com/a.jpg",
-                "https://example.com/b.jpg",
-            ],
-        )
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
 
         assert len(writer.uploaded_files) == 1
-
-    def test_URL에서_파일명_추출(self):
-        sub = _submission()
-        reader = FakeSlackReader()
-        reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
-        writer = FakeSlackWriter()
-
-        svc = _make_service(writer=writer, reader=reader)
-        svc.handle_webhook(
-            sub,
-            file_urls=["https://jotform.com/uploads/Carmore/12345/image%20(1).png"],
-        )
-
-        assert writer.uploaded_files[0]["filename"] == "image (1).png"
+        assert writer.uploaded_files[0]["filename"] == "ok.jpg"
 
 
 class TestPdfConversion:
-    """PDF 파일을 이미지로 변환하여 업로드하는 테스트."""
-
     def _make_pdf_bytes(self, pages: int = 1) -> bytes:
         doc = pymupdf.open()
         for _ in range(pages):
@@ -168,15 +195,23 @@ class TestPdfConversion:
 
     def test_pdf_파일_이미지로_변환_업로드(self):
         sub = _submission()
+        survey = FakeSurveySheet()
+        survey.submissions = [sub]
+        pdf_bytes = self._make_pdf_bytes()
+
         reader = FakeSlackReader()
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
         writer = FakeSlackWriter()
-        pdf_bytes = self._make_pdf_bytes()
 
-        svc = _make_service(
-            writer=writer, reader=reader, downloader=lambda url: pdf_bytes
-        )
-        svc.handle_webhook(sub, file_urls=["https://example.com/cert.pdf"])
+        drive = FakeDrive()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="cert.pdf", mime_type="application/pdf")
+        ]
+        drive.file_contents["f1"] = pdf_bytes
+
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
 
         assert len(writer.uploaded_files) == 1
         assert writer.uploaded_files[0]["filename"] == "cert.png"
@@ -184,15 +219,23 @@ class TestPdfConversion:
 
     def test_다페이지_pdf_모든_페이지_업로드(self):
         sub = _submission()
+        survey = FakeSurveySheet()
+        survey.submissions = [sub]
+        pdf_bytes = self._make_pdf_bytes(pages=3)
+
         reader = FakeSlackReader()
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
         writer = FakeSlackWriter()
-        pdf_bytes = self._make_pdf_bytes(pages=3)
 
-        svc = _make_service(
-            writer=writer, reader=reader, downloader=lambda url: pdf_bytes
-        )
-        svc.handle_webhook(sub, file_urls=["https://example.com/multi.pdf"])
+        drive = FakeDrive()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="multi.pdf", mime_type="application/pdf")
+        ]
+        drive.file_contents["f1"] = pdf_bytes
+
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
 
         assert len(writer.uploaded_files) == 3
         filenames = [f["filename"] for f in writer.uploaded_files]
@@ -200,139 +243,71 @@ class TestPdfConversion:
 
     def test_pdf_업로드_시_리액션_추가(self):
         sub = _submission()
+        survey = FakeSurveySheet()
+        survey.submissions = [sub]
+        pdf_bytes = self._make_pdf_bytes()
+
         reader = FakeSlackReader()
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
         writer = FakeSlackWriter()
-        pdf_bytes = self._make_pdf_bytes()
 
-        svc = _make_service(
-            writer=writer, reader=reader, downloader=lambda url: pdf_bytes
-        )
-        svc.handle_webhook(sub, file_urls=["https://example.com/cert.pdf"])
+        drive = FakeDrive()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="cert.pdf", mime_type="application/pdf")
+        ]
+        drive.file_contents["f1"] = pdf_bytes
+
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
 
         assert len(writer.reactions) == 1
         assert writer.reactions[0]["name"] == "pdf"
 
     def test_이미지만_있으면_pdf_리액션_없음(self):
         sub = _submission()
+        survey = FakeSurveySheet()
+        survey.submissions = [sub]
+
         reader = FakeSlackReader()
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
         writer = FakeSlackWriter()
 
-        svc = _make_service(writer=writer, reader=reader)
-        svc.handle_webhook(sub, file_urls=["https://example.com/photo.jpg"])
+        drive = FakeDrive()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="photo.jpg", mime_type="image/jpeg")
+        ]
+        drive.file_contents["f1"] = b"\xff\xd8"
+
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
 
         assert len(writer.reactions) == 0
 
     def test_pdf_변환_실패_시_다음_파일_계속(self):
         sub = _submission()
+        survey = FakeSurveySheet()
+        survey.submissions = [sub]
+
         reader = FakeSlackReader()
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
         writer = FakeSlackWriter()
 
-        call_count = 0
+        drive = FakeDrive()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="broken.pdf", mime_type="application/pdf"),
+            DriveFile(id="f2", name="ok.jpg", mime_type="image/jpeg"),
+        ]
+        drive.file_contents["f1"] = b"not-a-real-pdf"
+        drive.file_contents["f2"] = b"\xff\xd8"
 
-        def _downloader(url):
-            nonlocal call_count
-            call_count += 1
-            if "broken" in url:
-                return b"not-a-real-pdf"
-            return b"\xff\xd8"
-
-        svc = _make_service(writer=writer, reader=reader, downloader=_downloader)
-        svc.handle_webhook(
-            sub,
-            file_urls=[
-                "https://example.com/broken.pdf",
-                "https://example.com/ok.jpg",
-            ],
-        )
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
 
         assert len(writer.uploaded_files) == 1
         assert writer.uploaded_files[0]["filename"] == "ok.jpg"
-
-
-class TestThreadRetry:
-    """Jotform webhook이 Slack 메시지보다 먼저 도착할 때 재시도 테스트."""
-
-    def test_처음_못찾고_재시도_후_스레드_발견(self):
-        sub = _submission()
-        writer = FakeSlackWriter()
-        survey = FakeSurveySheet()
-
-        call_count = 0
-
-        class _DelayedReader(FakeSlackReader):
-            def find_message_by_text(self, channel_id, search_text, **kwargs):
-                nonlocal call_count
-                call_count += 1
-                if call_count < 3:
-                    return None
-                return "1.0"
-
-        reader = _DelayedReader()
-        sleep_calls: list[float] = []
-        svc = CancellationImageService(
-            survey_sheet=survey,
-            writer=writer,
-            reader=reader,
-            target_channel=TARGET_CH,
-            file_downloader=lambda url: b"\xff\xd8",
-            sleep_fn=lambda s: sleep_calls.append(s),
-        )
-        result = svc.handle_webhook(sub, file_urls=["https://example.com/img.jpg"])
-
-        assert result is True
-        assert call_count == 3
-        assert len(sleep_calls) == 2
-        assert len(writer.uploaded_files) == 1
-
-    def test_최대_재시도_초과_시_False(self):
-        sub = _submission()
-        writer = FakeSlackWriter()
-        survey = FakeSurveySheet()
-        reader = FakeSlackReader()
-        # messages_by_text에 아무것도 없으므로 항상 None 반환
-
-        sleep_calls: list[float] = []
-        svc = CancellationImageService(
-            survey_sheet=survey,
-            writer=writer,
-            reader=reader,
-            target_channel=TARGET_CH,
-            file_downloader=lambda url: b"\xff\xd8",
-            thread_max_retries=3,
-            thread_retry_interval=10.0,
-            sleep_fn=lambda s: sleep_calls.append(s),
-        )
-        result = svc.handle_webhook(sub, file_urls=["https://example.com/img.jpg"])
-
-        assert result is False
-        assert len(sleep_calls) == 3
-        assert all(s == 10.0 for s in sleep_calls)
-        assert len(writer.uploaded_files) == 0
-        assert len(survey.formatted_rows) == 0
-
-    def test_즉시_찾으면_재시도_없이_성공(self):
-        sub = _submission()
-        reader = FakeSlackReader()
-        reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
-        writer = FakeSlackWriter()
-
-        sleep_calls: list[float] = []
-        svc = CancellationImageService(
-            survey_sheet=FakeSurveySheet(),
-            writer=writer,
-            reader=reader,
-            target_channel=TARGET_CH,
-            file_downloader=lambda url: b"\xff\xd8",
-            sleep_fn=lambda s: sleep_calls.append(s),
-        )
-        result = svc.handle_webhook(sub, file_urls=["https://example.com/img.jpg"])
-
-        assert result is True
-        assert len(sleep_calls) == 0
-        assert len(writer.uploaded_files) == 1
 
 
 class TestFormattedSheet:
@@ -343,11 +318,20 @@ class TestFormattedSheet:
             phone="111-1111-1111",
         )
         survey = FakeSurveySheet()
+        survey.submissions = [sub]
+
         reader = FakeSlackReader()
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
 
-        svc = _make_service(survey=survey, reader=reader)
-        svc.handle_webhook(sub, file_urls=["https://example.com/img.jpg"])
+        drive = FakeDrive()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="img.jpg", mime_type="image/jpeg")
+        ]
+        drive.file_contents["f1"] = b"\xff\xd8"
+
+        svc = _make_service(survey=survey, drive=drive, reader=reader)
+        svc.poll_and_upload()
 
         assert len(survey.formatted_rows) == 1
         row = survey.formatted_rows[0]
@@ -359,9 +343,10 @@ class TestFormattedSheet:
     def test_실패_시_포맷_시트에_기록_안함(self):
         sub = _submission()
         survey = FakeSurveySheet()
+        survey.submissions = [sub]
         # reader에 스레드 없음 → 실패
 
         svc = _make_service(survey=survey)
-        svc.handle_webhook(sub, file_urls=["https://example.com/img.jpg"])
+        svc.poll_and_upload()
 
         assert len(survey.formatted_rows) == 0

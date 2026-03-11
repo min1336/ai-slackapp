@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from app.models import SettlementRow, SurveySubmission
+    from app.models import DriveFile, SettlementRow, SurveySubmission
 
 
 @runtime_checkable
@@ -103,4 +103,13 @@ class SlackMessageWriter(Protocol):
 
 @runtime_checkable
 class SurveySheetGateway(Protocol):
+    def get_all_submissions(self) -> list[SurveySubmission]: ...
+    def mark_processed(self, submission_id: str) -> None: ...
     def write_formatted_row(self, submission: SurveySubmission) -> None: ...
+
+
+@runtime_checkable
+class DriveImageGateway(Protocol):
+    def find_folder(self, folder_name: str) -> str | None: ...
+    def list_image_files(self, folder_id: str) -> list[DriveFile]: ...
+    def download_file(self, file_id: str) -> bytes: ...

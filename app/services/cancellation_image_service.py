@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-import time
-import urllib.parse
-import urllib.request
-from collections.abc import Callable
 from contextlib import suppress
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
-from urllib.parse import unquote, urlparse
 
 import pymupdf
 from slack_sdk.errors import SlackApiError
@@ -16,6 +11,7 @@ from app.core import get_logger
 
 if TYPE_CHECKING:
     from app.infrastructure.protocols import (
+        DriveImageGateway,
         SlackMessageReader,
         SlackMessageWriter,
         SurveySheetGateway,
@@ -27,118 +23,91 @@ logger = get_logger(__name__)
 _PDF_EMOJI = "pdf"
 
 
-def _default_download(url: str) -> bytes:
-    """URL에서 파일을 다운로드한다."""
-    encoded_url = urllib.parse.quote(url, safe=":/?#[]@!$&'()*+,;=-._~%")
-    with urllib.request.urlopen(encoded_url) as resp:  # noqa: S310
-        return resp.read()
-
-
-def _filename_from_url(url: str) -> str:
-    """URL에서 파일명을 추출한다."""
-    path = urlparse(url).path
-    return unquote(PurePosixPath(path).name) or "file"
-
-
-def _mime_from_filename(filename: str) -> str:
-    """파일명에서 MIME 타입을 추론한다."""
-    ext = PurePosixPath(filename).suffix.lower()
-    if ext == ".pdf":
-        return "application/pdf"
-    return f"image/{ext.lstrip('.')}" if ext else "application/octet-stream"
-
-
 class CancellationImageService:
-    """Jotform webhook 수신 → 파일 다운로드 → Slack 스레드 업로드."""
+    """설문 응답 폴링 → Drive 이미지 검색 → Slack 스레드 업로드."""
 
     def __init__(
         self,
         survey_sheet: SurveySheetGateway,
+        drive: DriveImageGateway,
         writer: SlackMessageWriter,
         reader: SlackMessageReader,
         target_channel: str,
-        file_downloader: Callable[[str], bytes] = _default_download,
-        thread_max_retries: int = 5,
-        thread_retry_interval: float = 30.0,
-        sleep_fn: Callable[[float], object] = time.sleep,
     ) -> None:
         self._survey_sheet = survey_sheet
+        self._drive = drive
         self._writer = writer
         self._reader = reader
         self._target_channel = target_channel
-        self._download = file_downloader
-        self._thread_max_retries = thread_max_retries
-        self._thread_retry_interval = thread_retry_interval
-        self._sleep = sleep_fn
 
-    def _find_thread_with_retry(self, booking_key: str) -> str | None:
-        """Slack 스레드를 검색하고, 없으면 재시도한다.
+    def poll_and_upload(self) -> None:
+        """새 설문 응답을 폴링하고 이미지를 업로드한다."""
+        logger.info("cancellation_poll_started")
+        submissions = self._survey_sheet.get_all_submissions()
+        if not submissions:
+            logger.info("cancellation_poll_no_submissions")
+            return
 
-        Jotform webhook이 Slack 메시지보다 먼저 도착하는 race condition 대응.
-        """
-        thread_ts = self._reader.find_message_by_text(self._target_channel, booking_key)
-        if thread_ts:
-            return thread_ts
+        processed = 0
+        for sub in submissions:
+            if self._process_submission(sub):
+                self._survey_sheet.mark_processed(sub.submission_id)
+                self._survey_sheet.write_formatted_row(sub)
+                processed += 1
 
-        for attempt in range(1, self._thread_max_retries + 1):
-            logger.info(
-                "cancellation_thread_retry",
-                booking_key=booking_key,
-                attempt=attempt,
-                max_retries=self._thread_max_retries,
-                interval=self._thread_retry_interval,
-            )
-            self._sleep(self._thread_retry_interval)
-            thread_ts = self._reader.find_message_by_text(
-                self._target_channel, booking_key
-            )
-            if thread_ts:
-                logger.info(
-                    "cancellation_thread_found_after_retry",
-                    booking_key=booking_key,
-                    attempt=attempt,
-                )
-                return thread_ts
-
-        logger.warning(
-            "cancellation_thread_not_found",
-            booking_key=booking_key,
-            total_retries=self._thread_max_retries,
-        )
-        return None
-
-    def handle_webhook(self, sub: SurveySubmission, file_urls: list[str]) -> bool:
-        """Jotform webhook에서 받은 파일 URL을 Slack 스레드에 업로드한다."""
         logger.info(
-            "cancellation_webhook_received",
+            "cancellation_poll_completed",
+            total=len(submissions),
+            processed=processed,
+            skipped=len(submissions) - processed,
+        )
+
+    def _process_submission(self, sub: SurveySubmission) -> bool:
+        logger.info(
+            "cancellation_processing",
             submission_id=sub.submission_id,
             booking_key=sub.booking_key,
             customer_name=sub.customer_name,
-            file_count=len(file_urls),
+            folder_name=sub.folder_name,
         )
-
-        thread_ts = self._find_thread_with_retry(sub.booking_key)
+        thread_ts = self._reader.find_message_by_text(
+            self._target_channel, sub.booking_key
+        )
         if not thread_ts:
+            logger.info(
+                "cancellation_no_thread",
+                booking_key=sub.booking_key,
+                submission_id=sub.submission_id,
+            )
             return False
 
-        if not file_urls:
-            logger.info("cancellation_no_files", booking_key=sub.booking_key)
+        folder_id = self._drive.find_folder(sub.folder_name)
+        if not folder_id:
+            logger.info(
+                "cancellation_no_folder",
+                folder_name=sub.folder_name,
+                submission_id=sub.submission_id,
+            )
+            return False
+
+        files = self._drive.list_image_files(folder_id)
+        if not files:
+            logger.info(
+                "cancellation_no_images",
+                folder_name=sub.folder_name,
+            )
             return False
 
         uploaded = 0
         has_pdf = False
-
-        for url in file_urls:
+        for file in files:
             try:
-                content = self._download(url)
-                filename = _filename_from_url(url)
-                mime_type = _mime_from_filename(filename)
-
-                if mime_type == "application/pdf":
-                    images = self._convert_pdf_to_images(content, filename)
+                content = self._drive.download_file(file.id)
+                if file.mime_type == "application/pdf":
+                    images = self._convert_pdf_to_images(content, file.name)
                     logger.info(
                         "cancellation_pdf_converted",
-                        file_name=filename,
+                        file_name=file.name,
                         pages=len(images),
                         booking_key=sub.booking_key,
                     )
@@ -156,13 +125,13 @@ class CancellationImageService:
                         channel=self._target_channel,
                         thread_ts=thread_ts,
                         content=content,
-                        filename=filename,
+                        filename=file.name,
                     )
                     uploaded += 1
             except Exception:
                 logger.exception(
                     "cancellation_upload_failed",
-                    url=url,
+                    file_name=file.name,
                     booking_key=sub.booking_key,
                 )
 
@@ -177,7 +146,6 @@ class CancellationImageService:
                     name=_PDF_EMOJI,
                 )
 
-        self._survey_sheet.write_formatted_row(sub)
         logger.info(
             "cancellation_uploaded",
             booking_key=sub.booking_key,

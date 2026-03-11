@@ -20,3 +20,12 @@ class SurveySubmission:
     def folder_name(self) -> str:
         """Google Drive 폴더명: 성함_예약번호."""
         return f"{self.customer_name}_{self.booking_key}"
+
+
+@dataclass
+class DriveFile:
+    """Google Drive 파일 메타데이터."""
+
+    id: str
+    name: str
+    mime_type: str

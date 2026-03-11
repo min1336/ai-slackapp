@@ -3,6 +3,13 @@ services:
     image: ghcr.io/teamo2dev/slack-bot:latest
     container_name: slack-bot
     restart: unless-stopped
+    mem_limit: 512m
+    memswap_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - ENVIRONMENT=prod
       - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
