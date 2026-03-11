@@ -167,9 +167,10 @@ def _trigger_cancellation_poll(service, channel_id: str) -> None:
         logger.info("cancellation_poll_already_running", channel=channel_id)
         return
 
+    _cancellation_poll_running = True
+
     def _run() -> None:
         global _cancellation_poll_running  # noqa: PLW0603
-        _cancellation_poll_running = True
         sleep(5)  # Jotform→Sheet/Drive 동기화 대기
         try:
             service.poll_and_upload()
