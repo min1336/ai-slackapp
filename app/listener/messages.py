@@ -247,7 +247,7 @@ def register_message_handlers(app: App, container: ServiceContainer) -> None:
         if not channel_id:
             return
 
-        logger.info(
+        logger.debug(
             "message_received",
             channel=channel_id,
             ts=message.get("ts"),
@@ -292,7 +292,7 @@ def register_message_handlers(app: App, container: ServiceContainer) -> None:
         channel_id = event.get("channel")
         subtype = event.get("subtype")
 
-        logger.info(
+        logger.debug(
             "message_event_subtype",
             channel=channel_id,
             subtype=subtype,
