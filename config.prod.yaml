@@ -84,5 +84,5 @@ cancellation:
     parent_folder_id: "1_AitMUZJuTgck-WBqoetbY6Ib2kVZBFZ"
   spreadsheet:
     id: "1E8FSB3ju9I8YuiNErsw-z3VKlXpXxGu4eDTX0EBBvVQ"
-    survey_sheet_name: "결항 데이터"
+    survey_sheet_name: "결항데이터"
     formatted_sheet_name: "결항관리"
