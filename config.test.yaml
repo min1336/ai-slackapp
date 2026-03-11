@@ -79,4 +79,3 @@ cancellation:
   spreadsheet:
     id: "REPLACE_WITH_TEST_SPREADSHEET_ID"
     survey_sheet_name: "설문조사"
-  poll_schedule: "*/5 * * * *"

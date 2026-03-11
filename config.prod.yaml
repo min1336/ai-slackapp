@@ -85,4 +85,3 @@ cancellation:
   spreadsheet:
     id: "1Ew0wPosttqLcaQjaCloQmHYq2E4UxdjO8vN2Qg5Crg4"
     survey_sheet_name: "결항 자동화 시트"
-  poll_schedule: "*/5 * * * *"

@@ -197,7 +197,6 @@ class CancellationConfig(BaseModel):
     slack_channels: CancellationSlackChannelsConfig = CancellationSlackChannelsConfig()
     drive: CancellationDriveConfig = CancellationDriveConfig()
     spreadsheet: CancellationSpreadsheetConfig = CancellationSpreadsheetConfig()
-    poll_schedule: str = "*/5 * * * *"
 
 
 class AppConfig(BaseModel):

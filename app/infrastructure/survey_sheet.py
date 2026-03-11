@@ -34,10 +34,22 @@ _DATE_FORMATS = (
 )
 
 
+_EXCEL_EPOCH = datetime(1899, 12, 30)
+
+
 def _normalize_date(raw: str) -> str:
     """날짜 문자열을 YYYY-MM-DD 형태로 정규화한다."""
     if not raw:
         return ""
+
+    # Excel 시리얼 날짜 (예: 46092.37943)
+    try:
+        serial = float(str(raw).strip())
+        if 40000 < serial < 55000:
+            return (_EXCEL_EPOCH + timedelta(days=serial)).strftime("%Y-%m-%d")
+    except (ValueError, TypeError):
+        pass
+
     for fmt in _DATE_FORMATS:
         try:
             return datetime.strptime(raw.strip(), fmt).strftime("%Y-%m-%d")

@@ -284,3 +284,32 @@ def register_message_handlers(app: App, container: ServiceContainer) -> None:
                 ts=message.get("ts"),
             )
             _trigger_cancellation_poll(cancellation_service, channel_id)
+
+    @app.event("message")
+    def handle_message_subtypes(event):
+        """@app.message()가 잡지 못하는 subtype 이벤트 처리."""
+        channel_id = event.get("channel")
+        subtype = event.get("subtype")
+
+        logger.info(
+            "message_event_subtype",
+            channel=channel_id,
+            subtype=subtype,
+            bot_id=event.get("bot_id"),
+            text_preview=event.get("text", "")[:50],
+        )
+
+        # cancellation 채널의 subtype 메시지도 트리거
+        if (
+            cancellation_service
+            and cancellation_channel
+            and channel_id == cancellation_channel
+            and subtype not in ("message_changed", "message_deleted")
+            and not event.get("thread_ts")
+        ):
+            logger.info(
+                "cancellation_message_detected_via_event",
+                channel=channel_id,
+                subtype=subtype,
+            )
+            _trigger_cancellation_poll(cancellation_service, channel_id)
