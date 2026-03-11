@@ -40,13 +40,13 @@ class CancellationImageService:
         self._reader = reader
         self._target_channel = target_channel
 
-    def poll_and_upload(self) -> None:
-        """새 설문 응답을 폴링하고 이미지를 업로드한다."""
+    def poll_and_upload(self) -> int:
+        """새 설문 응답을 폴링하고 이미지를 업로드한다. 미처리 건수를 반환."""
         logger.info("cancellation_poll_started")
         submissions = self._survey_sheet.get_all_submissions()
         if not submissions:
             logger.info("cancellation_poll_no_submissions")
-            return
+            return 0
 
         processed = 0
         for sub in submissions:
@@ -55,12 +55,14 @@ class CancellationImageService:
                 self._survey_sheet.write_formatted_row(sub)
                 processed += 1
 
+        skipped = len(submissions) - processed
         logger.info(
             "cancellation_poll_completed",
             total=len(submissions),
             processed=processed,
-            skipped=len(submissions) - processed,
+            skipped=skipped,
         )
+        return skipped
 
     def _process_submission(self, sub: SurveySubmission) -> bool:
         logger.info(
