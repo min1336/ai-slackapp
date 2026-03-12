@@ -86,3 +86,7 @@ cancellation:
     id: "1E8FSB3ju9I8YuiNErsw-z3VKlXpXxGu4eDTX0EBBvVQ"
     survey_sheet_name: "결항데이터"
     formatted_sheet_name: "결항관리"
+  analysis:
+    enabled: true
+    gemini_model: "gemini-2.5-flash"
+    timeout_seconds: 30

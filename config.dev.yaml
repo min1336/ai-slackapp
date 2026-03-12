@@ -75,8 +75,12 @@ cancellation:
   slack_channels:
     target: "C0AANUJGPAB"
   drive:
-    parent_folder_id: "1hbyjrc0wCvkltQ4mTrAL22gDfSWnnbMi"
+    parent_folder_id: "1mDpVCO1A6zqC9aojcCTqowQlDnsOe3Mw"
   spreadsheet:
     id: "1rp-ILKY0tMenEgASbo6Je71NerDNrO8W_nRjoAA7d7s"
     survey_sheet_name: "test"
     formatted_sheet_name: "운영현황"
+  analysis:
+    enabled: true
+    gemini_model: "gemini-2.5-flash"
+    timeout_seconds: 30
