@@ -9,6 +9,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "google-api-python-client>=2.160.0",
     "google-auth>=2.48.0",
+    "google-genai>=1.66.0",
     "gspread>=6.2.1",
     "psycopg2-binary>=2.9.0",
     "pydantic-settings>=2.12.0",

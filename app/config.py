@@ -193,10 +193,17 @@ class CancellationDriveConfig(BaseModel):
     parent_folder_id: str = ""
 
 
+class CancellationAnalysisConfig(BaseModel):
+    enabled: bool = False
+    gemini_model: str = "gemini-2.5-flash"
+    timeout_seconds: int = 30
+
+
 class CancellationConfig(BaseModel):
     slack_channels: CancellationSlackChannelsConfig = CancellationSlackChannelsConfig()
     drive: CancellationDriveConfig = CancellationDriveConfig()
     spreadsheet: CancellationSpreadsheetConfig = CancellationSpreadsheetConfig()
+    analysis: CancellationAnalysisConfig = CancellationAnalysisConfig()
 
 
 class AppConfig(BaseModel):
@@ -245,3 +252,19 @@ def get_database_settings() -> DatabaseProperties:
 @lru_cache
 def get_env_config() -> EnvironmentConfig:
     return EnvironmentConfig()
+
+
+class GeminiProperties(BaseSettings):
+    api_key: str = ""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_prefix="GEMINI_",
+        extra="ignore",
+    )
+
+
+@lru_cache(maxsize=1)
+def get_gemini_settings() -> GeminiProperties:
+    return GeminiProperties()

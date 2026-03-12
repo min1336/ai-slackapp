@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.models.analysis import AnalysisResult
 from app.models.cancellation import DriveFile, SurveySubmission
 from app.models.settlement import (
     SETTLEMENT_FIELDS,
@@ -13,6 +14,7 @@ from app.models.settlement import (
 )
 
 __all__ = [
+    "AnalysisResult",
     "SETTLEMENT_FIELDS",
     "DriveFile",
     "ModalMetadata",
