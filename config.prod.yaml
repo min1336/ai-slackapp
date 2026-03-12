@@ -89,4 +89,4 @@ cancellation:
   analysis:
     enabled: true
     gemini_model: "gemini-2.5-flash"
-    timeout_seconds: 30
+    timeout_seconds: 60

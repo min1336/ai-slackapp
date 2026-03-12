@@ -204,8 +204,11 @@ class SurveySheetReader:
             row=cell.row,
         )
 
-    def write_formatted_row(self, submission: SurveySubmission) -> None:
-        """운영현황 시트에 포맷된 행을 추가한다."""
+    def write_formatted_row(self, submission: SurveySubmission) -> bool:
+        """운영현황 시트에 포맷된 행을 추가한다.
+
+        신규 기록이면 True, 이미 존재하면 False.
+        """
         spreadsheet = self._get_client()
 
         # 탭 가져오기 (없으면 생성)
@@ -234,7 +237,7 @@ class SurveySheetReader:
                     "survey_formatted_row_exists",
                     booking_key=submission.booking_key,
                 )
-                return
+                return False
 
         date_str = _normalize_date(submission.submission_date)
 
@@ -255,6 +258,7 @@ class SurveySheetReader:
             booking_key=submission.booking_key,
             customer_name=submission.customer_name,
         )
+        return True
 
     def write_analysis_result(self, submission_id: str, result: AnalysisResult) -> None:
         """운영현황 시트에 분석 결과를 기록한다."""

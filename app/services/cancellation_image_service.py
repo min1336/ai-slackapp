@@ -104,6 +104,14 @@ class CancellationImageService:
             )
             return False
 
+        # 운영현황 행 선점: 이미 존재하면 중복 처리 방지 (Slack 업로드/댓글 스킵)
+        if not self._survey_sheet.write_formatted_row(sub):
+            logger.info(
+                "cancellation_already_processed",
+                booking_key=sub.booking_key,
+            )
+            return True
+
         uploaded = 0
         collected_images: list[bytes] = []
         has_pdf = False
@@ -154,9 +162,6 @@ class CancellationImageService:
                     timestamp=thread_ts,
                     name=_PDF_EMOJI,
                 )
-
-        # 분석 결과를 시트에 기록하려면 행이 먼저 존재해야 함
-        self._survey_sheet.write_formatted_row(sub)
 
         if self._analyzer and collected_images:
             self._analyze_and_report(collected_images, sub, thread_ts)
