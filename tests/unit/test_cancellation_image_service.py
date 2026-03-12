@@ -4,6 +4,8 @@ import pymupdf
 
 from app.models import DriveFile, SurveySubmission
 from app.services.cancellation_image_service import CancellationImageService
+from app.services.image_analyzer import ImageAnalyzer
+from tests.fakes.fake_gemini import FakeGeminiClient
 from tests.fakes.fake_slack import FakeSlackReader, FakeSlackWriter
 from tests.fakes.fake_survey import FakeSurveySheet
 
@@ -48,6 +50,7 @@ def _make_service(
     drive: FakeDrive | None = None,
     writer: FakeSlackWriter | None = None,
     reader: FakeSlackReader | None = None,
+    analyzer: ImageAnalyzer | None = None,
 ) -> CancellationImageService:
     return CancellationImageService(
         survey_sheet=survey or FakeSurveySheet(),
@@ -55,6 +58,7 @@ def _make_service(
         writer=writer or FakeSlackWriter(),
         reader=reader or FakeSlackReader(),
         target_channel=TARGET_CH,
+        analyzer=analyzer,
     )
 
 
@@ -350,3 +354,103 @@ class TestFormattedSheet:
         svc.poll_and_upload()
 
         assert len(survey.formatted_rows) == 0
+
+
+class TestAnalysisIntegration:
+    def _setup(self, gemini_result=None):
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient(result=gemini_result)
+        analyzer = ImageAnalyzer(gemini)
+
+        sub = _submission()
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        svc = _make_service(
+            survey=survey, drive=drive, writer=writer, reader=reader, analyzer=analyzer
+        )
+        return svc, writer, survey, gemini
+
+    def test_valid_analysis_adds_checkmark(self):
+        svc, writer, survey, gemini = self._setup()
+        svc.poll_and_upload()
+
+        assert any(r["name"] == "white_check_mark" for r in writer.reactions)
+        assert len(writer.posted_messages) >= 1
+        assert len(survey.analysis_results) == 1
+
+    def test_invalid_analysis_adds_x(self):
+        svc, writer, survey, _ = self._setup(
+            gemini_result={
+                "is_valid": False,
+                "confidence": 0.8,
+                "document_type": "결항확인서",
+                "extracted_fields": {},
+                "mismatches": ["예약번호 불일치"],
+                "quality_issues": [],
+                "reasoning": "불일치",
+            }
+        )
+        svc.poll_and_upload()
+
+        assert any(r["name"] == "x" for r in writer.reactions)
+
+    def test_analysis_failure_adds_warning_but_upload_succeeds(self):
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient(result=RuntimeError("API down"))
+        analyzer = ImageAnalyzer(gemini)
+
+        sub = _submission()
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        svc = _make_service(
+            survey=survey, drive=drive, writer=writer, reader=reader, analyzer=analyzer
+        )
+        svc.poll_and_upload()
+
+        assert len(writer.uploaded_files) == 1
+        assert any(r["name"] == "warning" for r in writer.reactions)
+        assert sub.submission_id in survey.processed_ids
+
+    def test_no_analyzer_skips_analysis(self):
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+
+        sub = _submission()
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
+
+        assert len(writer.uploaded_files) == 1
+        analysis_emojis = [
+            r
+            for r in writer.reactions
+            if r["name"] in ("white_check_mark", "x", "warning")
+        ]
+        assert len(analysis_emojis) == 0

@@ -5,13 +5,15 @@ from typing import TYPE_CHECKING
 import gspread
 from google.oauth2.service_account import Credentials
 
-from app.config import get_app_config, get_spreadsheet_settings
+from app.config import get_app_config, get_gemini_settings, get_spreadsheet_settings
 from app.infrastructure.database import SessionFactory, get_session
 from app.infrastructure.drive_client import DriveImageClient
+from app.infrastructure.gemini_client import GeminiClient
 from app.infrastructure.spreadsheet import SCOPES, SpreadsheetService
 from app.infrastructure.survey_sheet import SurveySheetReader
 from app.services.approval_service import ApprovalService
 from app.services.cancellation_image_service import CancellationImageService
+from app.services.image_analyzer import ImageAnalyzer
 from app.services.rejection_service import RejectionService
 from app.services.settlement_registration_service import (
     SettlementRegistrationService,
@@ -149,12 +151,25 @@ class ServiceContainer:
                 credentials_file=spreadsheet_settings.credentials_file,
                 parent_folder_id=cancel_drive_id,
             )
+            # Image analysis (feature flag)
+            _analyzer = None
+            if cancel_cfg.analysis.enabled:
+                gemini_settings = get_gemini_settings()
+                if gemini_settings.api_key:
+                    _gemini = GeminiClient(
+                        api_key=gemini_settings.api_key,
+                        model=cancel_cfg.analysis.gemini_model,
+                        timeout=cancel_cfg.analysis.timeout_seconds,
+                    )
+                    _analyzer = ImageAnalyzer(_gemini)
+
             self.cancellation_image = CancellationImageService(
                 survey_sheet=_survey,
                 drive=_drive,
                 writer=self.writer,
                 reader=self.reader,
                 target_channel=cancel_target,
+                analyzer=_analyzer,
             )
         else:
             self.cancellation_image = None  # type: ignore[assignment]

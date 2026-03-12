@@ -8,6 +8,7 @@ import pymupdf
 from slack_sdk.errors import SlackApiError
 
 from app.core import get_logger
+from app.views.analysis import build_analysis_result_blocks
 
 if TYPE_CHECKING:
     from app.infrastructure.protocols import (
@@ -17,6 +18,8 @@ if TYPE_CHECKING:
         SurveySheetGateway,
     )
     from app.models import SurveySubmission
+    from app.models.analysis import AnalysisResult
+    from app.services.image_analyzer import ImageAnalyzer
 
 logger = get_logger(__name__)
 
@@ -33,12 +36,14 @@ class CancellationImageService:
         writer: SlackMessageWriter,
         reader: SlackMessageReader,
         target_channel: str,
+        analyzer: ImageAnalyzer | None = None,
     ) -> None:
         self._survey_sheet = survey_sheet
         self._drive = drive
         self._writer = writer
         self._reader = reader
         self._target_channel = target_channel
+        self._analyzer = analyzer
 
     def poll_and_upload(self) -> int:
         """새 설문 응답을 폴링하고 이미지를 업로드한다. 미처리 건수를 반환."""
@@ -101,6 +106,7 @@ class CancellationImageService:
             return False
 
         uploaded = 0
+        collected_images: list[bytes] = []
         has_pdf = False
         for file in files:
             try:
@@ -120,6 +126,7 @@ class CancellationImageService:
                             content=img_bytes,
                             filename=img_name,
                         )
+                        collected_images.append(img_bytes)
                         uploaded += 1
                     has_pdf = True
                 else:
@@ -129,6 +136,7 @@ class CancellationImageService:
                         content=content,
                         filename=file.name,
                     )
+                    collected_images.append(content)
                     uploaded += 1
             except Exception:
                 logger.exception(
@@ -148,6 +156,9 @@ class CancellationImageService:
                     name=_PDF_EMOJI,
                 )
 
+        if self._analyzer and collected_images:
+            self._analyze_and_report(collected_images, sub, thread_ts)
+
         logger.info(
             "cancellation_uploaded",
             booking_key=sub.booking_key,
@@ -155,6 +166,47 @@ class CancellationImageService:
             has_pdf=has_pdf,
         )
         return True
+
+    def _analyze_and_report(
+        self,
+        image_data: list[bytes],
+        submission: SurveySubmission,
+        thread_ts: str,
+    ) -> None:
+        try:
+            result = self._analyzer.analyze(image_data, submission)  # type: ignore[union-attr]
+            emoji = self._result_to_emoji(result)
+            self._writer.add_reaction(
+                channel=self._target_channel,
+                timestamp=thread_ts,
+                name=emoji,
+            )
+            blocks = build_analysis_result_blocks(result)
+            self._writer.post_message(
+                channel=self._target_channel,
+                text="검증 결과",
+                thread_ts=thread_ts,
+                blocks=blocks,
+            )
+            self._survey_sheet.write_analysis_result(submission.submission_id, result)
+        except Exception:
+            logger.exception(
+                "image_analysis_failed", booking_key=submission.booking_key
+            )
+            with suppress(SlackApiError):
+                self._writer.add_reaction(
+                    channel=self._target_channel,
+                    timestamp=thread_ts,
+                    name="warning",
+                )
+
+    @staticmethod
+    def _result_to_emoji(result: AnalysisResult) -> str:
+        if result.is_valid is True:
+            return "white_check_mark"
+        if result.is_valid is False:
+            return "x"
+        return "warning"
 
     @staticmethod
     def _convert_pdf_to_images(

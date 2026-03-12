@@ -3,11 +3,15 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from threading import Lock
+from typing import TYPE_CHECKING
 
 import gspread
 
 from app.core import get_logger
 from app.models import SurveySubmission
+
+if TYPE_CHECKING:
+    from app.models.analysis import AnalysisResult
 
 logger = get_logger(__name__)
 
@@ -58,6 +62,17 @@ def _normalize_date(raw: str) -> str:
     return raw.split(" ")[0]
 
 
+def _deduplicate_headers(headers: list[str]) -> list[str]:
+    """중복 헤더에 _2, _3 … 접미사를 붙여 고유하게 만든다."""
+    seen: dict[str, int] = {}
+    result: list[str] = []
+    for h in headers:
+        count = seen.get(h, 0)
+        seen[h] = count + 1
+        result.append(h if count == 0 else f"{h}_{count + 1}")
+    return result
+
+
 def _get_row_value(row: dict, keyword: str) -> str:
     """헤더에 keyword가 포함된 컬럼의 값을 반환한다 (공백 차이 무시)."""
     for key, value in row.items():
@@ -104,7 +119,11 @@ class SurveySheetReader:
     def get_all_submissions(self) -> list[SurveySubmission]:
         """시트의 미처리 설문 응답을 반환한다 (처리완료 == TRUE 제외)."""
         worksheet = self._get_client().worksheet(self._sheet_name)
-        rows = worksheet.get_all_records()
+        all_values = worksheet.get_all_values()
+        if len(all_values) < 2:
+            return []
+        headers = _deduplicate_headers(all_values[0])
+        rows = [dict(zip(headers, row, strict=False)) for row in all_values[1:]]
         submissions: list[SurveySubmission] = []
 
         for row in rows:
@@ -229,4 +248,55 @@ class SurveySheetReader:
             "survey_formatted_row_written",
             booking_key=submission.booking_key,
             customer_name=submission.customer_name,
+        )
+
+    def write_analysis_result(self, submission_id: str, result: AnalysisResult) -> None:
+        """운영현황 시트에 분석 결과를 기록한다."""
+        spreadsheet = self._get_client()
+        try:
+            ws = spreadsheet.worksheet(self._formatted_sheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            logger.info(
+                "analysis_formatted_sheet_not_found",
+                sheet_name=self._formatted_sheet_name,
+            )
+            return
+        try:
+            cell = ws.find(submission_id)
+        except Exception:
+            logger.info("analysis_result_row_not_found", submission_id=submission_id)
+            return
+
+        if cell is None:
+            logger.info("analysis_result_row_not_found", submission_id=submission_id)
+            return
+
+        row = cell.row
+        headers = ws.row_values(1)
+        result_col = None
+        reason_col = None
+        for i, h in enumerate(headers, 1):
+            if h == "검증결과":
+                result_col = i
+            elif h == "검증사유":
+                reason_col = i
+
+        if result.is_valid is True:
+            status = "적합"
+        elif result.is_valid is False:
+            status = "부적합"
+        else:
+            status = "분석실패"
+
+        reasoning = (result.reasoning or "")[:100]
+
+        if result_col:
+            ws.update_cell(row, result_col, status)
+        if reason_col:
+            ws.update_cell(row, reason_col, reasoning)
+
+        logger.info(
+            "analysis_result_written",
+            submission_id=submission_id,
+            status=status,
         )

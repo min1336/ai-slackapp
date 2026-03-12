@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.models import SurveySubmission
+from app.models import AnalysisResult, SurveySubmission
 
 
 class FakeSurveySheet:
@@ -10,6 +10,7 @@ class FakeSurveySheet:
         self.submissions: list[SurveySubmission] = []
         self.processed_ids: list[str] = []
         self.formatted_rows: list[SurveySubmission] = []
+        self.analysis_results: list[tuple[str, AnalysisResult]] = []
 
     def get_all_submissions(self) -> list[SurveySubmission]:
         return self.submissions
@@ -19,3 +20,6 @@ class FakeSurveySheet:
 
     def write_formatted_row(self, submission: SurveySubmission) -> None:
         self.formatted_rows.append(submission)
+
+    def write_analysis_result(self, submission_id: str, result: AnalysisResult) -> None:
+        self.analysis_results.append((submission_id, result))
