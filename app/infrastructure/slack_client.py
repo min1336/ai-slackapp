@@ -99,6 +99,10 @@ def find_message_by_text(
             text = msg.get("text", "")
             if search_text in text:
                 return msg.get("ts")
+            for block in msg.get("blocks", []):
+                for field in block.get("fields", []):
+                    if search_text in str(field.get("text", "")):
+                        return msg.get("ts")
             for att in msg.get("attachments", []):
                 for field in att.get("fields", []):
                     if search_text in str(field.get("value", "")):

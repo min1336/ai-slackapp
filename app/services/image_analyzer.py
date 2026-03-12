@@ -105,7 +105,7 @@ class ImageAnalyzer:
                 quality_issues=raw.get("quality_issues", []) + extra_issues,
                 reasoning=raw.get("reasoning", ""),
             )
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, AttributeError):
             result = AnalysisResult(
                 is_valid=None,
                 confidence=0.0,

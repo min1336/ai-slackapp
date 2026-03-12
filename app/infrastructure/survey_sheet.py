@@ -131,13 +131,19 @@ class SurveySheetReader:
                 continue
 
             submission_id = str(row.get("Submission ID", "")).strip()
-            customer_name = str(row.get("1. 운전자 성함을 입력해주세요.", "")).strip()
+            customer_name = (
+                str(row.get("1. 운전자 성함을 입력해주세요.", ""))
+                .strip()
+                .replace("/", "")
+            )
             booking_key = str(
                 row.get("2. 취소 및 환불 접수하실 예약번호를 입력해주세요.", "")
             ).strip()
 
-            if not (submission_id and customer_name and booking_key):
+            if not (customer_name and booking_key):
                 continue
+            if not submission_id:
+                submission_id = booking_key
 
             submission_date = str(row.get("Submission Date", "")).strip()
             company_name = str(_get_row_value(row, "업체명")).strip()
@@ -263,9 +269,13 @@ class SurveySheetReader:
             return
         try:
             cell = ws.find(submission_id)
-        except Exception:
-            logger.info("analysis_result_row_not_found", submission_id=submission_id)
-            return
+        except Exception as e:
+            if e.__class__.__name__ == "CellNotFound":
+                logger.info(
+                    "analysis_result_row_not_found", submission_id=submission_id
+                )
+                return
+            raise
 
         if cell is None:
             logger.info("analysis_result_row_not_found", submission_id=submission_id)

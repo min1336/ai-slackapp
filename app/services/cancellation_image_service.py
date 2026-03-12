@@ -57,7 +57,6 @@ class CancellationImageService:
         for sub in submissions:
             if self._process_submission(sub):
                 self._survey_sheet.mark_processed(sub.submission_id)
-                self._survey_sheet.write_formatted_row(sub)
                 processed += 1
 
         skipped = len(submissions) - processed
@@ -155,6 +154,9 @@ class CancellationImageService:
                     timestamp=thread_ts,
                     name=_PDF_EMOJI,
                 )
+
+        # 분석 결과를 시트에 기록하려면 행이 먼저 존재해야 함
+        self._survey_sheet.write_formatted_row(sub)
 
         if self._analyzer and collected_images:
             self._analyze_and_report(collected_images, sub, thread_ts)

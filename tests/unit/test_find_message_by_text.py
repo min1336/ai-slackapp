@@ -119,6 +119,33 @@ class TestFindMessageByText:
         result = find_message_by_text(client, "C123", "BK-001")
         assert result is None
 
+    def test_blocks_fields에서_발견(self):
+        """Block Kit 메시지의 blocks[].fields[].text에서 검색어 발견."""
+        client = _FakeSlackClient(
+            [
+                _make_history_response(
+                    [
+                        {
+                            "text": "예약 정보를 확인해주세요",
+                            "ts": "444.444",
+                            "blocks": [
+                                {
+                                    "type": "section",
+                                    "fields": [
+                                        {"type": "mrkdwn", "text": "*예약번호*"},
+                                        {"type": "plain_text", "text": "BK-001"},
+                                    ],
+                                }
+                            ],
+                        }
+                    ]
+                )
+            ]
+        )
+
+        result = find_message_by_text(client, "C123", "BK-001")
+        assert result == "444.444"
+
     def test_cursor_없으면_다음_페이지_요청_안함(self):
         client = _FakeSlackClient(
             [
