@@ -208,6 +208,14 @@ def register_message_handlers(app: App, container: ServiceContainer) -> None:
     cancellation_channel = container.cancellation_target_channel
     cancellation_service = container.cancellation_image
 
+    _watched_channels: set[str] = set()
+    if transfer_channel:
+        _watched_channels.add(transfer_channel)
+    if reservation_channels:
+        _watched_channels.update(reservation_channels)
+    if cancellation_channel:
+        _watched_channels.add(cancellation_channel)
+
     @app.message(re.compile(rf"^{re.escape(Command.SETTLEMENT_ISSUE)}$"))
     def handle_read(message, say):
         channel_id = message.get("channel")
@@ -259,17 +267,16 @@ def register_message_handlers(app: App, container: ServiceContainer) -> None:
             )
 
     @app.message("")
-    def handle_auto_detect_transfer(message, say):
+    def handle_watched_channel_message(message, say):
         channel_id = message.get("channel")
-        if not channel_id:
+        if not channel_id or channel_id not in _watched_channels:
             return
 
         logger.debug(
-            "message_received",
+            "watched_channel_message",
             channel=channel_id,
             ts=message.get("ts"),
             subtype=message.get("subtype"),
-            text_preview=message.get("text", "")[:30],
         )
 
         route = _route_channel_message(
