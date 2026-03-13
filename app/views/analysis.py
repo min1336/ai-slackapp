@@ -35,59 +35,36 @@ def build_analysis_result_blocks(result: AnalysisResult) -> list[dict]:
     """분석 결과를 Block Kit blocks로 변환한다."""
     blocks: list[dict] = []
 
-    if result.is_valid is True:
-        header = f":white_check_mark: *검증 완료* (신뢰도: {result.confidence:.0%})"
-    elif result.is_valid is False:
-        header = f":x: *부적합* (신뢰도: {result.confidence:.0%})"
-    else:
-        header = ":warning: *판단 불가*"
+    # 헤더: 문서유형
+    doc_type = result.document_type or "문서"
+    blocks.append(
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f":page_facing_up: *{doc_type}*"},
+        }
+    )
 
-    if result.document_type:
-        header += f"\n문서 유형: {result.document_type}"
-
-    blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": header}})
-
+    # 추출 정보: 2열 fields 그리드
     if result.extracted_fields:
-        fields_text = "\n".join(
-            f"- {k}: {v}" for k, v in result.extracted_fields.items() if v
-        )
-        # 환불 기한 계산
+        fields = []
+        for k, v in result.extracted_fields.items():
+            if v:
+                fields.append({"type": "mrkdwn", "text": f"*{k}*\n{v}"})
+        # 환불 기한
         cancel_date = result.extracted_fields.get("날짜", "")
         if cancel_date:
             deadline = _calc_refund_deadline(cancel_date)
             if deadline:
-                fields_text += f"\n- 환불 신청 기한: ~{deadline}"
-        if fields_text:
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": f"*추출 정보*\n{fields_text}"},
-                }
-            )
+                fields.append({"type": "mrkdwn", "text": f"*환불 기한*\n~{deadline}"})
+        if fields:
+            blocks.append({"type": "section", "fields": fields[:10]})
 
-    if result.mismatches:
-        mismatch_text = "\n".join(f"- {m}" for m in result.mismatches)
-        blocks.append(
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*불일치 항목*\n{mismatch_text}"},
-            }
-        )
-
-    if result.quality_issues:
-        issues_text = "\n".join(f"- {q}" for q in result.quality_issues)
-        blocks.append(
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*품질 이슈*\n{issues_text}"},
-            }
-        )
-
-    if result.reasoning:
+    # 요약
+    if result.summary:
         blocks.append(
             {
                 "type": "context",
-                "elements": [{"type": "mrkdwn", "text": result.reasoning[:300]}],
+                "elements": [{"type": "mrkdwn", "text": result.summary[:300]}],
             }
         )
 

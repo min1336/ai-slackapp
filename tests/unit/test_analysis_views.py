@@ -6,65 +6,80 @@ from app.models.analysis import AnalysisResult
 from app.views.analysis import _calc_refund_deadline, build_analysis_result_blocks
 
 
+def _extract_all_text(blocks: list[dict]) -> str:
+    """블록 내 모든 텍스트를 추출한다 (section text, fields, context)."""
+    parts = []
+    for b in blocks:
+        if "text" in b and isinstance(b["text"], dict):
+            parts.append(b["text"].get("text", ""))
+        for f in b.get("fields", []):
+            parts.append(f.get("text", ""))
+        for e in b.get("elements", []):
+            parts.append(e.get("text", ""))
+    return "\n".join(parts)
+
+
 class TestBuildAnalysisResultBlocks:
-    def test_valid_result_shows_checkmark(self):
+    def test_shows_document_type(self):
         result = AnalysisResult(
-            is_valid=True,
-            confidence=0.95,
-            document_type="결항확인서",
-            extracted_fields={"고객명": "홍길동", "예약번호": "R12345"},
-            reasoning="문서 형식 적합",
+            document_type="항공사 운항정보확인서",
+            extracted_fields={"날짜": "2025-12-13", "항공편": "KE123"},
+            summary="대한항공 KE123편 결항 확인.",
         )
         blocks = build_analysis_result_blocks(result)
-        text = blocks[0]["text"]["text"]
-        assert "검증 완료" in text
+        header = blocks[0]["text"]["text"]
+        assert "항공사 운항정보확인서" in header
 
-    def test_invalid_result_shows_mismatches(self):
+    def test_shows_extracted_fields_as_grid(self):
         result = AnalysisResult(
-            is_valid=False,
-            confidence=0.8,
-            document_type="결항확인서",
-            mismatches=["예약번호 불일치"],
-            reasoning="예약번호가 일치하지 않습니다.",
+            document_type="해운사 결항확인서",
+            extracted_fields={"고객명": "홍길동", "날짜": "2025-12-13"},
         )
         blocks = build_analysis_result_blocks(result)
-        text = blocks[0]["text"]["text"]
-        assert "부적합" in text
-        full_text = "".join(b.get("text", {}).get("text", "") for b in blocks)
-        assert "예약번호 불일치" in full_text
+        has_fields = any("fields" in b for b in blocks)
+        assert has_fields
+        all_text = _extract_all_text(blocks)
+        assert "홍길동" in all_text
 
-    def test_none_validity_shows_warning(self):
+    def test_shows_summary_in_context(self):
         result = AnalysisResult(
-            is_valid=None,
-            confidence=0.0,
-            document_type=None,
-            reasoning="분석 실패",
+            document_type="항공사 운항정보확인서",
+            summary="대한항공 KE123편이 기상악화로 결항.",
         )
         blocks = build_analysis_result_blocks(result)
-        text = blocks[0]["text"]["text"]
-        assert "분석 실패" in text or "판단 불가" in text
+        all_text = _extract_all_text(blocks)
+        assert "대한항공" in all_text
 
     def test_refund_deadline_shown_when_date_exists(self):
         result = AnalysisResult(
-            is_valid=True,
-            confidence=0.9,
             document_type="항공사 운항정보확인서",
             extracted_fields={"날짜": "2025-12-13", "항공편": "KE123"},
         )
         blocks = build_analysis_result_blocks(result)
-        full_text = "".join(b.get("text", {}).get("text", "") for b in blocks)
-        assert "환불 신청 기한: ~2026-01-12" in full_text
+        all_text = _extract_all_text(blocks)
+        assert "환불 기한" in all_text
+        assert "2026-01-12" in all_text
 
     def test_refund_deadline_not_shown_when_no_date(self):
         result = AnalysisResult(
-            is_valid=True,
-            confidence=0.9,
             document_type="결항확인서",
             extracted_fields={"고객명": "홍길동"},
         )
         blocks = build_analysis_result_blocks(result)
-        full_text = "".join(b.get("text", {}).get("text", "") for b in blocks)
-        assert "환불 신청 기한" not in full_text
+        all_text = _extract_all_text(blocks)
+        assert "환불 기한" not in all_text
+
+    def test_null_document_type_shows_default(self):
+        result = AnalysisResult(document_type=None, summary="내용 불명.")
+        blocks = build_analysis_result_blocks(result)
+        header = blocks[0]["text"]["text"]
+        assert "문서" in header
+
+    def test_empty_fields_no_grid(self):
+        result = AnalysisResult(document_type="기타", extracted_fields={})
+        blocks = build_analysis_result_blocks(result)
+        has_fields = any("fields" in b for b in blocks)
+        assert not has_fields
 
 
 class TestCalcRefundDeadline:

@@ -18,7 +18,6 @@ if TYPE_CHECKING:
         SurveySheetGateway,
     )
     from app.models import SurveySubmission
-    from app.models.analysis import AnalysisResult
     from app.services.image_analyzer import ImageAnalyzer
 
 logger = get_logger(__name__)
@@ -213,19 +212,9 @@ class CancellationImageService:
             logger.info(
                 "analysis_completed",
                 booking_key=submission.booking_key,
-                is_valid=result.is_valid,
-                confidence=result.confidence,
                 document_type=result.document_type,
-                mismatches=result.mismatches,
-                quality_issues=result.quality_issues,
-                reasoning=result.reasoning[:200] if result.reasoning else "",
+                summary=result.summary[:200] if result.summary else "",
                 extracted_fields=result.extracted_fields,
-            )
-            emoji = self._result_to_emoji(result)
-            self._writer.add_reaction(
-                channel=self._target_channel,
-                timestamp=thread_ts,
-                name=emoji,
             )
             blocks = build_analysis_result_blocks(result)
             self._writer.post_message(
@@ -238,26 +227,11 @@ class CancellationImageService:
             logger.info(
                 "analysis_report_posted",
                 booking_key=submission.booking_key,
-                emoji=emoji,
             )
         except Exception:
             logger.exception(
                 "image_analysis_failed", booking_key=submission.booking_key
             )
-            with suppress(SlackApiError):
-                self._writer.add_reaction(
-                    channel=self._target_channel,
-                    timestamp=thread_ts,
-                    name="warning",
-                )
-
-    @staticmethod
-    def _result_to_emoji(result: AnalysisResult) -> str:
-        if result.is_valid is True:
-            return "white_check_mark"
-        if result.is_valid is False:
-            return "x"
-        return "warning"
 
     @staticmethod
     def _convert_pdf_to_images(

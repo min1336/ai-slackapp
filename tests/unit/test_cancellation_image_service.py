@@ -379,31 +379,14 @@ class TestAnalysisIntegration:
         )
         return svc, writer, survey, gemini
 
-    def test_valid_analysis_adds_checkmark(self):
+    def test_analysis_posts_summary(self):
         svc, writer, survey, gemini = self._setup()
         svc.poll_and_upload()
 
-        assert any(r["name"] == "white_check_mark" for r in writer.reactions)
         assert len(writer.posted_messages) >= 1
         assert len(survey.analysis_results) == 1
 
-    def test_invalid_analysis_adds_x(self):
-        svc, writer, survey, _ = self._setup(
-            gemini_result={
-                "is_valid": False,
-                "confidence": 0.8,
-                "document_type": "결항확인서",
-                "extracted_fields": {},
-                "mismatches": ["예약번호 불일치"],
-                "quality_issues": [],
-                "reasoning": "불일치",
-            }
-        )
-        svc.poll_and_upload()
-
-        assert any(r["name"] == "x" for r in writer.reactions)
-
-    def test_analysis_failure_adds_warning_but_upload_succeeds(self):
+    def test_analysis_failure_still_uploads(self):
         survey = FakeSurveySheet()
         drive = FakeDrive()
         writer = FakeSlackWriter()
@@ -426,7 +409,6 @@ class TestAnalysisIntegration:
         svc.poll_and_upload()
 
         assert len(writer.uploaded_files) == 1
-        assert any(r["name"] == "warning" for r in writer.reactions)
         assert sub.submission_id in survey.processed_ids
 
     def test_no_analyzer_skips_analysis(self):
