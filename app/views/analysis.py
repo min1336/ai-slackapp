@@ -1,9 +1,34 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.analysis import AnalysisResult
+
+_REFUND_DEADLINE_DAYS = 30
+
+_DATE_FORMATS = ("%Y-%m-%d", "%Y.%m.%d", "%Y/%m/%d", "%Y년 %m월 %d일")
+
+
+def _parse_date(raw: str) -> datetime | None:
+    """다양한 형식의 날짜 문자열을 파싱한다."""
+    stripped = raw.strip()
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(stripped, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _calc_refund_deadline(date_str: str) -> str | None:
+    """결항 날짜에서 환불 기한(+30일)을 계산한다."""
+    dt = _parse_date(date_str)
+    if dt is None:
+        return None
+    deadline = dt + timedelta(days=_REFUND_DEADLINE_DAYS)
+    return deadline.strftime("%Y-%m-%d")
 
 
 def build_analysis_result_blocks(result: AnalysisResult) -> list[dict]:
@@ -26,6 +51,12 @@ def build_analysis_result_blocks(result: AnalysisResult) -> list[dict]:
         fields_text = "\n".join(
             f"- {k}: {v}" for k, v in result.extracted_fields.items() if v
         )
+        # 환불 기한 계산
+        cancel_date = result.extracted_fields.get("날짜", "")
+        if cancel_date:
+            deadline = _calc_refund_deadline(cancel_date)
+            if deadline:
+                fields_text += f"\n- 환불 신청 기한: ~{deadline}"
         if fields_text:
             blocks.append(
                 {

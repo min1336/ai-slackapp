@@ -28,6 +28,12 @@ class GeminiClient:
             contents.append(types.Part.from_bytes(data=img, mime_type="image/png"))
         contents.append(prompt)
 
+        logger.info(
+            "gemini_request_started",
+            model=self._model,
+            image_count=len(images),
+            prompt_length=len(prompt),
+        )
         last_error: Exception | None = None
         for attempt in range(_MAX_RETRIES + 1):
             try:
@@ -39,6 +45,11 @@ class GeminiClient:
                         response_mime_type="application/json",
                         temperature=0.1,
                     ),
+                )
+                logger.debug(
+                    "gemini_raw_text",
+                    text_length=len(response.text) if response.text else 0,
+                    text_preview=(response.text or "")[:500],
                 )
                 return json.loads(response.text)
             except (TimeoutError, ConnectionError) as e:

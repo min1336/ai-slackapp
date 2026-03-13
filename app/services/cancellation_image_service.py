@@ -86,6 +86,11 @@ class CancellationImageService:
                 submission_id=sub.submission_id,
             )
             return False
+        logger.debug(
+            "cancellation_thread_found",
+            booking_key=sub.booking_key,
+            thread_ts=thread_ts,
+        )
 
         folder_id = self._drive.find_folder(sub.folder_name)
         if not folder_id:
@@ -103,6 +108,13 @@ class CancellationImageService:
                 folder_name=sub.folder_name,
             )
             return False
+        logger.debug(
+            "cancellation_files_found",
+            booking_key=sub.booking_key,
+            file_count=len(files),
+            file_names=[f.name for f in files],
+            mime_types=[f.mime_type for f in files],
+        )
 
         # 운영현황 행 선점: 이미 존재하면 중복 처리 방지 (Slack 업로드/댓글 스킵)
         if not self._survey_sheet.write_formatted_row(sub):
@@ -111,6 +123,10 @@ class CancellationImageService:
                 booking_key=sub.booking_key,
             )
             return True
+        logger.debug(
+            "cancellation_formatted_row_created",
+            booking_key=sub.booking_key,
+        )
 
         uploaded = 0
         collected_images: list[bytes] = []
@@ -118,6 +134,12 @@ class CancellationImageService:
         for file in files:
             try:
                 content = self._drive.download_file(file.id)
+                logger.debug(
+                    "cancellation_file_downloaded",
+                    file_name=file.name,
+                    size=len(content),
+                    mime_type=file.mime_type,
+                )
                 if file.mime_type == "application/pdf":
                     images = self._convert_pdf_to_images(content, file.name)
                     logger.info(
@@ -181,7 +203,24 @@ class CancellationImageService:
         thread_ts: str,
     ) -> None:
         try:
+            logger.info(
+                "analysis_started",
+                booking_key=submission.booking_key,
+                image_count=len(image_data),
+                image_sizes=[len(img) for img in image_data],
+            )
             result = self._analyzer.analyze(image_data, submission)  # type: ignore[union-attr]
+            logger.info(
+                "analysis_completed",
+                booking_key=submission.booking_key,
+                is_valid=result.is_valid,
+                confidence=result.confidence,
+                document_type=result.document_type,
+                mismatches=result.mismatches,
+                quality_issues=result.quality_issues,
+                reasoning=result.reasoning[:200] if result.reasoning else "",
+                extracted_fields=result.extracted_fields,
+            )
             emoji = self._result_to_emoji(result)
             self._writer.add_reaction(
                 channel=self._target_channel,
@@ -196,6 +235,11 @@ class CancellationImageService:
                 blocks=blocks,
             )
             self._survey_sheet.write_analysis_result(submission.submission_id, result)
+            logger.info(
+                "analysis_report_posted",
+                booking_key=submission.booking_key,
+                emoji=emoji,
+            )
         except Exception:
             logger.exception(
                 "image_analysis_failed", booking_key=submission.booking_key

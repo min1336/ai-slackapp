@@ -90,3 +90,93 @@ class TestImageAnalyzerAnalyze:
         prompt = gemini.calls[0][1]
         assert "김철수" in prompt
         assert "R99999" in prompt
+
+    def test_airline_doc_without_booking_key_is_valid(self):
+        """항공사 운항정보확인서는 예약번호가 없어도 is_valid=True."""
+        response = {
+            "is_valid": True,
+            "confidence": 0.90,
+            "document_type": "항공사 운항정보확인서",
+            "extracted_fields": {
+                "고객명": "",
+                "예약번호": "",
+                "날짜": "2025-12-13",
+                "항공편": "KE123",
+                "결항사유": "기상악화",
+                "발급기관": "대한항공",
+            },
+            "mismatches": [],
+            "quality_issues": [],
+            "reasoning": "항공사 발급 문서로 고객 정보 미기재는 정상.",
+        }
+        gemini = FakeGeminiClient(result=response)
+        analyzer = ImageAnalyzer(gemini)
+        result = analyzer.analyze([b"fake-png"], _submission())
+        assert result.is_valid is True
+        assert result.document_type == "항공사 운항정보확인서"
+        assert result.mismatches == []
+
+    def test_airline_doc_without_customer_name_is_valid(self):
+        """항공사 운항정보확인서는 고객명이 없어도 is_valid=True."""
+        response = {
+            "is_valid": True,
+            "confidence": 0.88,
+            "document_type": "항공사 운항정보확인서",
+            "extracted_fields": {
+                "고객명": "",
+                "예약번호": "",
+                "날짜": "2025-12-13",
+                "항공편": "OZ456",
+                "결항사유": "운항 스케줄 변경",
+                "발급기관": "아시아나항공",
+            },
+            "mismatches": [],
+            "quality_issues": [],
+            "reasoning": "항공사 운항정보확인서 — 고객 정보 미기재 정상.",
+        }
+        gemini = FakeGeminiClient(result=response)
+        analyzer = ImageAnalyzer(gemini)
+        result = analyzer.analyze([b"fake-png"], _submission())
+        assert result.is_valid is True
+        assert result.mismatches == []
+
+    def test_maritime_doc_customer_name_mismatch_is_invalid(self):
+        """해운사 결항확인서는 고객명 불일치 시 is_valid=False."""
+        response = {
+            "is_valid": False,
+            "confidence": 0.85,
+            "document_type": "해운사 결항확인서",
+            "extracted_fields": {
+                "고객명": "김영희",
+                "예약번호": "R12345",
+                "날짜": "2025-12-13",
+                "항공편": "",
+                "결항사유": "태풍",
+                "발급기관": "한일고속",
+            },
+            "mismatches": ["고객명 불일치: 이미지(김영희) vs 제출(홍길동)"],
+            "quality_issues": [],
+            "reasoning": "고객명이 일치하지 않습니다.",
+        }
+        gemini = FakeGeminiClient(result=response)
+        analyzer = ImageAnalyzer(gemini)
+        result = analyzer.analyze([b"fake-png"], _submission())
+        assert result.is_valid is False
+        assert len(result.mismatches) == 1
+
+    def test_non_cancellation_doc_is_invalid(self):
+        """결항확인서가 아닌 문서는 is_valid=False."""
+        response = {
+            "is_valid": False,
+            "confidence": 0.92,
+            "document_type": "기타",
+            "extracted_fields": {},
+            "mismatches": [],
+            "quality_issues": [],
+            "reasoning": "결항확인서가 아닌 일반 영수증입니다.",
+        }
+        gemini = FakeGeminiClient(result=response)
+        analyzer = ImageAnalyzer(gemini)
+        result = analyzer.analyze([b"fake-png"], _submission())
+        assert result.is_valid is False
+        assert result.document_type == "기타"

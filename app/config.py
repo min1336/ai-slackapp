@@ -196,6 +196,7 @@ class CancellationDriveConfig(BaseModel):
 class CancellationAnalysisConfig(BaseModel):
     enabled: bool = False
     gemini_model: str = "gemini-2.5-flash"
+    openai_model: str = "gpt-4o-mini"
     timeout_seconds: int = 30
 
 
@@ -268,3 +269,19 @@ class GeminiProperties(BaseSettings):
 @lru_cache(maxsize=1)
 def get_gemini_settings() -> GeminiProperties:
     return GeminiProperties()
+
+
+class OpenAIProperties(BaseSettings):
+    api_key: str = ""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_prefix="OPENAI_",
+        extra="ignore",
+    )
+
+
+@lru_cache(maxsize=1)
+def get_openai_settings() -> OpenAIProperties:
+    return OpenAIProperties()

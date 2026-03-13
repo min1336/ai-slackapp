@@ -5,10 +5,17 @@ from typing import TYPE_CHECKING
 import gspread
 from google.oauth2.service_account import Credentials
 
-from app.config import get_app_config, get_gemini_settings, get_spreadsheet_settings
+from app.config import (
+    get_app_config,
+    get_gemini_settings,
+    get_openai_settings,
+    get_spreadsheet_settings,
+)
 from app.infrastructure.database import SessionFactory, get_session
 from app.infrastructure.drive_client import DriveImageClient
+from app.infrastructure.fallback_gateway import FallbackImageGateway
 from app.infrastructure.gemini_client import GeminiClient
+from app.infrastructure.openai_client import OpenAIImageClient
 from app.infrastructure.spreadsheet import SCOPES, SpreadsheetService
 from app.infrastructure.survey_sheet import SurveySheetReader
 from app.services.approval_service import ApprovalService
@@ -156,12 +163,23 @@ class ServiceContainer:
             if cancel_cfg.analysis.enabled:
                 gemini_settings = get_gemini_settings()
                 if gemini_settings.api_key:
-                    _gemini = GeminiClient(
+                    _gateway = GeminiClient(
                         api_key=gemini_settings.api_key,
                         model=cancel_cfg.analysis.gemini_model,
                         timeout=cancel_cfg.analysis.timeout_seconds,
                     )
-                    _analyzer = ImageAnalyzer(_gemini)
+                    openai_settings = get_openai_settings()
+                    if openai_settings.api_key:
+                        _fallback = OpenAIImageClient(
+                            api_key=openai_settings.api_key,
+                            model=cancel_cfg.analysis.openai_model,
+                            timeout=cancel_cfg.analysis.timeout_seconds,
+                        )
+                        _gateway = FallbackImageGateway(  # type: ignore[assignment]
+                            primary=_gateway,
+                            fallback=_fallback,
+                        )
+                    _analyzer = ImageAnalyzer(_gateway)
 
             self.cancellation_image = CancellationImageService(
                 survey_sheet=_survey,

@@ -309,6 +309,21 @@ class SurveySheetReader:
         if reason_col:
             ws.update_cell(row, reason_col, reasoning)
 
+        # 추출 필드 저장 (헤더가 있는 컬럼만)
+        extracted = result.extracted_fields or {}
+        _FIELD_HEADER_MAP = {
+            "문서유형": result.document_type or "",
+            "결항일자": extracted.get("날짜", ""),
+            "항공편/선편": extracted.get("항공편", ""),
+            "결항사유": extracted.get("결항사유", ""),
+            "발급기관": extracted.get("발급기관", ""),
+        }
+        header_col_map = {h: i for i, h in enumerate(headers, 1)}
+        for header_name, value in _FIELD_HEADER_MAP.items():
+            col = header_col_map.get(header_name)
+            if col and value:
+                ws.update_cell(row, col, str(value)[:100])
+
         logger.info(
             "analysis_result_written",
             submission_id=submission_id,
