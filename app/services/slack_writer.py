@@ -83,5 +83,18 @@ class SlackWriter:
             title=title or filename,
         )
 
+    def upload_files(
+        self,
+        *,
+        channel: str,
+        thread_ts: str,
+        file_uploads: list[dict[str, Any]],
+    ) -> None:
+        self._client.files_upload_v2(
+            channel=channel,
+            thread_ts=thread_ts,
+            file_uploads=file_uploads,
+        )
+
     def add_reaction(self, *, channel: str, timestamp: str, name: str) -> None:
         self._client.reactions_add(channel=channel, timestamp=timestamp, name=name)

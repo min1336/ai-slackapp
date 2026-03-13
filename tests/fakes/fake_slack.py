@@ -139,6 +139,24 @@ class FakeSlackWriter:
             }
         )
 
+    def upload_files(
+        self,
+        *,
+        channel: str,
+        thread_ts: str,
+        file_uploads: list[dict[str, Any]],
+    ) -> None:
+        for f in file_uploads:
+            self.uploaded_files.append(
+                {
+                    "channel": channel,
+                    "thread_ts": thread_ts,
+                    "content": f["content"],
+                    "filename": f["filename"],
+                    "title": f.get("title", ""),
+                }
+            )
+
     def add_reaction(self, *, channel: str, timestamp: str, name: str) -> None:
         self.reactions.append(
             {"channel": channel, "timestamp": timestamp, "name": name}

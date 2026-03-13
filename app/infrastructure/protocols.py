@@ -98,6 +98,14 @@ class SlackMessageWriter(Protocol):
         title: str = "",
     ) -> None: ...
 
+    def upload_files(
+        self,
+        *,
+        channel: str,
+        thread_ts: str,
+        file_uploads: list[dict[str, Any]],
+    ) -> None: ...
+
     def add_reaction(self, *, channel: str, timestamp: str, name: str) -> None: ...
 
 

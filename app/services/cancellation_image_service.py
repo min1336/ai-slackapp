@@ -127,8 +127,7 @@ class CancellationImageService:
             booking_key=sub.booking_key,
         )
 
-        uploaded = 0
-        collected_images: list[bytes] = []
+        downloads: list[tuple[str, bytes]] = []
         has_pdf = False
         for file in files:
             try:
@@ -147,34 +146,30 @@ class CancellationImageService:
                         pages=len(images),
                         booking_key=sub.booking_key,
                     )
-                    for img_name, img_bytes in images:
-                        self._writer.upload_file(
-                            channel=self._target_channel,
-                            thread_ts=thread_ts,
-                            content=img_bytes,
-                            filename=img_name,
-                        )
-                        collected_images.append(img_bytes)
-                        uploaded += 1
+                    downloads.extend(images)
                     has_pdf = True
                 else:
-                    self._writer.upload_file(
-                        channel=self._target_channel,
-                        thread_ts=thread_ts,
-                        content=content,
-                        filename=file.name,
-                    )
-                    collected_images.append(content)
-                    uploaded += 1
+                    downloads.append((file.name, content))
             except Exception:
                 logger.exception(
-                    "cancellation_upload_failed",
+                    "cancellation_download_failed",
                     file_name=file.name,
                     booking_key=sub.booking_key,
                 )
 
-        if uploaded == 0:
+        if not downloads:
             return False
+
+        self._writer.upload_files(
+            channel=self._target_channel,
+            thread_ts=thread_ts,
+            file_uploads=[
+                {"content": data, "filename": name, "title": name}
+                for name, data in downloads
+            ],
+        )
+        uploaded = len(downloads)
+        collected_images = [data for _, data in downloads]
 
         if has_pdf:
             with suppress(SlackApiError):
