@@ -1,15 +1,29 @@
 from __future__ import annotations
 
+import types
+
 import pymupdf
 
 from app.models import DriveFile, SurveySubmission
 from app.services.cancellation_image_service import CancellationImageService
+from app.services.cross_verifier import CrossVerifier
 from app.services.image_analyzer import ImageAnalyzer
 from tests.fakes.fake_gemini import FakeGeminiClient
 from tests.fakes.fake_slack import FakeSlackReader, FakeSlackWriter
 from tests.fakes.fake_survey import FakeSurveySheet
 
 TARGET_CH = "C-CANCEL"
+RESERVATION_CH = "C-RESERVE"
+
+SAMPLE_RESERVATION_MSG = """\
+[카모아 예약]
+    예약번호 : R12345
+    예약자명 : 홍길동
+    예약자연락처 : 010-1234-5678
+    예약기간 : 2026.2.27 (금) 오후 9시 00분 ~ 2026.3.2 (월) 오후 7시 30분 (2일 22시간 30분)
+    업체 : 패밀리렌트카 본사 [제주] - 입판가 정산
+<결제정보>
+    총 결제금액 : 185,704원"""
 
 
 class FakeDrive:
@@ -51,6 +65,8 @@ def _make_service(
     writer: FakeSlackWriter | None = None,
     reader: FakeSlackReader | None = None,
     analyzer: ImageAnalyzer | None = None,
+    cross_verifier: CrossVerifier | None = None,
+    reservation_channels: list[str] | None = None,
 ) -> CancellationImageService:
     return CancellationImageService(
         survey_sheet=survey or FakeSurveySheet(),
@@ -59,6 +75,8 @@ def _make_service(
         reader=reader or FakeSlackReader(),
         target_channel=TARGET_CH,
         analyzer=analyzer,
+        cross_verifier=cross_verifier,
+        reservation_channels=reservation_channels,
     )
 
 
@@ -436,3 +454,215 @@ class TestAnalysisIntegration:
             if r["name"] in ("white_check_mark", "x", "warning")
         ]
         assert len(analysis_emojis) == 0
+
+
+class TestCrossVerification:
+    """교차검증 통합 테스트: 분석 → 예약검색 → 교차비교 → 댓글 전체 체인."""
+
+    def _setup_full_chain(
+        self, *, gemini_result=None, reservation_msg=SAMPLE_RESERVATION_MSG
+    ):
+        """분석 + 교차검증 전체 체인 세팅 헬퍼."""
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient(result=gemini_result)
+        analyzer = ImageAnalyzer(gemini)
+        cross_verifier = CrossVerifier(gateway=gemini)
+
+        sub = _submission()
+        survey.submissions = [sub]
+
+        # 결항 채널 스레드 세팅
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        # 예약 채널 세팅
+        reader.messages_by_text[(RESERVATION_CH, sub.booking_key)] = "reserve-thread-1"
+        reader.parent_messages[(RESERVATION_CH, "reserve-thread-1")] = reservation_msg
+
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            cross_verifier=cross_verifier,
+            reservation_channels=[RESERVATION_CH],
+        )
+        return svc, writer, survey, gemini
+
+    def test_분석후_교차검증_실행(self):
+        """분석 완료 후 예약 메시지를 찾아 교차검증하고, 검증 결과를 스레드에 포스트한다."""
+        svc, writer, survey, _ = self._setup_full_chain()
+        svc.poll_and_upload()
+
+        # 분석 결과 댓글 (기존) + 교차검증 결과 댓글 = 최소 2개
+        assert len(writer.posted_messages) >= 2
+        # 교차검증 결과가 시트에 기록됨
+        assert len(survey.verification_results) == 1
+
+    def test_교차검증_verdict_포함_댓글(self):
+        """교차검증 결과 댓글에 verdict 관련 텍스트가 포함된다."""
+        svc, writer, survey, _ = self._setup_full_chain()
+        svc.poll_and_upload()
+
+        # 마지막 posted_message가 교차검증 결과
+        verification_msg = writer.posted_messages[-1]
+        assert verification_msg["thread_ts"] == "cancel-thread-1"
+        assert verification_msg["blocks"] is not None
+
+    def test_예약_스레드_없으면_보류_포스트(self):
+        """예약 채널에서 스레드를 못 찾으면 verdict='보류'로 포스트한다."""
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient()
+        analyzer = ImageAnalyzer(gemini)
+        cross_verifier = CrossVerifier(gateway=gemini)
+
+        sub = _submission()
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+        # 예약 채널에는 아무것도 세팅하지 않음 → 검색 실패
+
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            cross_verifier=cross_verifier,
+            reservation_channels=[RESERVATION_CH],
+        )
+        svc.poll_and_upload()
+
+        # 보류 결과가 기록됨
+        assert len(survey.verification_results) == 1
+        assert survey.verification_results[0][1].verdict == "보류"
+
+    def test_교차검증_실패해도_분석결과_유지(self):
+        """교차검증 중 예외가 발생해도 이미지 업로드 + 분석 결과는 유지된다."""
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient()
+        analyzer = ImageAnalyzer(gemini)
+        cross_verifier = CrossVerifier(gateway=gemini)
+
+        sub = _submission()
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            cross_verifier=cross_verifier,
+            reservation_channels=[RESERVATION_CH],
+        )
+
+        # _cross_verify_and_report가 예외를 던지도록 조작
+        def _boom(self_inner, *a, **kw):
+            raise RuntimeError("cross verify exploded")
+
+        svc._cross_verify_and_report = types.MethodType(_boom, svc)
+
+        svc.poll_and_upload()
+
+        # 이미지 업로드는 성공
+        assert len(writer.uploaded_files) == 1
+        # 분석 결과도 기록됨
+        assert len(survey.analysis_results) == 1
+        # submission은 처리 완료 마킹됨
+        assert sub.submission_id in survey.processed_ids
+
+    def test_cross_verifier_없으면_교차검증_스킵(self):
+        """cross_verifier=None이면 분석만 하고 교차검증은 실행하지 않는다."""
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient()
+        analyzer = ImageAnalyzer(gemini)
+
+        sub = _submission()
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        # cross_verifier=None → 교차검증 스킵
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            cross_verifier=None,
+        )
+        svc.poll_and_upload()
+
+        # 분석 결과만 포스트 (교차검증 댓글 없음)
+        assert len(writer.posted_messages) == 1
+        assert len(survey.verification_results) == 0
+
+    def test_여러_예약채널_순회_첫번째_발견시_사용(self):
+        """reservation_channels를 순회하다 첫 번째 매칭 채널에서 예약 데이터를 가져온다."""
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient()
+        analyzer = ImageAnalyzer(gemini)
+        cross_verifier = CrossVerifier(gateway=gemini)
+
+        sub = _submission()
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        # 첫 번째 채널에는 없고, 두 번째 채널에 있음
+        second_ch = "C-RESERVE-2"
+        reader.messages_by_text[(second_ch, sub.booking_key)] = "reserve-thread-2"
+        reader.parent_messages[(second_ch, "reserve-thread-2")] = SAMPLE_RESERVATION_MSG
+
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            cross_verifier=cross_verifier,
+            reservation_channels=[RESERVATION_CH, second_ch],
+        )
+        svc.poll_and_upload()
+
+        # 두 번째 채널에서 찾았으므로 교차검증 결과 존재
+        assert len(survey.verification_results) == 1

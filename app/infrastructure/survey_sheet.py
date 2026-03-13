@@ -11,7 +11,7 @@ from app.core import get_logger
 from app.models import SurveySubmission
 
 if TYPE_CHECKING:
-    from app.models.analysis import AnalysisResult
+    from app.models.analysis import AnalysisResult, CrossVerificationResult
 
 logger = get_logger(__name__)
 
@@ -308,4 +308,52 @@ class SurveySheetReader:
             "analysis_result_written",
             submission_id=submission_id,
             document_type=result.document_type,
+        )
+
+    def write_verification_result(
+        self, submission_id: str, result: CrossVerificationResult
+    ) -> None:
+        """운영현황 시트에 교차검증 결과를 기록한다."""
+        spreadsheet = self._get_client()
+        try:
+            ws = spreadsheet.worksheet(self._formatted_sheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            logger.info(
+                "verification_formatted_sheet_not_found",
+                sheet_name=self._formatted_sheet_name,
+            )
+            return
+        try:
+            cell = ws.find(submission_id)
+        except Exception as e:
+            if e.__class__.__name__ == "CellNotFound":
+                logger.info(
+                    "verification_result_row_not_found", submission_id=submission_id
+                )
+                return
+            raise
+
+        if cell is None:
+            logger.info(
+                "verification_result_row_not_found", submission_id=submission_id
+            )
+            return
+
+        row = cell.row
+        headers = ws.row_values(1)
+        header_col_map = {h: i for i, h in enumerate(headers, 1)}
+
+        field_map = {
+            "교차검증결과": result.verdict,
+            "교차검증사유": (result.reason or "")[:100],
+        }
+        for header_name, value in field_map.items():
+            col = header_col_map.get(header_name)
+            if col and value:
+                ws.update_cell(row, col, str(value)[:100])
+
+        logger.info(
+            "verification_result_written",
+            submission_id=submission_id,
+            verdict=result.verdict,
         )

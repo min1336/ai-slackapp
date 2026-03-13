@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass
@@ -20,6 +21,19 @@ class SurveySubmission:
     def folder_name(self) -> str:
         """Google Drive 폴더명: 성함_예약번호."""
         return f"{self.customer_name}_{self.booking_key}"
+
+
+@dataclass
+class ReservationData:
+    """예약 채널에서 수집한 예약 정보."""
+
+    booking_key: str = ""
+    customer_name: str = ""
+    phone: str = ""
+    rental_period_start: datetime | None = None
+    rental_period_end: datetime | None = None
+    company_name: str = ""
+    payment_amount: int | None = None
 
 
 @dataclass

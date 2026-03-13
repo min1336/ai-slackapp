@@ -8,7 +8,12 @@ import pymupdf
 from slack_sdk.errors import SlackApiError
 
 from app.core import get_logger
-from app.views.analysis import build_analysis_result_blocks
+from app.models.analysis import CrossVerificationResult
+from app.services.message_parser import parse_reservation_message
+from app.views.analysis import (
+    build_analysis_result_blocks,
+    build_cross_verification_blocks,
+)
 
 if TYPE_CHECKING:
     from app.infrastructure.protocols import (
@@ -18,6 +23,9 @@ if TYPE_CHECKING:
         SurveySheetGateway,
     )
     from app.models import SurveySubmission
+    from app.models.analysis import AnalysisResult
+    from app.models.cancellation import ReservationData
+    from app.services.cross_verifier import CrossVerifier
     from app.services.image_analyzer import ImageAnalyzer
 
 logger = get_logger(__name__)
@@ -36,6 +44,8 @@ class CancellationImageService:
         reader: SlackMessageReader,
         target_channel: str,
         analyzer: ImageAnalyzer | None = None,
+        cross_verifier: CrossVerifier | None = None,
+        reservation_channels: list[str] | None = None,
     ) -> None:
         self._survey_sheet = survey_sheet
         self._drive = drive
@@ -43,6 +53,8 @@ class CancellationImageService:
         self._reader = reader
         self._target_channel = target_channel
         self._analyzer = analyzer
+        self._cross_verifier = cross_verifier
+        self._reservation_channels = reservation_channels or []
 
     def poll_and_upload(self) -> int:
         """새 설문 응답을 폴링하고 이미지를 업로드한다. 미처리 건수를 반환."""
@@ -223,10 +235,63 @@ class CancellationImageService:
                 "analysis_report_posted",
                 booking_key=submission.booking_key,
             )
+            if self._cross_verifier:
+                try:
+                    self._cross_verify_and_report(result, submission, thread_ts)
+                except Exception:
+                    logger.exception(
+                        "cross_verification_failed",
+                        booking_key=submission.booking_key,
+                    )
         except Exception:
             logger.exception(
                 "image_analysis_failed", booking_key=submission.booking_key
             )
+
+    def _cross_verify_and_report(
+        self,
+        analysis_result: AnalysisResult,
+        submission: SurveySubmission,
+        thread_ts: str,
+    ) -> None:
+        """예약 데이터를 찾아 교차검증하고 결과를 스레드에 포스트한다."""
+        reservation_data = self._find_reservation_data(submission.booking_key)
+
+        if reservation_data is None:
+            result = CrossVerificationResult(
+                verdict="보류",
+                reason="예약 스레드를 찾지 못했습니다.",
+            )
+        else:
+            result = self._cross_verifier.verify(  # type: ignore[union-attr]
+                analysis_result, reservation_data, submission
+            )
+
+        blocks = build_cross_verification_blocks(result)
+        self._writer.post_message(
+            channel=self._target_channel,
+            text=f"교차검증: {result.verdict}",
+            thread_ts=thread_ts,
+            blocks=blocks,
+        )
+        self._survey_sheet.write_verification_result(submission.submission_id, result)
+        logger.info(
+            "cross_verification_posted",
+            booking_key=submission.booking_key,
+            verdict=result.verdict,
+        )
+
+    def _find_reservation_data(self, booking_key: str) -> ReservationData | None:
+        """예약 채널을 순회하며 예약 메시지를 찾아 파싱한다."""
+        for channel in self._reservation_channels:
+            found_ts = self._reader.find_message_by_text(channel, booking_key)
+            if not found_ts:
+                continue
+            parent_text = self._reader.get_parent_message(channel, found_ts)
+            if not parent_text:
+                continue
+            return parse_reservation_message(parent_text)
+        return None
 
     @staticmethod
     def _convert_pdf_to_images(

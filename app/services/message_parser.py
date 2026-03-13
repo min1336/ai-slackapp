@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, field_validator
 
 from app.constants import TransferMessageField
+from app.models.cancellation import ReservationData
 
 
 class BookingMessageField(StrEnum):
@@ -218,3 +220,89 @@ def parse_settlement_message(text: str) -> ParsedSettlement:
                     break
 
     return ParsedSettlement(**data)
+
+
+# 예약 메시지 필드 매핑: 한글 키 → (ReservationData 필드명, 변환 함수 or None)
+_RESERVATION_FIELD_MAP: dict[str, str] = {
+    "예약번호": "booking_key",
+    "예약자명": "customer_name",
+    "예약자연락처": "phone",
+    "업체": "company_name",
+    "총 결제금액": "payment_amount",
+    "예약기간": "rental_period",
+}
+
+_DATE_PATTERN = re.compile(r"(\d{4})\.(\d{1,2})\.(\d{1,2})")
+_TIME_PATTERN = re.compile(r"(오전|오후)\s*(\d{1,2})시\s*(\d{1,2})분")
+
+
+def _parse_rental_period(raw: str) -> tuple[datetime | None, datetime | None]:
+    """예약기간 문자열에서 시작/종료 datetime을 추출한다."""
+    if not raw or "~" not in raw:
+        return None, None
+
+    tilde_idx = raw.index("~")
+    left = raw[:tilde_idx]
+    right = raw[tilde_idx + 1 :]
+
+    # 괄호 안 trailing info (e.g. "(2일 22시간 30분)") 제거: 날짜+시간 파트만 사용
+    # 오른쪽 파트에서 두 번째 괄호 이후 제거 (첫 번째는 요일)
+    right = re.sub(r"\(\d+일.*?\)", "", right)
+
+    def _parse_part(part: str) -> datetime | None:
+        date_m = _DATE_PATTERN.search(part)
+        if not date_m:
+            return None
+        year = int(date_m.group(1))
+        month = int(date_m.group(2))
+        day = int(date_m.group(3))
+        time_m = _TIME_PATTERN.search(part)
+        if not time_m:
+            return datetime(year, month, day, 0, 0)
+        ampm, hour, minute = time_m.group(1), int(time_m.group(2)), int(time_m.group(3))
+        if ampm == "오전":
+            hour = 0 if hour == 12 else hour
+        else:  # 오후
+            hour = hour if hour == 12 else hour + 12
+        return datetime(year, month, day, hour, minute)
+
+    return _parse_part(left), _parse_part(right)
+
+
+def parse_reservation_message(text: str) -> ReservationData:
+    """예약 채널 메시지에서 예약 정보를 추출한다."""
+    result = ReservationData()
+
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+
+        match = re.match(r"^([가-힣\s]+?)\s*[:：]\s*(.+)$", line)
+        if not match:
+            continue
+
+        korean_key = match.group(1).strip()
+        value = match.group(2).strip()
+
+        field = _RESERVATION_FIELD_MAP.get(korean_key)
+        if not field:
+            continue
+
+        if field == "booking_key":
+            result.booking_key = _strip_value(value)
+        elif field == "customer_name":
+            result.customer_name = _clean_name(value)
+        elif field == "phone":
+            result.phone = _strip_value(value)
+        elif field == "company_name":
+            result.company_name = _strip_value(value)
+        elif field == "payment_amount":
+            digits = _digits_only(value)
+            is_numeric = digits.lstrip("-").isdigit()
+            result.payment_amount = int(digits) if is_numeric else None
+        elif field == "rental_period":
+            start, end = _parse_rental_period(value)
+            result.rental_period_start, result.rental_period_end = start, end
+
+    return result

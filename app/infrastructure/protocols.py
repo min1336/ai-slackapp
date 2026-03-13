@@ -4,7 +4,13 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from app.models import AnalysisResult, DriveFile, SettlementRow, SurveySubmission
+    from app.models import (
+        AnalysisResult,
+        CrossVerificationResult,
+        DriveFile,
+        SettlementRow,
+        SurveySubmission,
+    )
 
 
 @runtime_checkable
@@ -116,6 +122,10 @@ class SurveySheetGateway(Protocol):
     def write_formatted_row(self, submission: SurveySubmission) -> bool: ...
     def write_analysis_result(
         self, submission_id: str, result: AnalysisResult
+    ) -> None: ...
+
+    def write_verification_result(
+        self, submission_id: str, result: CrossVerificationResult
     ) -> None: ...
 
 
