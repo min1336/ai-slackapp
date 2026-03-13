@@ -11,7 +11,7 @@ from app.constants import (
     LabelText,
     find_option_by_text,
 )
-from app.constants.options import SlackOption
+from app.constants.options import Description, IssueType, SlackOption
 from app.views.blocks import (
     Block,
     Blocks,
@@ -177,9 +177,11 @@ def build_registration_modal(
     custom_description: str = "",
 ) -> dict:
     """통합 등록 모달 빌더 (일반 정산 + Transfer 통합)"""
-    # 동적 폼: 텍스트 입력 중이면 셀렉트 initial 설정 안함
+    # 동적 폼: "기타" 모드일 때 셀렉트에 "기타" 선택됨 표시
     issue_type_initial = None
-    if not show_issue_type_text and issue_type:
+    if show_issue_type_text:
+        issue_type_initial = IssueType.OTHER.to_slack_option()
+    elif issue_type:
         issue_type_initial = find_option_by_text(ISSUE_TYPE_OPTIONS, issue_type)
 
     seller_channel_initial = (
@@ -189,7 +191,9 @@ def build_registration_modal(
     )
 
     description_initial = None
-    if not show_description_text and description:
+    if show_description_text:
+        description_initial = Description.OTHER.to_slack_option()
+    elif description:
         description_initial = find_option_by_text(DESCRIPTION_OPTIONS, description)
 
     blocks = _build_booking_header_blocks(user_name)
@@ -223,27 +227,26 @@ def build_registration_modal(
         initial_date=settlement_day,
     )
 
-    # 동적 폼: 이슈사항 - "기타" 선택 시 텍스트 입력으로 전환
+    # 동적 폼: 이슈사항 - 셀렉트 항상 렌더링, "기타" 선택 시 텍스트 입력 추가
+    _add_select_with_initial(
+        blocks=blocks,
+        block_id=BlockId.ISSUE_TYPE_BLOCK,
+        label_text=LabelText.ISSUE_TYPE,
+        action_id=ActionId.ISSUE_TYPE_INPUT,
+        placeholder_text=CommonText.SELECT,
+        options=ISSUE_TYPE_OPTIONS,
+        initial_option=issue_type_initial,
+        is_required=True,
+        dispatch_action=True,
+    )
     if show_issue_type_text:
         _add_text_input(
             blocks=blocks,
             block_id=BlockId.ISSUE_TYPE_TEXT_BLOCK,
-            label_text=f"{LabelText.ISSUE_TYPE}{CommonText.REQUIRED}",
+            label_text=f"{LabelText.ISSUE_TYPE} - 직접 입력{CommonText.REQUIRED}",
             action_id=ActionId.ISSUE_TYPE_TEXT_INPUT,
             initial_value=custom_issue_type,
             is_optional=False,
-        )
-    else:
-        _add_select_with_initial(
-            blocks=blocks,
-            block_id=BlockId.ISSUE_TYPE_BLOCK,
-            label_text=LabelText.ISSUE_TYPE,
-            action_id=ActionId.ISSUE_TYPE_INPUT,
-            placeholder_text=CommonText.SELECT,
-            options=ISSUE_TYPE_OPTIONS,
-            initial_option=issue_type_initial,
-            is_required=True,
-            dispatch_action=True,
         )
 
     _add_text_inputs(
@@ -298,27 +301,26 @@ def build_registration_modal(
         is_required=True,
     )
 
-    # 동적 폼: 내용 - "기타" 선택 시 텍스트 입력으로 전환
+    # 동적 폼: 내용 - 셀렉트 항상 렌더링, "기타" 선택 시 텍스트 입력 추가
+    _add_select_with_initial(
+        blocks=blocks,
+        block_id=BlockId.DESCRIPTION_BLOCK,
+        label_text=LabelText.DESCRIPTION,
+        action_id=ActionId.DESCRIPTION_INPUT,
+        placeholder_text=CommonText.SELECT,
+        options=DESCRIPTION_OPTIONS,
+        initial_option=description_initial,
+        is_required=True,
+        dispatch_action=True,
+    )
     if show_description_text:
         _add_text_input(
             blocks=blocks,
             block_id=BlockId.DESCRIPTION_TEXT_BLOCK,
-            label_text=f"{LabelText.DESCRIPTION}{CommonText.REQUIRED}",
+            label_text=f"{LabelText.DESCRIPTION} - 직접 입력{CommonText.REQUIRED}",
             action_id=ActionId.DESCRIPTION_TEXT_INPUT,
             initial_value=custom_description,
             is_optional=False,
-        )
-    else:
-        _add_select_with_initial(
-            blocks=blocks,
-            block_id=BlockId.DESCRIPTION_BLOCK,
-            label_text=LabelText.DESCRIPTION,
-            action_id=ActionId.DESCRIPTION_INPUT,
-            placeholder_text=CommonText.SELECT,
-            options=DESCRIPTION_OPTIONS,
-            initial_option=description_initial,
-            is_required=True,
-            dispatch_action=True,
         )
 
     # 비고 필드 (선택 입력, multiline)

@@ -15,7 +15,6 @@ class SlackOption(TypedDict):
 
 
 class IssueType(StrEnum):
-    OTHER = "기타(직접입력)"
     IGNORE_SETTLEMENT = "정산제외"
     CANCEL_CHARGE_FEE = "취소수수료"
     COST_CHANGED = "금액변경"
@@ -23,7 +22,7 @@ class IssueType(StrEnum):
     ADD_SETTLEMENT = "정산추가"
     EARLY_RETURN_BEFORE = "조기반납(전)"
     EARLY_RETURN_AFTER = "조기반납(후)"
-    ETC = "기타"
+    OTHER = "기타"
 
     def to_slack_option(self) -> SlackOption:
         return {
@@ -52,7 +51,6 @@ class SellerChannel(StrEnum):
 
 
 class Description(StrEnum):
-    OTHER = "기타(직접입력)"
     EXCLUDE_UNABLE_DISPATCH = "배차불가로 인한 정산제외 (정산 100% 제외)"
     EXCLUDE_FLIGHT_CANCEL = "결항으로 인한 정산제외 (정산 100% 제외)"
     EXCLUDE_PARTNER = "파트너사 협의 후 정산제외 (정산 100% 제외)"
@@ -80,6 +78,7 @@ class Description(StrEnum):
     INBOUND_AS_IS = "인바운드 (정산기준금액 그대로 정산 필요)"
     API_ERROR_CANCEL = "api 통신오류 건 수기 취소 (전액환불 구간)"
     MONTHLY_SUB_MANUAL = "월구독 수기결제 진행 된 건 정산 누락 방지 차 기재"
+    OTHER = "기타"
 
     def to_slack_option(self) -> SlackOption:
         return {

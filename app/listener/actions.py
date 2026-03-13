@@ -225,13 +225,17 @@ def _handle_dynamic_form_change(body: dict, client) -> None:
         customer_name=state["customer_name"] or metadata.customer_name,
         metadata=private_metadata,
         settlement_day=state["settlement_day"],
-        issue_type="" if show_issue_type_text else state["issue_type"],
+        issue_type=(
+            IssueType.OTHER.value if show_issue_type_text else state["issue_type"]
+        ),
         company_sub_name=state["company_sub_name"],
         settlement_cost=state["settlement_cost"],
         carmore_cost=state["carmore_cost"],
         user_refund_cost=state["user_refund_cost"],
         seller_channel=state["seller_channel"],
-        description=("" if show_description_text else state["description"]),
+        description=(
+            Description.OTHER.value if show_description_text else state["description"]
+        ),
         note=state["note"],
         show_issue_type_text=show_issue_type_text,
         show_description_text=show_description_text,

@@ -139,8 +139,8 @@ class TestModalBuilders:
         assert note_input["element"]["initial_value"] == "테스트 비고"
         assert note_input["element"]["multiline"] is True
 
-    def test_동적폼_기타_선택시_텍스트_입력_블록으로_전환(self):
-        """show_issue_type_text=True일 때 텍스트 입력 블록 렌더링"""
+    def test_동적폼_기타_선택시_셀렉트_유지_및_텍스트_입력_추가(self):
+        """show_issue_type_text=True일 때 셀렉트 유지 + 텍스트 입력 블록 추가"""
         modal = build_registration_modal(
             user_name="작성자",
             booking_key="BK-1",
@@ -151,7 +151,22 @@ class TestModalBuilders:
             custom_issue_type="커스텀 이슈",
         )
 
-        # 텍스트 입력 블록이 있어야 함
+        # 셀렉트 블록이 유지되어야 함
+        select_block = next(
+            (
+                block
+                for block in modal["blocks"]
+                if block.get("block_id") == BlockId.ISSUE_TYPE_BLOCK
+            ),
+            None,
+        )
+        assert select_block is not None
+        assert select_block["element"]["type"] == "static_select"
+        # 셀렉트의 initial_option이 "기타"여야 함
+        initial_text = select_block["element"]["initial_option"]["text"]["text"]
+        assert initial_text == IssueType.OTHER.value
+
+        # 텍스트 입력 블록도 있어야 함
         text_input = next(
             (
                 block
@@ -163,17 +178,6 @@ class TestModalBuilders:
         assert text_input is not None
         assert text_input["element"]["type"] == "plain_text_input"
         assert text_input["element"]["initial_value"] == "커스텀 이슈"
-
-        # 셀렉트 블록이 없어야 함
-        select_block = next(
-            (
-                block
-                for block in modal["blocks"]
-                if block.get("block_id") == BlockId.ISSUE_TYPE_BLOCK
-            ),
-            None,
-        )
-        assert select_block is None
 
 
 class TestApprovalRequestMessageWithNote:
