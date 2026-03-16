@@ -134,7 +134,7 @@ def main():
     database = get_database_settings()
     if database.is_configured:
         container.sync_service.recover_stale_sync_records()
-        container.discovery.backfill_reservation_threads(days=30)
+        container.discovery.backfill_reservation_threads(days=None, max_pages=500)
         _start_sync_worker(container.sync_service, app_config.settlement.sync_schedule)
     else:
         logger.warning(

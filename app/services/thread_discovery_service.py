@@ -91,19 +91,28 @@ class ThreadDiscoveryService:
             thread_ts=thread_ts,
         )
 
-    def backfill_reservation_threads(self, days: int = 7) -> int:
-        """예약 채널 목록을 순차 스캔하여 ThreadReference DB를 채운다."""
+    def backfill_reservation_threads(
+        self, days: int | None = 7, *, max_pages: int = 10
+    ) -> int:
+        """예약 채널 목록을 순차 스캔하여 ThreadReference DB를 채운다.
+
+        Args:
+            days: 스캔할 기간. None이면 전체 히스토리.
+            max_pages: 채널당 최대 페이지 수 (1페이지 = 200메시지).
+        """
         if not self._reservation_channels:
             logger.warning("backfill_skipped_no_channel")
             return 0
 
-        oldest = time.time() - (days * 86400)
+        oldest = 0.0 if days is None else time.time() - (days * 86400)
         saved = 0
         scanned = 0
 
         for ch in self._reservation_channels:
             try:
-                messages = self._reader.list_channel_messages(ch, oldest=oldest)
+                messages = self._reader.list_channel_messages(
+                    ch, oldest=oldest, max_pages=max_pages
+                )
                 for msg in messages:
                     scanned += 1
                     text = msg.get("text", "")

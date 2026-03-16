@@ -385,7 +385,7 @@ class CancellationImageService:
     def _search_reservation_channels(
         self, search_text: str
     ) -> ReservationLocation | None:
-        """DB 캐시 → Slack API 폴백으로 예약 스레드를 찾는다."""
+        """DB 캐시 → conversations.history 폴백으로 예약 스레드를 찾는다."""
         # Stage 1: DB lookup
         if self._thread_ref_store:
             location = self._thread_ref_store.get_by_booking_key(search_text)
@@ -400,22 +400,32 @@ class CancellationImageService:
                         thread_ts=location.thread_ts,
                     )
 
-        # Stage 2: Slack API fallback
+        # Stage 2: conversations.history 폴백 (최근 메시지 순차 스캔)
         for channel in self._reservation_channels:
-            found_ts = self._reader.find_message_by_text(channel, search_text)
+            found_ts = self._reader.find_message_by_text(
+                channel, search_text, max_pages=50
+            )
             if not found_ts:
                 continue
-            parent_text = self._reader.get_parent_message(channel, found_ts)
-            if not parent_text:
-                continue
-            if self._thread_ref_store:
-                self._thread_ref_store.save(search_text, channel, found_ts)
-            return ReservationLocation(
-                data=parse_reservation_message(parent_text),
-                channel=channel,
-                thread_ts=found_ts,
-            )
+            loc = self._build_location(search_text, channel, found_ts)
+            if loc:
+                return loc
         return None
+
+    def _build_location(
+        self, search_text: str, channel: str, found_ts: str
+    ) -> ReservationLocation | None:
+        """채널+ts에서 parent 메시지를 읽어 ReservationLocation을 생성한다."""
+        parent_text = self._reader.get_parent_message(channel, found_ts)
+        if not parent_text:
+            return None
+        if self._thread_ref_store:
+            self._thread_ref_store.save(search_text, channel, found_ts)
+        return ReservationLocation(
+            data=parse_reservation_message(parent_text),
+            channel=channel,
+            thread_ts=found_ts,
+        )
 
     @staticmethod
     def _convert_pdf_to_images(

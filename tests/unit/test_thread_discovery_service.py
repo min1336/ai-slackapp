@@ -232,6 +232,28 @@ class TestBackfillReservationThreads:
 
         assert saved == 0
 
+    def test_days_None이면_oldest_0으로_전체_히스토리_스캔한다(
+        self, fake_db, fake_reader, service
+    ):
+        fake_reader.channel_messages["C_ISSUE"] = [
+            {"text": "예약번호 : BK-OLD\n업체명 : 오래전", "ts": "10.010"},
+        ]
+        captured: dict = {}
+        original = fake_reader.list_channel_messages
+
+        def _capture(channel_id, *, oldest=0, max_pages=10):
+            captured["oldest"] = oldest
+            captured["max_pages"] = max_pages
+            return original(channel_id, oldest=oldest, max_pages=max_pages)
+
+        fake_reader.list_channel_messages = _capture
+
+        saved = service.backfill_reservation_threads(days=None, max_pages=500)
+
+        assert saved == 1
+        assert captured["oldest"] == 0.0
+        assert captured["max_pages"] == 500
+
     def test_채널_미설정시_0_반환(self, store, fake_reader):
         svc = ThreadDiscoveryService(store, fake_reader, reservation_channels=[])
 
