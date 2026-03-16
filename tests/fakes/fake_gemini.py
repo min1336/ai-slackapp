@@ -6,7 +6,7 @@ from typing import Any
 class FakeGeminiClient:
     """ImageAnalysisGateway Protocol 호환 Fake."""
 
-    def __init__(self, result: dict[str, Any] | Exception | None = None) -> None:
+    def __init__(self, result: dict[str, Any] | list | Exception | None = None) -> None:
         self.result = result
         self.calls: list[tuple[list[bytes], str]] = []
 

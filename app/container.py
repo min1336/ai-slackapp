@@ -11,6 +11,7 @@ from app.config import (
     get_openai_settings,
     get_spreadsheet_settings,
 )
+from app.core import get_logger
 from app.infrastructure.database import SessionFactory, get_session
 from app.infrastructure.drive_client import DriveImageClient
 from app.infrastructure.fallback_gateway import FallbackImageGateway
@@ -34,6 +35,8 @@ from app.services.sync_service import SyncService
 from app.services.thread_discovery_service import ThreadDiscoveryService
 from app.services.thread_reference_store import ThreadReferenceStore
 from app.services.transfer_lifecycle_service import TransferLifecycleService
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from slack_sdk import WebClient
@@ -186,6 +189,25 @@ class ServiceContainer:
             _cross_verifier = None
             if cancel_cfg.analysis.enabled and _analyzer is not None:
                 _cross_verifier = CrossVerifier(gateway=_gateway)
+
+            if _analyzer:
+                logger.info(
+                    "cancellation_analyzer_ready",
+                    model=cancel_cfg.analysis.gemini_model,
+                    gateway_type=type(_gateway).__name__,
+                    has_cross_verifier=_cross_verifier is not None,
+                )
+            elif not cancel_cfg.analysis.enabled:
+                logger.info(
+                    "cancellation_analyzer_disabled",
+                    reason="analysis.enabled=false",
+                )
+            else:
+                logger.warning(
+                    "cancellation_analyzer_disabled",
+                    reason="gemini_api_key_missing",
+                    analysis_enabled=True,
+                )
 
             self.cancellation_image = CancellationImageService(
                 survey_sheet=_survey,
