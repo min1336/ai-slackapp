@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import atexit
 import os
 import signal
 from datetime import datetime
-from pathlib import Path
 from threading import Event, Thread
 
 from croniter import croniter
@@ -72,37 +70,6 @@ def _start_sync_worker(sync_service: SyncService, cron_expr: str) -> None:
     Thread(target=run, daemon=True).start()
 
 
-_PID_FILE = Path(__file__).parent.parent / ".pid"
-
-
-def _kill_previous_instance() -> None:
-    """이전 인스턴스가 실행 중이면 종료한다."""
-    if not _PID_FILE.exists():
-        return
-
-    try:
-        old_pid = int(_PID_FILE.read_text().strip())
-    except (ValueError, OSError):
-        _PID_FILE.unlink(missing_ok=True)
-        return
-
-    if old_pid == os.getpid():
-        return
-
-    try:
-        os.kill(old_pid, signal.SIGTERM)
-        logger.info("previous_instance_killed", pid=old_pid)
-    except ProcessLookupError:
-        pass  # 이미 종료됨
-    finally:
-        _PID_FILE.unlink(missing_ok=True)
-
-
-def _write_pid() -> None:
-    _PID_FILE.write_text(str(os.getpid()))
-    atexit.register(lambda: _PID_FILE.unlink(missing_ok=True))
-
-
 def _handle_shutdown(signum: int, frame) -> None:
     """SIGTERM/SIGINT 핸들러 - graceful shutdown 시작."""
     sig_name = signal.Signals(signum).name
@@ -111,10 +78,6 @@ def _handle_shutdown(signum: int, frame) -> None:
 
 
 def main():
-    # 이전 인스턴스 정리 + PID 기록
-    _kill_previous_instance()
-    _write_pid()
-
     # 시그널 핸들러 등록
     signal.signal(signal.SIGTERM, _handle_shutdown)
     signal.signal(signal.SIGINT, _handle_shutdown)
