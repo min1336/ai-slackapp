@@ -109,10 +109,13 @@ listener/ (Thin Controller)   ← Slack 이벤트 수신, 파싱 → container �
 container.py (Composition Root) ← ServiceContainer: 모든 서비스 DI 와이어링
     ↓
 services/ (Orchestrators)     ← 워크플로우 조합 (컴포넌트 호출)
-    ├── settlement_decision_service.py   ← 승인/반려 결정
+    ├── approval_service.py              ← 승인 결정
+    ├── rejection_service.py             ← 반려 결정
     ├── settlement_registration_service.py ← 등록 워크플로우
     ├── thread_discovery_service.py      ← 스레드 탐색 (DB→Slack 폴백)
-    └── sync_service.py                  ← 배치 동기화
+    ├── sync_service.py                  ← 배치 동기화
+    ├── cancellation_image_service.py    ← 결항확인서 이미지 검증 워크플로우
+    └── transfer_lifecycle_service.py    ← 이관 라이프사이클
     ↓
 services/ (Components)        ← 단일 책임 컴포넌트
     ├── slack_reader.py       ← Reader: Slack 정보 조회
@@ -120,15 +123,25 @@ services/ (Components)        ← 단일 책임 컴포넌트
     ├── settlement_writer.py  ← Writer: 정산 검증+저장
     ├── sync_processor.py     ← Processor: DB→Sheets 즉시 동기화
     ├── thread_reference_store.py ← Store: 스레드 참조 CRUD
-    └── message_parser.py     ← Parser: 텍스트 파싱 (순수 함수)
+    ├── message_parser.py     ← Parser: 텍스트 파싱 (순수 함수)
+    ├── image_analyzer.py     ← Analyzer: AI 이미지 분석 (Gemini/GPT)
+    └── cross_verifier.py     ← Verifier: 예약 데이터 교차검증
     ↓
-infrastructure/               ← 외부 시스템 통신 (Slack API, Google Sheets)
-    ├── protocols.py          ← Protocol 인터페이스 (SlackMessageReader, SlackMessageWriter, SpreadsheetGateway)
+infrastructure/               ← 외부 시스템 통신 (Slack API, Google Sheets, AI API)
+    ├── protocols.py          ← Protocol 인터페이스 (SlackMessageReader/Writer, SpreadsheetGateway, SurveySheetGateway, DriveImageGateway, ImageAnalysisGateway)
     ├── slack_client.py       ← Raw Slack API 래퍼
     ├── database/             ← SQLAlchemy, Repository, SessionFactory
-    └── spreadsheet/          ← gspread
+    ├── spreadsheet/          ← gspread (정산 시트)
+    ├── survey_sheet.py       ← gspread (결항 설문 시트, SurveySheetGateway)
+    ├── gemini_client.py      ← Gemini Flash API (ImageAnalysisGateway)
+    ├── openai_client.py      ← GPT-4o-mini Vision (ImageAnalysisGateway)
+    ├── fallback_gateway.py   ← Primary/Fallback 이미지 분석 전환
+    └── drive_client.py       ← Google Drive 이미지 다운로드 (DriveImageGateway)
     ↓
 models/                       ← 모든 레이어에서 import 가능
+    ├── settlement.py         ← 정산 도메인 (SettlementData, SettlementRow 등)
+    ├── analysis.py           ← 분석 결과 (AnalysisResult, CrossVerificationResult)
+    └── cancellation.py       ← 결항 도메인 (SurveySubmission, ReservationData, DriveFile)
 views/                        ← Slack Block Kit JSON 생성 (데이터 가공 금지)
 core/                         ← 공통 유틸 (logger.py: structlog 설정)
 ```
@@ -155,7 +168,14 @@ service = ThreadDiscoveryService(store, FakeSlackReader())
 ## 설정 구조
 
 - `.env`: Slack 토큰, Google 자격 증명, DB 연결 정보 (Pydantic Settings로 로드)
-- `config.yaml`: 승인자 목록, 스프레드시트 ID, 채널 ID
+- `config.{env}.yaml`: 환경별 설정 (`config.dev.yaml`, `config.prod.yaml`). `ENVIRONMENT` 환경변수로 선택 (기본: `dev`)
+  - `settlement`: 승인자 목록, 스프레드시트 ID, 채널 ID
+  - `cancellation`: 결항 검증 대상 채널, Drive 폴더, 설문 시트, 분석 모델 설정
+
+**결항 분석 환경변수** (`.env`, 선택):
+- `GEMINI_API_KEY`: Gemini Flash API (primary 분석)
+- `OPENAI_API_KEY`: GPT-4o-mini Vision (fallback 분석)
+- 둘 다 없으면 이미지 분석 비활성, 이미지 업로드만 수행
 
 ## 데이터베이스
 
@@ -206,6 +226,7 @@ uv run alembic check
 
 1. **정산 이슈**: 스레드에서 `!정산` 명령 → 원본 메시지 파싱 → 모달 → 승인 요청 → 시트 저장
 2. **이관 예약**: 이관 채널 메시지 자동 감지 → 파싱 → 예약 채널의 기존 정산이슈 스레드 탐색(DB→Slack API 폴백) → 해당 스레드에 포스트 → 이관 후 예약번호 체인 저장
+3. **결항확인서 검증**: SurveySheet 폴링 → Drive 이미지 다운로드 → Gemini(primary)/GPT(fallback) 분석 → 예약 데이터 교차검증(승인/반려/보류) → 대상 채널에 결과 포스팅 + 시트 기록
 
 ## 로깅 (structlog)
 
@@ -308,6 +329,8 @@ except SlackApiError:
   - `fake_database.py` — 인메모리 SQLite `FakeDatabase`. `fake_db.get_session`을 `SessionFactory`로 주입
   - `fake_spreadsheet.py` — `FakeSpreadsheet`. `completed_keys: set[str]`로 정산완료 시뮬레이션
   - `fake_slack.py` — `FakeSlackReader` (dict 기반 반환값), `FakeSlackWriter` (list 기반 호출 기록)
+  - `fake_gemini.py` — `FakeGeminiClient` (ImageAnalysisGateway Fake, 커스텀 결과/에러 주입)
+  - `fake_survey.py` — `FakeSurveySheet` (SurveySheetGateway Fake, 설문/분석결과 기록)
 - `tests/conftest.py` — 공유 픽스처: `fake_db`, `fake_reader`, `fake_writer`, `sample_settlement_data` 등
 - **테스트 DI 패턴:** 서비스 생성자에 Fake 직접 주입 — monkeypatch 불필요
   ```python
