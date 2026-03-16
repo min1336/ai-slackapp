@@ -175,6 +175,8 @@ jobs:
           DATABASE_DBNAME: ${{ secrets.DATABASE_DBNAME }}
           FORCE_INFRA_DEPLOY: ${{ github.event.inputs.force_infra_deploy || 'false' }}
           JOTFORM_API_KEY: ${{ secrets.JOTFORM_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           host: ${{ secrets.PROD_SERVER_HOST }}
           username: ${{ secrets.PROD_SERVER_USER }}
@@ -186,7 +188,7 @@ jobs:
           proxy_port: ${{ secrets.AWS_TM2_BASTION_PORT }}
           debug: true
           script_stop: true
-          envs: SLACK_APP_TOKEN,SLACK_BOT_TOKEN,SLACK_SIGNING_SECRET,DATABASE_HOST,DATABASE_PASSWORD,DATABASE_USER,DATABASE_PORT,DATABASE_DBNAME,JOTFORM_API_KEY,FORCE_INFRA_DEPLOY
+          envs: SLACK_APP_TOKEN,SLACK_BOT_TOKEN,SLACK_SIGNING_SECRET,DATABASE_HOST,DATABASE_PASSWORD,DATABASE_USER,DATABASE_PORT,DATABASE_DBNAME,JOTFORM_API_KEY,GEMINI_API_KEY,OPENAI_API_KEY,FORCE_INFRA_DEPLOY
           script: |
             echo "🚀 배포 시작..."
             
@@ -215,7 +217,9 @@ jobs:
             export DATABASE_PORT="$DATABASE_PORT"
             export DATABASE_DBNAME="$DATABASE_DBNAME"
             export JOTFORM_API_KEY="$JOTFORM_API_KEY"
-            
+            export GEMINI_API_KEY="$GEMINI_API_KEY"
+            export OPENAI_API_KEY="$OPENAI_API_KEY"
+
             FORCE_RECREATE=""
             if [ "${FORCE_INFRA_DEPLOY}" = "true" ]; then
               FORCE_RECREATE="--force-recreate"

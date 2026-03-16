@@ -165,15 +165,16 @@ class ServiceContainer:
             )
             # Image analysis (feature flag)
             _analyzer = None
+            _gateway = None
             if cancel_cfg.analysis.enabled:
                 gemini_settings = get_gemini_settings()
+                openai_settings = get_openai_settings()
                 if gemini_settings.api_key:
                     _gateway = GeminiClient(
                         api_key=gemini_settings.api_key,
                         model=cancel_cfg.analysis.gemini_model,
                         timeout=cancel_cfg.analysis.timeout_seconds,
                     )
-                    openai_settings = get_openai_settings()
                     if openai_settings.api_key:
                         _fallback = OpenAIImageClient(
                             api_key=openai_settings.api_key,
@@ -184,6 +185,13 @@ class ServiceContainer:
                             primary=_gateway,
                             fallback=_fallback,
                         )
+                elif openai_settings.api_key:
+                    _gateway = OpenAIImageClient(
+                        api_key=openai_settings.api_key,
+                        model=cancel_cfg.analysis.openai_model,
+                        timeout=cancel_cfg.analysis.timeout_seconds,
+                    )
+                if _gateway:
                     _analyzer = ImageAnalyzer(_gateway)
 
             # Cross-verification (분석 활성 + gateway 있을 때만)
@@ -206,7 +214,7 @@ class ServiceContainer:
             else:
                 logger.warning(
                     "cancellation_analyzer_disabled",
-                    reason="gemini_api_key_missing",
+                    reason="no_api_key",
                     analysis_enabled=True,
                 )
 
