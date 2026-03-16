@@ -8,6 +8,21 @@ if TYPE_CHECKING:
 
 _REFUND_DEADLINE_DAYS = 30
 
+_PRIORITY_FIELDS = frozenset(
+    {
+        "고객명",
+        "예약번호",
+        "날짜",
+        "항공편",
+        "선편",
+        "결항사유",
+        "노선",
+        "출발지",
+        "도착지",
+        "발급기관",
+    }
+)
+
 _DATE_FORMATS = ("%Y-%m-%d", "%Y.%m.%d", "%Y/%m/%d", "%Y년 %m월 %d일")
 
 
@@ -44,11 +59,11 @@ def build_analysis_result_blocks(result: AnalysisResult) -> list[dict]:
         }
     )
 
-    # 추출 정보: 2열 fields 그리드
+    # 추출 정보: 핵심 필드만 2열 fields 그리드
     if result.extracted_fields:
         fields = []
         for k, v in result.extracted_fields.items():
-            if v:
+            if v and k in _PRIORITY_FIELDS:
                 fields.append({"type": "mrkdwn", "text": f"*{k}*\n{v}"})
         # 환불 기한
         cancel_date = result.extracted_fields.get("날짜", "")
@@ -56,8 +71,8 @@ def build_analysis_result_blocks(result: AnalysisResult) -> list[dict]:
             deadline = _calc_refund_deadline(cancel_date)
             if deadline:
                 fields.append({"type": "mrkdwn", "text": f"*환불 기한*\n~{deadline}"})
-        if fields:
-            blocks.append({"type": "section", "fields": fields[:10]})
+        for i in range(0, len(fields), 10):
+            blocks.append({"type": "section", "fields": fields[i : i + 10]})
 
     # 요약
     if result.summary:

@@ -15,6 +15,44 @@ from tests.fakes.fake_survey import FakeSurveySheet
 TARGET_CH = "C-CANCEL"
 RESERVATION_CH = "C-RESERVE"
 
+# 교차검증 "승인" 유도 — 날짜가 렌트기간 내, 모든 필드 일치
+_APPROVE_RESPONSE = {
+    "document_type": "항공사 운항정보확인서",
+    "extracted_fields": {
+        "고객명": "홍길동",
+        "예약번호": "R12345",
+        "날짜": "2026-02-28",
+        "항공편": "KE123",
+        "결항사유": "기상악화",
+        "발급기관": "대한항공",
+    },
+    "summary": "대한항공 KE123편이 2026-02-28 기상악화로 결항.",
+    "rejection_reasons": [],
+}
+
+# 교차검증 "반려" 유도 — 날짜가 렌트기간 밖
+_REJECT_RESPONSE = {
+    "document_type": "항공사 운항정보확인서",
+    "extracted_fields": {
+        "고객명": "홍길동",
+        "예약번호": "R12345",
+        "날짜": "2025-12-13",
+        "항공편": "KE123",
+        "결항사유": "기상악화",
+        "발급기관": "대한항공",
+    },
+    "summary": "대한항공 KE123편이 2025-12-13 기상악화로 결항.",
+    "rejection_reasons": [],
+}
+
+# 이미지 부적합 — rejection_reasons 포함
+_INVALID_IMAGE_RESPONSE = {
+    "document_type": "기타",
+    "extracted_fields": {},
+    "summary": "이미지가 흐려 내용 확인 불가",
+    "rejection_reasons": ["이미지가 흐리거나 텍스트를 읽을 수 없음"],
+}
+
 SAMPLE_RESERVATION_MSG = """\
 [카모아 예약]
     예약번호 : R12345
@@ -158,6 +196,26 @@ class TestPollAndUpload:
 
 
 class TestProcessSubmission:
+    def test_모든_다운로드_실패_시_마킹_안함(self):
+        sub = _submission()
+        survey = FakeSurveySheet()
+        survey.submissions = [sub]
+
+        reader = FakeSlackReader()
+        reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
+
+        drive = FakeDrive()
+        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="bad.jpg", mime_type="image/jpeg"),
+        ]
+        # f1 content 없음 → KeyError on download
+
+        svc = _make_service(survey=survey, drive=drive, reader=reader)
+        svc.poll_and_upload()
+
+        assert len(survey.processed_ids) == 0
+
     def test_여러_파일_모두_업로드(self):
         sub = _submission()
         survey = FakeSurveySheet()
@@ -666,3 +724,215 @@ class TestCrossVerification:
 
         # 두 번째 채널에서 찾았으므로 교차검증 결과 존재
         assert len(survey.verification_results) == 1
+
+
+class TestImageValidation:
+    """이미지 유효성 검증 및 X 리액션 테스트."""
+
+    def _setup_with_response(self, gemini_response, *, with_cross_verifier=False):
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient(result=gemini_response)
+        analyzer = ImageAnalyzer(gemini)
+        cross_verifier = CrossVerifier(gateway=gemini) if with_cross_verifier else None
+
+        sub = _submission()
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        if with_cross_verifier:
+            reader.messages_by_text[(RESERVATION_CH, sub.booking_key)] = (
+                "reserve-thread-1"
+            )
+            reader.parent_messages[(RESERVATION_CH, "reserve-thread-1")] = (
+                SAMPLE_RESERVATION_MSG
+            )
+
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            cross_verifier=cross_verifier,
+            reservation_channels=[RESERVATION_CH] if with_cross_verifier else None,
+        )
+        return svc, writer, survey
+
+    def test_이미지_부적합_X리액션_사유댓글(self):
+        svc, writer, _ = self._setup_with_response(_INVALID_IMAGE_RESPONSE)
+        svc.poll_and_upload()
+
+        x_reactions = [r for r in writer.reactions if r["name"] == "x"]
+        assert len(x_reactions) == 1
+        rejection_msgs = [
+            m for m in writer.posted_messages if "부적합 사유" in m["text"]
+        ]
+        assert len(rejection_msgs) == 1
+        assert "텍스트를 읽을 수 없음" in rejection_msgs[0]["text"]
+
+    def test_이미지_부적합_교차검증_스킵(self):
+        svc, writer, survey = self._setup_with_response(
+            _INVALID_IMAGE_RESPONSE, with_cross_verifier=True
+        )
+        svc.poll_and_upload()
+
+        assert len(survey.verification_results) == 0
+        assert len(survey.analysis_results) == 0
+
+
+class TestCrossVerificationReactions:
+    """교차검증 verdict별 후속 처리(X 리액션, 양방향 링크) 테스트."""
+
+    def _setup_with_verdict(self, gemini_response, *, with_links=False):
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient(result=gemini_response)
+        analyzer = ImageAnalyzer(gemini)
+        cross_verifier = CrossVerifier(gateway=gemini)
+
+        sub = _submission()
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        reader.messages_by_text[(RESERVATION_CH, sub.booking_key)] = "reserve-thread-1"
+        reader.parent_messages[(RESERVATION_CH, "reserve-thread-1")] = (
+            SAMPLE_RESERVATION_MSG
+        )
+
+        if with_links:
+            reader.thread_urls[(RESERVATION_CH, "reserve-thread-1")] = (
+                "https://slack.com/reserve-link"
+            )
+            reader.thread_urls[(TARGET_CH, "cancel-thread-1")] = (
+                "https://slack.com/cancel-link"
+            )
+
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            cross_verifier=cross_verifier,
+            reservation_channels=[RESERVATION_CH],
+        )
+        return svc, writer, survey
+
+    def test_교차검증_반려_X리액션_링크없음(self):
+        svc, writer, _ = self._setup_with_verdict(_REJECT_RESPONSE, with_links=True)
+        svc.poll_and_upload()
+
+        x_reactions = [r for r in writer.reactions if r["name"] == "x"]
+        assert len(x_reactions) == 1
+        link_msgs = [m for m in writer.posted_messages if "slack.com" in m["text"]]
+        assert len(link_msgs) == 0
+
+    def test_교차검증_승인_양방향링크(self):
+        svc, writer, _ = self._setup_with_verdict(_APPROVE_RESPONSE, with_links=True)
+        svc.poll_and_upload()
+
+        x_reactions = [r for r in writer.reactions if r["name"] == "x"]
+        assert len(x_reactions) == 0
+        link_msgs = [m for m in writer.posted_messages if "slack.com" in m["text"]]
+        assert len(link_msgs) == 2
+        # 취소 스레드에 예약 링크
+        cancel_thread_links = [m for m in link_msgs if m["channel"] == TARGET_CH]
+        assert len(cancel_thread_links) == 1
+        assert "reserve-link" in cancel_thread_links[0]["text"]
+        # 예약 스레드에 취소 링크
+        reserve_thread_links = [m for m in link_msgs if m["channel"] == RESERVATION_CH]
+        assert len(reserve_thread_links) == 1
+        assert "cancel-link" in reserve_thread_links[0]["text"]
+
+    def test_교차검증_보류_X없음_링크없음(self):
+        """예약 스레드를 못 찾으면 보류 — X 리액션 없고 링크도 없다."""
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient(result=_APPROVE_RESPONSE)
+        analyzer = ImageAnalyzer(gemini)
+        cross_verifier = CrossVerifier(gateway=gemini)
+
+        sub = _submission()
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+        # 예약 채널에 아무것도 없음
+
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            cross_verifier=cross_verifier,
+            reservation_channels=[RESERVATION_CH],
+        )
+        svc.poll_and_upload()
+
+        x_reactions = [r for r in writer.reactions if r["name"] == "x"]
+        assert len(x_reactions) == 0
+        link_msgs = [m for m in writer.posted_messages if "slack.com" in m["text"]]
+        assert len(link_msgs) == 0
+
+
+class TestPhoneFallback:
+    """전화번호 fallback 검색 테스트."""
+
+    def test_예약번호실패_전화번호로_검색_성공(self):
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient(result=_APPROVE_RESPONSE)
+        analyzer = ImageAnalyzer(gemini)
+        cross_verifier = CrossVerifier(gateway=gemini)
+
+        sub = _submission(phone="010-1234-5678")
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        # 예약번호로는 못 찾고, 전화번호로 찾음
+        reader.messages_by_text[(RESERVATION_CH, "010-1234-5678")] = "reserve-thread-1"
+        reader.parent_messages[(RESERVATION_CH, "reserve-thread-1")] = (
+            SAMPLE_RESERVATION_MSG
+        )
+
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            cross_verifier=cross_verifier,
+            reservation_channels=[RESERVATION_CH],
+        )
+        svc.poll_and_upload()
+
+        assert len(survey.verification_results) == 1
+        assert survey.verification_results[0][1].verdict == "승인"

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 from pathlib import PurePosixPath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import pymupdf
 from slack_sdk.errors import SlackApiError
@@ -31,6 +31,15 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 _PDF_EMOJI = "pdf"
+_INVALID_EMOJI = "x"
+
+
+class ReservationLocation(NamedTuple):
+    """예약 데이터 + 해당 스레드 위치."""
+
+    data: ReservationData
+    channel: str
+    thread_ts: str
 
 
 class CancellationImageService:
@@ -193,6 +202,14 @@ class CancellationImageService:
 
         if self._analyzer and collected_images:
             self._analyze_and_report(collected_images, sub, thread_ts)
+        else:
+            logger.warning(
+                "analysis_skipped",
+                booking_key=sub.booking_key,
+                reason="no_analyzer" if not self._analyzer else "no_images",
+                has_analyzer=self._analyzer is not None,
+                image_count=len(collected_images),
+            )
 
         logger.info(
             "cancellation_uploaded",
@@ -223,6 +240,30 @@ class CancellationImageService:
                 summary=result.summary[:200] if result.summary else "",
                 extracted_fields=result.extracted_fields,
             )
+
+            # 이미지 품질 부적합 → X + 사유, 즉시 종료
+            if not result.is_valid:
+                logger.info(
+                    "analysis_invalid_image",
+                    booking_key=submission.booking_key,
+                    rejection_reasons=result.rejection_reasons,
+                )
+                reason_text = "부적합 사유:\n" + "\n".join(
+                    f"- {r}" for r in result.rejection_reasons
+                )
+                self._writer.post_message(
+                    channel=self._target_channel,
+                    text=reason_text,
+                    thread_ts=thread_ts,
+                )
+                with suppress(SlackApiError):
+                    self._writer.add_reaction(
+                        channel=self._target_channel,
+                        timestamp=thread_ts,
+                        name=_INVALID_EMOJI,
+                    )
+                return
+
             blocks = build_analysis_result_blocks(result)
             self._writer.post_message(
                 channel=self._target_channel,
@@ -255,16 +296,16 @@ class CancellationImageService:
         thread_ts: str,
     ) -> None:
         """예약 데이터를 찾아 교차검증하고 결과를 스레드에 포스트한다."""
-        reservation_data = self._find_reservation_data(submission.booking_key)
+        location = self._find_reservation_data(submission.booking_key, submission.phone)
 
-        if reservation_data is None:
+        if location is None:
             result = CrossVerificationResult(
                 verdict="보류",
                 reason="예약 스레드를 찾지 못했습니다.",
             )
         else:
             result = self._cross_verifier.verify(  # type: ignore[union-attr]
-                analysis_result, reservation_data, submission
+                analysis_result, location.data, submission
             )
 
         blocks = build_cross_verification_blocks(result)
@@ -281,16 +322,79 @@ class CancellationImageService:
             verdict=result.verdict,
         )
 
-    def _find_reservation_data(self, booking_key: str) -> ReservationData | None:
-        """예약 채널을 순회하며 예약 메시지를 찾아 파싱한다."""
+        if result.verdict == "반려":
+            with suppress(SlackApiError):
+                self._writer.add_reaction(
+                    channel=self._target_channel,
+                    timestamp=thread_ts,
+                    name=_INVALID_EMOJI,
+                )
+        elif result.verdict == "승인" and location is not None:
+            self._post_bidirectional_links(thread_ts, location, submission)
+
+    def _post_bidirectional_links(
+        self,
+        thread_ts: str,
+        location: ReservationLocation,
+        submission: SurveySubmission,
+    ) -> None:
+        """승인 시 예약↔취소 스레드 간 양방향 permalink을 포스트한다."""
+        with suppress(SlackApiError):
+            res_permalink = self._reader.get_thread_url(
+                location.channel, location.thread_ts
+            )
+            if res_permalink:
+                self._writer.post_message(
+                    channel=self._target_channel,
+                    text=res_permalink,
+                    thread_ts=thread_ts,
+                )
+
+            cancel_permalink = self._reader.get_thread_url(
+                self._target_channel, thread_ts
+            )
+            if cancel_permalink:
+                self._writer.post_message(
+                    channel=location.channel,
+                    text=cancel_permalink,
+                    thread_ts=location.thread_ts,
+                )
+            logger.info(
+                "cancellation_bidirectional_links_posted",
+                booking_key=submission.booking_key,
+            )
+
+    def _find_reservation_data(
+        self, booking_key: str, phone: str = ""
+    ) -> ReservationLocation | None:
+        """예약번호로 검색 → 실패 시 전화번호 fallback."""
+        location = self._search_reservation_channels(booking_key)
+        if location:
+            return location
+        if phone:
+            logger.info(
+                "reservation_search_fallback_phone",
+                booking_key=booking_key,
+            )
+            return self._search_reservation_channels(phone)
+        return None
+
+    def _search_reservation_channels(
+        self, search_text: str
+    ) -> ReservationLocation | None:
+        """예약 채널을 순회하며 메시지를 찾아 ReservationLocation을 반환한다."""
         for channel in self._reservation_channels:
-            found_ts = self._reader.find_message_by_text(channel, booking_key)
+            found_ts = self._reader.find_message_by_text(channel, search_text)
             if not found_ts:
                 continue
             parent_text = self._reader.get_parent_message(channel, found_ts)
             if not parent_text:
                 continue
-            return parse_reservation_message(parent_text)
+            return ReservationLocation(
+                data=parse_reservation_message(parent_text),
+                channel=channel,
+                thread_ts=found_ts,
+            )
         return None
 
     @staticmethod

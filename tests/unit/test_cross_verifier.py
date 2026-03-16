@@ -109,27 +109,28 @@ class TestCompareFields:
         assert comp is not None
         assert comp.status == "불일치"
 
-    def test_예약번호_완전일치(self):
+    def test_예약번호_항상_비교불필요(self):
         verifier = CrossVerifier()
         result = verifier.verify(_analysis(), _reservation(), _submission())
         comp = _get_comparison(result, "예약번호")
         assert comp is not None
-        assert comp.status == "일치"
+        assert comp.status == "비교불필요"
 
-    def test_예약번호_불일치(self):
+    def test_예약번호_다른값이어도_비교불필요(self):
         verifier = CrossVerifier()
         analysis = _analysis(
             fields={
                 "고객명": "박성구",
                 "예약번호": "OR9999999",
                 "날짜": "2026-02-27",
+                "항공편": "LJ473",
                 "결항사유": "기상악화",
             }
         )
         result = verifier.verify(analysis, _reservation(), _submission())
         comp = _get_comparison(result, "예약번호")
         assert comp is not None
-        assert comp.status == "불일치"
+        assert comp.status == "비교불필요"
 
     def test_날짜_예약기간_범위내_일치(self):
         verifier = CrossVerifier()
@@ -290,6 +291,7 @@ class TestRuleBasedVerdict:
                 "고객명": "김철수",
                 "예약번호": "OR2017576",
                 "날짜": "2026-02-27",
+                "항공편": "LJ473",
                 "결항사유": "기상악화",
             }
         )
@@ -320,6 +322,18 @@ class TestRuleBasedVerdict:
                 "날짜": "2026-02-27",
                 "결항사유": "기상악화",
             },
+        )
+        result = verifier.verify(analysis, _reservation(), _submission())
+        assert result.verdict == "보류"
+
+    def test_편명_미추출이면_보류(self):
+        verifier = CrossVerifier(gateway=None)
+        analysis = _analysis(
+            fields={
+                "고객명": "박성구",
+                "날짜": "2026-02-27",
+                "결항사유": "기상악화",
+            }
         )
         result = verifier.verify(analysis, _reservation(), _submission())
         assert result.verdict == "보류"
@@ -367,6 +381,7 @@ class TestRuleBasedVerdict:
                 "고객명": "",
                 "예약번호": "",
                 "날짜": "2026-02-27",
+                "항공편": "LJ473",
                 "결항사유": "기상악화",
             },
         )
@@ -457,3 +472,19 @@ class TestAIFallback:
         result = verifier.verify(analysis, _reservation(), _submission())
         assert result.verdict == "보류"
         assert result.ai_used is False
+
+    def test_ai_무효_verdict_보류_변환(self):
+        gemini = FakeGeminiClient(result={"verdict": "확인", "reasoning": "판단"})
+        verifier = CrossVerifier(gateway=gemini)
+        analysis = _analysis(
+            document_type="기타",
+            fields={
+                "고객명": "박성구",
+                "날짜": "2026-02-27",
+                "항공편": "LJ473",
+                "결항사유": "기상악화",
+            },
+        )
+        result = verifier.verify(analysis, _reservation(), _submission())
+        assert result.verdict == "보류"
+        assert result.ai_used is True

@@ -96,20 +96,10 @@ class CrossVerifier:
             status = "일치" if (a in b or b in a) else "불일치"
             comparisons.append(FieldComparison("고객명", doc_name, res_name, status))
 
-        # 예약번호
+        # 예약번호 — 항공 PNR ≠ 렌트카 예약번호이므로 비교 불필요
         doc_key = fields.get("예약번호") or ""
         res_key = reservation.booking_key
-        if is_airline and not doc_key:
-            comparisons.append(
-                FieldComparison("예약번호", doc_key, res_key, "비교불필요")
-            )
-        elif not doc_key:
-            comparisons.append(
-                FieldComparison("예약번호", doc_key, res_key, "확인불가")
-            )
-        else:
-            status = "일치" if doc_key == res_key else "불일치"
-            comparisons.append(FieldComparison("예약번호", doc_key, res_key, status))
+        comparisons.append(FieldComparison("예약번호", doc_key, res_key, "비교불필요"))
 
         # 날짜
         doc_date_str = fields.get("날짜") or ""
@@ -166,14 +156,23 @@ class CrossVerifier:
         if not (analysis.extracted_fields.get("결항사유") or ""):
             return None
 
+        # 편명 필수 — 항공편 또는 선편이 추출되어야 자동 판단 가능
+        flight = (
+            analysis.extracted_fields.get("항공편")
+            or analysis.extracted_fields.get("선편")
+            or ""
+        )
+        if not flight:
+            return None
+
         # 불일치 체크
         mismatched = [c for c in comparisons if c.status == "불일치"]
         if mismatched:
             return "반려"
 
-        # 신원 필드(고객명, 예약번호) 모두 확인불가이면 근거 부족
-        identity = [c for c in comparisons if c.field_name in ("고객명", "예약번호")]
-        if identity and all(c.status == "확인불가" for c in identity):
+        # 고객명 확인불가이면 근거 부족
+        name_cmp = [c for c in comparisons if c.field_name == "고객명"]
+        if name_cmp and all(c.status == "확인불가" for c in name_cmp):
             return None
 
         return "승인"

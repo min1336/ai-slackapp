@@ -11,6 +11,12 @@ class AnalysisResult:
     extracted_fields: dict = field(default_factory=dict)
     summary: str = ""
     quality_issues: list[str] = field(default_factory=list)
+    rejection_reasons: list[str] = field(default_factory=list)
+
+    @property
+    def is_valid(self) -> bool:
+        """Gemini가 판별한 부적합 사유가 없으면 유효."""
+        return not self.rejection_reasons
 
 
 @dataclass

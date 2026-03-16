@@ -3,7 +3,9 @@ from __future__ import annotations
 import pytest
 
 from app.models import SurveySubmission
+from app.models.analysis import AnalysisResult
 from app.services.image_analyzer import ImageAnalyzer
+from app.views.analysis import build_analysis_result_blocks
 from tests.fakes.fake_gemini import FakeGeminiClient
 
 _SAMPLE_RESPONSE = {
@@ -84,6 +86,77 @@ class TestImageAnalyzerAnalyze:
         assert "분석 가능한 이미지가 없습니다" in result.summary
         assert len(gemini.calls) == 0
 
+    def test_list_response_normalized_to_first_element(self):
+        response = [
+            {
+                "document_type": "항공사 운항정보확인서",
+                "extracted_fields": {"고객명": "홍길동"},
+                "summary": "첫 번째 문서",
+            },
+            {
+                "document_type": "해운사 결항확인서",
+                "extracted_fields": {"고객명": "김영희"},
+                "summary": "두 번째 문서",
+            },
+        ]
+        gemini = FakeGeminiClient(result=response)
+        analyzer = ImageAnalyzer(gemini)
+        result = analyzer.analyze([b"img1", b"img2"], _submission())
+        assert result.document_type == "항공사 운항정보확인서"
+        assert result.extracted_fields["고객명"] == "홍길동"
+
+    def test_empty_list_response_returns_fallback(self):
+        gemini = FakeGeminiClient(result=[])
+        analyzer = ImageAnalyzer(gemini)
+        result = analyzer.analyze([b"img"], _submission())
+        assert result.document_type is None
+
+    def test_rejection_reasons_파싱(self):
+        response = {
+            "document_type": "항공사 운항정보확인서",
+            "extracted_fields": {"고객명": "홍길동"},
+            "summary": "문서 요약",
+            "rejection_reasons": ["흐린 이미지"],
+        }
+        gemini = FakeGeminiClient(result=response)
+        analyzer = ImageAnalyzer(gemini)
+        result = analyzer.analyze([b"fake-png"], _submission())
+        assert result.rejection_reasons == ["흐린 이미지"]
+        assert not result.is_valid
+
+    def test_rejection_reasons_빈배열이면_valid(self):
+        response = {
+            "document_type": "항공사 운항정보확인서",
+            "extracted_fields": {},
+            "summary": "정상 문서",
+            "rejection_reasons": [],
+        }
+        gemini = FakeGeminiClient(result=response)
+        analyzer = ImageAnalyzer(gemini)
+        result = analyzer.analyze([b"fake-png"], _submission())
+        assert result.rejection_reasons == []
+        assert result.is_valid
+
+    def test_rejection_reasons_없으면_기본값_valid(self):
+        gemini = FakeGeminiClient(result=_SAMPLE_RESPONSE)
+        analyzer = ImageAnalyzer(gemini)
+        result = analyzer.analyze([b"fake-png"], _submission())
+        assert result.rejection_reasons == []
+        assert result.is_valid
+
+    def test_rejection_reasons_문자열이면_빈리스트로_정규화(self):
+        response = {
+            "document_type": "항공사 운항정보확인서",
+            "extracted_fields": {},
+            "summary": "문서 요약",
+            "rejection_reasons": "문자열로 왔음",
+        }
+        gemini = FakeGeminiClient(result=response)
+        analyzer = ImageAnalyzer(gemini)
+        result = analyzer.analyze([b"fake-png"], _submission())
+        assert result.rejection_reasons == []
+        assert result.is_valid
+
     def test_maritime_doc_extracts_fields(self):
         response = {
             "document_type": "해운사 결항확인서",
@@ -100,3 +173,25 @@ class TestImageAnalyzerAnalyze:
         result = analyzer.analyze([b"fake-png"], _submission())
         assert result.document_type == "해운사 결항확인서"
         assert result.extracted_fields["결항사유"] == "태풍"
+
+
+class TestAnalysisResultBlocks:
+    def test_파싱불가_날짜_환불기한_생략(self):
+        result = AnalysisResult(
+            document_type="항공사 운항정보확인서",
+            extracted_fields={"고객명": "홍길동", "날짜": "어제"},
+        )
+        blocks = build_analysis_result_blocks(result)
+        all_text = str(blocks)
+        assert "환불 기한" not in all_text
+        assert "홍길동" in all_text  # 고객명은 _PRIORITY_FIELDS에 포함
+
+    def test_정상_날짜_환불기한_표시(self):
+        result = AnalysisResult(
+            document_type="항공사 운항정보확인서",
+            extracted_fields={"날짜": "2026-02-24"},
+        )
+        blocks = build_analysis_result_blocks(result)
+        all_text = str(blocks)
+        assert "환불 기한" in all_text
+        assert "2026-03-26" in all_text
