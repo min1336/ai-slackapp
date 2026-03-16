@@ -58,8 +58,9 @@ def list_channel_messages(
         kwargs: dict = {
             "channel": channel_id,
             "limit": page_size,
-            "oldest": str(oldest),
         }
+        if oldest:
+            kwargs["oldest"] = str(oldest)
         if cursor:
             kwargs["cursor"] = cursor
 
