@@ -287,6 +287,39 @@ class TestBackfillReservationThreads:
             repo = ThreadReferenceRepository(session)
             assert repo.get_by_booking_key("BK-OK") is not None
 
+    def test_메시지_처리_중_예외시_나머지_메시지는_계속_처리한다(
+        self, fake_db, fake_reader, service, monkeypatch
+    ):
+        fake_reader.channel_messages["C_ISSUE"] = [
+            {"text": "예약번호 : BK-FAIL\n업체명 : 실패건", "ts": "100.100"},
+            {"text": "예약번호 : BK-OK\n업체명 : 성공건", "ts": "200.200"},
+        ]
+
+        original_parse = __import__(
+            "app.services.message_parser", fromlist=["parse_settlement_message"]
+        ).parse_settlement_message
+        call_count = 0
+
+        def _parse_with_error(text):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ValueError("unexpected parse error")
+            return original_parse(text)
+
+        monkeypatch.setattr(
+            "app.services.thread_discovery_service.parse_settlement_message",
+            _parse_with_error,
+        )
+
+        saved = service.backfill_reservation_threads(days=7)
+
+        assert saved == 1
+        with fake_db.get_session() as session:
+            repo = ThreadReferenceRepository(session)
+            assert repo.get_by_booking_key("BK-OK") is not None
+            assert repo.get_by_booking_key("BK-FAIL") is None
+
     def test_멀티채널_모든_채널을_스캔한다(self, fake_db, store, fake_reader):
         svc = ThreadDiscoveryService(
             store, fake_reader, reservation_channels=["C_A", "C_B"]

@@ -115,25 +115,30 @@ class ThreadDiscoveryService:
                 )
                 for msg in messages:
                     scanned += 1
-                    text = msg.get("text", "")
-                    parsed = parse_settlement_message(text)
-                    booking_key = parsed.booking_key.strip()
-                    if not booking_key:
-                        continue
+                    try:
+                        text = msg.get("text", "")
+                        parsed = parse_settlement_message(text)
+                        booking_key = parsed.booking_key.strip()
+                        if not booking_key:
+                            continue
 
-                    message_ts = msg.get("ts", "")
-                    if not message_ts:
-                        continue
+                        message_ts = msg.get("ts", "")
+                        if not message_ts:
+                            continue
 
-                    if self._store.get_by_booking_key(booking_key):
-                        continue
+                        if self._store.get_by_booking_key(booking_key):
+                            continue
 
-                    self._store.save(
-                        booking_key=booking_key,
-                        channel_id=ch,
-                        thread_ts=message_ts,
-                    )
-                    saved += 1
+                        self._store.save(
+                            booking_key=booking_key,
+                            channel_id=ch,
+                            thread_ts=message_ts,
+                        )
+                        saved += 1
+                    except SlackApiError:
+                        raise
+                    except Exception:
+                        logger.exception("backfill_message_error", ts=msg.get("ts"))
             except SlackApiError:
                 logger.exception("backfill_channel_read_failed", channel_id=ch)
                 continue  # 한 채널 실패 시 다음 채널 계속
