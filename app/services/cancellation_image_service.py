@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from app.models import SurveySubmission
     from app.models.analysis import AnalysisResult
     from app.models.cancellation import ReservationData
+    from app.services.cancellation_thread_store import CancellationThreadStore
     from app.services.cross_verifier import CrossVerifier
     from app.services.image_analyzer import ImageAnalyzer
 
@@ -55,6 +56,7 @@ class CancellationImageService:
         analyzer: ImageAnalyzer | None = None,
         cross_verifier: CrossVerifier | None = None,
         reservation_channels: list[str] | None = None,
+        cancel_thread_store: CancellationThreadStore | None = None,
     ) -> None:
         self._survey_sheet = survey_sheet
         self._drive = drive
@@ -64,6 +66,7 @@ class CancellationImageService:
         self._analyzer = analyzer
         self._cross_verifier = cross_verifier
         self._reservation_channels = reservation_channels or []
+        self._cancel_thread_store = cancel_thread_store
 
     def poll_and_upload(self) -> int:
         """새 설문 응답을 폴링하고 이미지를 업로드한다. 미처리 건수를 반환."""
@@ -382,7 +385,22 @@ class CancellationImageService:
     def _search_reservation_channels(
         self, search_text: str
     ) -> ReservationLocation | None:
-        """예약 채널을 순회하며 메시지를 찾아 ReservationLocation을 반환한다."""
+        """DB 캐시 → Slack API 폴백으로 예약 스레드를 찾는다."""
+        # Stage 1: DB lookup
+        if self._cancel_thread_store:
+            location = self._cancel_thread_store.get_by_booking_key(search_text)
+            if location:
+                parent_text = self._reader.get_parent_message(
+                    location.channel_id, location.thread_ts
+                )
+                if parent_text:
+                    return ReservationLocation(
+                        data=parse_reservation_message(parent_text),
+                        channel=location.channel_id,
+                        thread_ts=location.thread_ts,
+                    )
+
+        # Stage 2: Slack API fallback
         for channel in self._reservation_channels:
             found_ts = self._reader.find_message_by_text(channel, search_text)
             if not found_ts:
@@ -390,6 +408,8 @@ class CancellationImageService:
             parent_text = self._reader.get_parent_message(channel, found_ts)
             if not parent_text:
                 continue
+            if self._cancel_thread_store:
+                self._cancel_thread_store.save(search_text, channel, found_ts)
             return ReservationLocation(
                 data=parse_reservation_message(parent_text),
                 channel=channel,

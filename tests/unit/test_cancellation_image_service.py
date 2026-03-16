@@ -6,8 +6,10 @@ import pymupdf
 
 from app.models import DriveFile, SurveySubmission
 from app.services.cancellation_image_service import CancellationImageService
+from app.services.cancellation_thread_store import CancellationThreadStore
 from app.services.cross_verifier import CrossVerifier
 from app.services.image_analyzer import ImageAnalyzer
+from tests.fakes.fake_database import FakeDatabase
 from tests.fakes.fake_gemini import FakeGeminiClient
 from tests.fakes.fake_slack import FakeSlackReader, FakeSlackWriter
 from tests.fakes.fake_survey import FakeSurveySheet
@@ -105,6 +107,7 @@ def _make_service(
     analyzer: ImageAnalyzer | None = None,
     cross_verifier: CrossVerifier | None = None,
     reservation_channels: list[str] | None = None,
+    cancel_thread_store: CancellationThreadStore | None = None,
 ) -> CancellationImageService:
     return CancellationImageService(
         survey_sheet=survey or FakeSurveySheet(),
@@ -115,6 +118,7 @@ def _make_service(
         analyzer=analyzer,
         cross_verifier=cross_verifier,
         reservation_channels=reservation_channels,
+        cancel_thread_store=cancel_thread_store,
     )
 
 
@@ -936,3 +940,133 @@ class TestPhoneFallback:
 
         assert len(survey.verification_results) == 1
         assert survey.verification_results[0][1].verdict == "승인"
+
+
+class TestReservationThreadDBLookup:
+    """DB 캐시 → Slack API 폴백 예약 스레드 검색 테스트."""
+
+    def test_DB캐시_예약스레드_사용(self):
+        """DB에 저장된 위치 → Slack API 채널 순회 없이 ReservationLocation 반환."""
+        fake_db = FakeDatabase()
+        store = CancellationThreadStore(fake_db.get_session)
+        store.save("R12345", RESERVATION_CH, "reserve-thread-1")
+
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient(result=_APPROVE_RESPONSE)
+        analyzer = ImageAnalyzer(gemini)
+        cross_verifier = CrossVerifier(gateway=gemini)
+
+        sub = _submission()
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        # DB에 캐시된 위치의 parent message만 세팅 (채널 검색용 세팅 없음)
+        reader.parent_messages[(RESERVATION_CH, "reserve-thread-1")] = (
+            SAMPLE_RESERVATION_MSG
+        )
+
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            cross_verifier=cross_verifier,
+            reservation_channels=[RESERVATION_CH],
+            cancel_thread_store=store,
+        )
+        svc.poll_and_upload()
+
+        assert len(survey.verification_results) == 1
+
+    def test_Slack_API_폴백_후_DB_캐시(self):
+        """DB miss → Slack API 발견 → DB에 캐시 저장 확인."""
+        fake_db = FakeDatabase()
+        store = CancellationThreadStore(fake_db.get_session)
+
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient(result=_APPROVE_RESPONSE)
+        analyzer = ImageAnalyzer(gemini)
+        cross_verifier = CrossVerifier(gateway=gemini)
+
+        sub = _submission()
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        # Slack API로 찾을 수 있게 세팅
+        reader.messages_by_text[(RESERVATION_CH, sub.booking_key)] = "reserve-thread-1"
+        reader.parent_messages[(RESERVATION_CH, "reserve-thread-1")] = (
+            SAMPLE_RESERVATION_MSG
+        )
+
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            cross_verifier=cross_verifier,
+            reservation_channels=[RESERVATION_CH],
+            cancel_thread_store=store,
+        )
+        svc.poll_and_upload()
+
+        # Slack API 검색 성공 후 DB에 캐시됨
+        cached = store.get_by_booking_key("R12345")
+        assert cached is not None
+        assert cached.channel_id == RESERVATION_CH
+        assert cached.thread_ts == "reserve-thread-1"
+
+    def test_store_미설정시_기존동작(self):
+        """cancel_thread_store=None → 기존 Slack API 검색만 사용."""
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient(result=_APPROVE_RESPONSE)
+        analyzer = ImageAnalyzer(gemini)
+        cross_verifier = CrossVerifier(gateway=gemini)
+
+        sub = _submission()
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        reader.messages_by_text[(RESERVATION_CH, sub.booking_key)] = "reserve-thread-1"
+        reader.parent_messages[(RESERVATION_CH, "reserve-thread-1")] = (
+            SAMPLE_RESERVATION_MSG
+        )
+
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            cross_verifier=cross_verifier,
+            reservation_channels=[RESERVATION_CH],
+            cancel_thread_store=None,
+        )
+        svc.poll_and_upload()
+
+        assert len(survey.verification_results) == 1

@@ -145,6 +145,23 @@ class IssueLog(Base):
     settlement: Mapped[Settlement | None] = relationship(back_populates="issue_logs")
 
 
+class CancellationThreadRef(Base):
+    """예약번호 → 예약 채널 스레드 매핑 (결항 교차검증용)."""
+
+    __tablename__ = "cancellation_thread_refs"
+    __table_args__ = (
+        Index("idx_cancel_thread_refs_booking_key", "booking_key", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(_BigIntPK, primary_key=True)
+    booking_key: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    channel_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    thread_ts: Mapped[str] = mapped_column(String(50), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now, nullable=True
+    )
+
+
 class ThreadReference(Base):
     """예약번호 → 정산이슈 스레드 매핑.
 
