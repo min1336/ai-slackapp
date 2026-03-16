@@ -21,7 +21,6 @@ from app.infrastructure.spreadsheet import SCOPES, SpreadsheetService
 from app.infrastructure.survey_sheet import SurveySheetReader
 from app.services.approval_service import ApprovalService
 from app.services.cancellation_image_service import CancellationImageService
-from app.services.cancellation_thread_store import CancellationThreadStore
 from app.services.cross_verifier import CrossVerifier
 from app.services.image_analyzer import ImageAnalyzer
 from app.services.rejection_service import RejectionService
@@ -218,8 +217,6 @@ class ServiceContainer:
                     analysis_enabled=True,
                 )
 
-            self.cancel_thread_store = CancellationThreadStore(get_session_fn)
-
             self.cancellation_image = CancellationImageService(
                 survey_sheet=_survey,
                 drive=_drive,
@@ -229,10 +226,9 @@ class ServiceContainer:
                 analyzer=_analyzer,
                 cross_verifier=_cross_verifier,
                 reservation_channels=config.settlement.slack_channels.reservation,
-                cancel_thread_store=self.cancel_thread_store,
+                thread_ref_store=self.thread_ref_store,
             )
         else:
             self.cancellation_image = None  # type: ignore[assignment]
-            self.cancel_thread_store = None  # type: ignore[assignment]
 
         self.cancellation_target_channel = cancel_target

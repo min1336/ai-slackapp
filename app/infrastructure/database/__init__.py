@@ -7,13 +7,11 @@ from app.infrastructure.database.connection import (
 )
 from app.infrastructure.database.models import (
     Base,
-    CancellationThreadRef,
     IssueLog,
     Settlement,
     ThreadReference,
 )
 from app.infrastructure.database.repository import (
-    CancellationThreadRefRepository,
     IssueLogRepository,
     SettlementRepository,
     ThreadReferenceRepository,
@@ -21,8 +19,6 @@ from app.infrastructure.database.repository import (
 
 __all__ = [
     "Base",
-    "CancellationThreadRef",
-    "CancellationThreadRefRepository",
     "IssueLog",
     "IssueLogRepository",
     "Settlement",

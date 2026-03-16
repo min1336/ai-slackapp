@@ -154,24 +154,6 @@ def _cache_reservation_origin_thread(message: dict, discovery) -> None:
     )
 
 
-def _cache_cancellation_thread_ref(message: dict, cancel_thread_store) -> None:
-    """예약 메시지 도착 시 결항 교차검증용 스레드 위치를 캐시한다."""
-    if cancel_thread_store is None:
-        return
-    channel_id = message.get("channel")
-    message_ts = message.get("ts")
-    text = message.get("text", "")
-    if not channel_id or not message_ts or not text or message.get("thread_ts"):
-        return
-
-    parsed = parse_settlement_message(text)
-    booking_key = parsed.booking_key.strip()
-    if not booking_key:
-        return
-
-    cancel_thread_store.save(booking_key, channel_id, message_ts)
-
-
 _cancellation_poll_running = False
 _RETRY_DELAYS = (30, 60)  # 재시도 대기(초): 30s, 60s
 
@@ -225,7 +207,6 @@ def register_message_handlers(app: App, container: ServiceContainer) -> None:
     transfer_channel = container.transfer_channel
     cancellation_channel = container.cancellation_target_channel
     cancellation_service = container.cancellation_image
-    cancel_thread_store = container.cancel_thread_store
 
     _watched_channels: set[str] = set()
     if transfer_channel:
@@ -315,7 +296,6 @@ def register_message_handlers(app: App, container: ServiceContainer) -> None:
             )
         elif route == "reservation" and _should_process_message(message):
             _cache_reservation_origin_thread(message, discovery)
-            _cache_cancellation_thread_ref(message, cancel_thread_store)
 
         if (
             cancellation_service

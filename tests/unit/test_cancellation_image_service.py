@@ -6,9 +6,9 @@ import pymupdf
 
 from app.models import DriveFile, SurveySubmission
 from app.services.cancellation_image_service import CancellationImageService
-from app.services.cancellation_thread_store import CancellationThreadStore
 from app.services.cross_verifier import CrossVerifier
 from app.services.image_analyzer import ImageAnalyzer
+from app.services.thread_reference_store import ThreadReferenceStore
 from tests.fakes.fake_database import FakeDatabase
 from tests.fakes.fake_gemini import FakeGeminiClient
 from tests.fakes.fake_slack import FakeSlackReader, FakeSlackWriter
@@ -107,7 +107,7 @@ def _make_service(
     analyzer: ImageAnalyzer | None = None,
     cross_verifier: CrossVerifier | None = None,
     reservation_channels: list[str] | None = None,
-    cancel_thread_store: CancellationThreadStore | None = None,
+    thread_ref_store: ThreadReferenceStore | None = None,
 ) -> CancellationImageService:
     return CancellationImageService(
         survey_sheet=survey or FakeSurveySheet(),
@@ -118,7 +118,7 @@ def _make_service(
         analyzer=analyzer,
         cross_verifier=cross_verifier,
         reservation_channels=reservation_channels,
-        cancel_thread_store=cancel_thread_store,
+        thread_ref_store=thread_ref_store,
     )
 
 
@@ -948,7 +948,7 @@ class TestReservationThreadDBLookup:
     def test_DB캐시_예약스레드_사용(self):
         """DB에 저장된 위치 → Slack API 채널 순회 없이 ReservationLocation 반환."""
         fake_db = FakeDatabase()
-        store = CancellationThreadStore(fake_db.get_session)
+        store = ThreadReferenceStore(fake_db.get_session)
         store.save("R12345", RESERVATION_CH, "reserve-thread-1")
 
         survey = FakeSurveySheet()
@@ -981,7 +981,7 @@ class TestReservationThreadDBLookup:
             analyzer=analyzer,
             cross_verifier=cross_verifier,
             reservation_channels=[RESERVATION_CH],
-            cancel_thread_store=store,
+            thread_ref_store=store,
         )
         svc.poll_and_upload()
 
@@ -990,7 +990,7 @@ class TestReservationThreadDBLookup:
     def test_Slack_API_폴백_후_DB_캐시(self):
         """DB miss → Slack API 발견 → DB에 캐시 저장 확인."""
         fake_db = FakeDatabase()
-        store = CancellationThreadStore(fake_db.get_session)
+        store = ThreadReferenceStore(fake_db.get_session)
 
         survey = FakeSurveySheet()
         drive = FakeDrive()
@@ -1023,7 +1023,7 @@ class TestReservationThreadDBLookup:
             analyzer=analyzer,
             cross_verifier=cross_verifier,
             reservation_channels=[RESERVATION_CH],
-            cancel_thread_store=store,
+            thread_ref_store=store,
         )
         svc.poll_and_upload()
 
@@ -1065,7 +1065,7 @@ class TestReservationThreadDBLookup:
             analyzer=analyzer,
             cross_verifier=cross_verifier,
             reservation_channels=[RESERVATION_CH],
-            cancel_thread_store=None,
+            thread_ref_store=None,
         )
         svc.poll_and_upload()
 

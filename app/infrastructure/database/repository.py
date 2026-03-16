@@ -5,12 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
-from app.infrastructure.database.models import (
-    CancellationThreadRef,
-    IssueLog,
-    Settlement,
-    ThreadReference,
-)
+from app.infrastructure.database.models import IssueLog, Settlement, ThreadReference
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -292,32 +287,6 @@ class IssueLogRepository:
             record.sync_status = "pending"
 
         return len(records)
-
-
-class CancellationThreadRefRepository:
-    def __init__(self, session: Session):
-        self.session = session
-
-    def get_by_booking_key(self, booking_key: str) -> CancellationThreadRef | None:
-        stmt = select(CancellationThreadRef).where(
-            CancellationThreadRef.booking_key == booking_key,
-        )
-        return self.session.execute(stmt).scalar_one_or_none()
-
-    def save(
-        self, booking_key: str, channel_id: str, thread_ts: str
-    ) -> CancellationThreadRef:
-        existing = self.get_by_booking_key(booking_key)
-        if existing:
-            return existing
-        ref = CancellationThreadRef(
-            booking_key=booking_key,
-            channel_id=channel_id,
-            thread_ts=thread_ts,
-        )
-        self.session.add(ref)
-        self.session.flush()
-        return ref
 
 
 class ThreadReferenceRepository:
