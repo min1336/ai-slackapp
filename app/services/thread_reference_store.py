@@ -62,6 +62,27 @@ class ThreadReferenceStore:
         except SQLAlchemyError:
             logger.exception("thread_ref_save_failed", booking_key=booking_key)
 
+    def save_new_references(
+        self,
+        references: list[tuple[str, str]],
+        channel_id: str,
+    ) -> int:
+        """중복 없는 참조만 일괄 저장한다. 저장 건수를 반환."""
+        saved = 0
+        for booking_key, thread_ts in references:
+            try:
+                if self.get_by_booking_key(booking_key):
+                    continue
+                self.save(
+                    booking_key=booking_key,
+                    channel_id=channel_id,
+                    thread_ts=thread_ts,
+                )
+                saved += 1
+            except SQLAlchemyError:
+                logger.exception("backfill_save_failed", booking_key=booking_key)
+        return saved
+
     def _get_ref(self, booking_key: str) -> ThreadLocation | None:
         with self._get_session() as session:
             ref = ThreadReferenceRepository(session).get_by_booking_key(booking_key)

@@ -7,7 +7,10 @@ import pymupdf
 from app.models import DriveFile, SurveySubmission
 from app.services.cancellation_image_service import CancellationImageService
 from app.services.cross_verifier import CrossVerifier
+from app.services.drive_file_collector import DriveFileCollector
 from app.services.image_analyzer import ImageAnalyzer
+from app.services.pdf_converter import PdfConverter
+from app.services.reservation_locator import ReservationLocator
 from app.services.thread_reference_store import ThreadReferenceStore
 from tests.fakes.fake_database import FakeDatabase
 from tests.fakes.fake_gemini import FakeGeminiClient
@@ -104,21 +107,27 @@ def _make_service(
     drive: FakeDrive | None = None,
     writer: FakeSlackWriter | None = None,
     reader: FakeSlackReader | None = None,
+    file_collector: DriveFileCollector | None = None,
     analyzer: ImageAnalyzer | None = None,
     cross_verifier: CrossVerifier | None = None,
+    reservation_locator: ReservationLocator | None = None,
     reservation_channels: list[str] | None = None,
     thread_ref_store: ThreadReferenceStore | None = None,
 ) -> CancellationImageService:
+    _reader = reader or FakeSlackReader()
+    _drive = drive or FakeDrive()
+    _locator = reservation_locator
+    if _locator is None and reservation_channels is not None:
+        _locator = ReservationLocator(_reader, reservation_channels, thread_ref_store)
     return CancellationImageService(
         survey_sheet=survey or FakeSurveySheet(),
-        drive=drive or FakeDrive(),
+        file_collector=file_collector or DriveFileCollector(_drive, PdfConverter()),
         writer=writer or FakeSlackWriter(),
-        reader=reader or FakeSlackReader(),
+        reader=_reader,
         target_channel=TARGET_CH,
         analyzer=analyzer,
         cross_verifier=cross_verifier,
-        reservation_channels=reservation_channels,
-        thread_ref_store=thread_ref_store,
+        reservation_locator=_locator,
     )
 
 

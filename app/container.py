@@ -22,8 +22,11 @@ from app.infrastructure.survey_sheet import SurveySheetReader
 from app.services.approval_service import ApprovalService
 from app.services.cancellation_image_service import CancellationImageService
 from app.services.cross_verifier import CrossVerifier
+from app.services.drive_file_collector import DriveFileCollector
 from app.services.image_analyzer import ImageAnalyzer
+from app.services.pdf_converter import PdfConverter
 from app.services.rejection_service import RejectionService
+from app.services.reservation_locator import ReservationLocator
 from app.services.settlement_registration_service import (
     SettlementRegistrationService,
 )
@@ -217,16 +220,22 @@ class ServiceContainer:
                     analysis_enabled=True,
                 )
 
+            _collector = DriveFileCollector(drive=_drive, pdf_converter=PdfConverter())
+            _reservation_locator = ReservationLocator(
+                reader=self.reader,
+                reservation_channels=config.settlement.slack_channels.reservation,
+                thread_ref_store=self.thread_ref_store,
+            )
+
             self.cancellation_image = CancellationImageService(
                 survey_sheet=_survey,
-                drive=_drive,
+                file_collector=_collector,
                 writer=self.writer,
                 reader=self.reader,
                 target_channel=cancel_target,
                 analyzer=_analyzer,
                 cross_verifier=_cross_verifier,
-                reservation_channels=config.settlement.slack_channels.reservation,
-                thread_ref_store=self.thread_ref_store,
+                reservation_locator=_reservation_locator,
             )
         else:
             self.cancellation_image = None  # type: ignore[assignment]

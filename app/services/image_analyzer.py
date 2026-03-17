@@ -95,7 +95,15 @@ class ImageAnalyzer:
             raw_keys=list(raw.keys()),
             document_type=raw.get("document_type"),
         )
-        return self._parse_response(raw, quality_issues)
+        result = self._parse_response(raw, quality_issues)
+        logger.info(
+            "analysis_result",
+            document_type=result.document_type,
+            is_valid=result.is_valid,
+            extracted_fields=result.extracted_fields,
+            summary=result.summary[:200] if result.summary else "",
+        )
+        return result
 
     def _filter_images(self, images: list[bytes]) -> tuple[list[bytes], list[str]]:
         quality_issues: list[str] = []

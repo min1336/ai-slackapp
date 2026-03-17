@@ -6,15 +6,12 @@ from typing import TYPE_CHECKING
 
 from slack_sdk.errors import SlackApiError
 
-from app.core import get_logger
 from app.models import ThreadLocation
-from app.services.message_parser import parse_settlement_message
+from app.services.message_parser import extract_thread_references
 
 if TYPE_CHECKING:
     from app.infrastructure.protocols import SlackMessageReader
     from app.services.thread_reference_store import ThreadReferenceStore
-
-logger = get_logger(__name__)
 
 
 class ThreadDiscoveryService:
@@ -35,7 +32,6 @@ class ThreadDiscoveryService:
         fallback_booking_keys: Iterable[str] = (),
     ) -> ThreadLocation | None:
         if not self._reservation_channels:
-            logger.warning("reservation_channels_not_configured")
             return None
 
         candidate_keys = self._candidate_booking_keys(
@@ -43,12 +39,10 @@ class ThreadDiscoveryService:
             fallback_booking_keys,
         )
 
-        # 1단계: DB 조회
         location = self._find_issue_thread_in_db(candidate_keys)
         if location:
             return location
 
-        # 2단계: Slack API 폴백 — 채널 순서대로 탐색, 첫 발견 즉시 반환
         for ch in self._reservation_channels:
             location = self._find_issue_thread_in_slack(
                 reservation_channel=ch,
@@ -58,11 +52,6 @@ class ThreadDiscoveryService:
             if location:
                 return location
 
-        logger.info(
-            "thread_not_found_in_slack",
-            booking_key=booking_key,
-            fallback_booking_keys=list(candidate_keys[1:]),
-        )
         return None
 
     def save_thread_reference(
@@ -101,49 +90,21 @@ class ThreadDiscoveryService:
             max_pages: 채널당 최대 페이지 수 (1페이지 = 200메시지).
         """
         if not self._reservation_channels:
-            logger.warning("backfill_skipped_no_channel")
             return 0
 
         oldest = 0.0 if days is None else time.time() - (days * 86400)
         saved = 0
-        scanned = 0
 
         for ch in self._reservation_channels:
             try:
                 messages = self._reader.list_channel_messages(
                     ch, oldest=oldest, max_pages=max_pages
                 )
-                for msg in messages:
-                    scanned += 1
-                    try:
-                        text = msg.get("text", "")
-                        parsed = parse_settlement_message(text)
-                        booking_key = parsed.booking_key.strip()
-                        if not booking_key:
-                            continue
-
-                        message_ts = msg.get("ts", "")
-                        if not message_ts:
-                            continue
-
-                        if self._store.get_by_booking_key(booking_key):
-                            continue
-
-                        self._store.save(
-                            booking_key=booking_key,
-                            channel_id=ch,
-                            thread_ts=message_ts,
-                        )
-                        saved += 1
-                    except SlackApiError:
-                        raise
-                    except Exception:
-                        logger.exception("backfill_message_error", ts=msg.get("ts"))
+                refs, _ = extract_thread_references(messages)
+                saved += self._store.save_new_references(refs, ch)
             except SlackApiError:
-                logger.exception("backfill_channel_read_failed", channel_id=ch)
-                continue  # 한 채널 실패 시 다음 채널 계속
+                continue
 
-        logger.info("backfill_completed", saved=saved, scanned=scanned)
         return saved
 
     def save_transfer_thread_reference(
@@ -202,11 +163,6 @@ class ThreadDiscoveryService:
             if not thread_ts:
                 continue
 
-            logger.info(
-                "thread_found_via_slack_api",
-                booking_key=key,
-                thread_ts=thread_ts,
-            )
             self._save_discovered_reference(
                 target_booking_key=target_booking_key,
                 matched_booking_key=key,

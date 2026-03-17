@@ -308,7 +308,7 @@ class TestBackfillReservationThreads:
             return original_parse(text)
 
         monkeypatch.setattr(
-            "app.services.thread_discovery_service.parse_settlement_message",
+            "app.services.message_parser.parse_settlement_message",
             _parse_with_error,
         )
 

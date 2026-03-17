@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import datetime
 from enum import StrEnum
 
@@ -306,3 +306,33 @@ def parse_reservation_message(text: str) -> ReservationData:
             result.rental_period_start, result.rental_period_end = start, end
 
     return result
+
+
+def extract_thread_references(
+    messages: Iterable[dict],
+) -> tuple[list[tuple[str, str]], int]:
+    """메시지에서 (booking_key, thread_ts) 쌍을 추출한다.
+
+    Returns:
+        (references, scanned): 추출된 참조 리스트와 스캔한 총 메시지 수.
+    """
+    refs: list[tuple[str, str]] = []
+    scanned = 0
+    try:
+        for msg in messages:
+            scanned += 1
+            try:
+                text = msg.get("text", "")
+                parsed = parse_settlement_message(text)
+                booking_key = parsed.booking_key.strip()
+                if not booking_key:
+                    continue
+                message_ts = msg.get("ts", "")
+                if not message_ts:
+                    continue
+                refs.append((booking_key, message_ts))
+            except Exception:
+                continue
+    except Exception:
+        pass  # iterator 에러 시 수집된 부분 결과 반환
+    return refs, scanned

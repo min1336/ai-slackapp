@@ -1,15 +1,11 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from pathlib import PurePosixPath
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
-import pymupdf
 from slack_sdk.errors import SlackApiError
 
-from app.core import get_logger
 from app.models.analysis import CrossVerificationResult
-from app.services.message_parser import parse_reservation_message
 from app.views.analysis import (
     build_analysis_result_blocks,
     build_cross_verification_blocks,
@@ -17,30 +13,19 @@ from app.views.analysis import (
 
 if TYPE_CHECKING:
     from app.infrastructure.protocols import (
-        DriveImageGateway,
         SlackMessageReader,
         SlackMessageWriter,
         SurveySheetGateway,
     )
     from app.models import SurveySubmission
     from app.models.analysis import AnalysisResult
-    from app.models.cancellation import ReservationData
     from app.services.cross_verifier import CrossVerifier
+    from app.services.drive_file_collector import DriveFileCollector
     from app.services.image_analyzer import ImageAnalyzer
-    from app.services.thread_reference_store import ThreadReferenceStore
-
-logger = get_logger(__name__)
+    from app.services.reservation_locator import ReservationLocation, ReservationLocator
 
 _PDF_EMOJI = "pdf"
 _INVALID_EMOJI = "x"
-
-
-class ReservationLocation(NamedTuple):
-    """예약 데이터 + 해당 스레드 위치."""
-
-    data: ReservationData
-    channel: str
-    thread_ts: str
 
 
 class CancellationImageService:
@@ -49,31 +34,27 @@ class CancellationImageService:
     def __init__(
         self,
         survey_sheet: SurveySheetGateway,
-        drive: DriveImageGateway,
+        file_collector: DriveFileCollector,
         writer: SlackMessageWriter,
         reader: SlackMessageReader,
         target_channel: str,
         analyzer: ImageAnalyzer | None = None,
         cross_verifier: CrossVerifier | None = None,
-        reservation_channels: list[str] | None = None,
-        thread_ref_store: ThreadReferenceStore | None = None,
+        reservation_locator: ReservationLocator | None = None,
     ) -> None:
         self._survey_sheet = survey_sheet
-        self._drive = drive
+        self._file_collector = file_collector
         self._writer = writer
         self._reader = reader
         self._target_channel = target_channel
         self._analyzer = analyzer
         self._cross_verifier = cross_verifier
-        self._reservation_channels = reservation_channels or []
-        self._thread_ref_store = thread_ref_store
+        self._reservation_locator = reservation_locator
 
     def poll_and_upload(self) -> int:
         """새 설문 응답을 폴링하고 이미지를 업로드한다. 미처리 건수를 반환."""
-        logger.info("cancellation_poll_started")
         submissions = self._survey_sheet.get_all_submissions()
         if not submissions:
-            logger.info("cancellation_poll_no_submissions")
             return 0
 
         processed = 0
@@ -82,120 +63,34 @@ class CancellationImageService:
                 self._survey_sheet.mark_processed(sub.submission_id)
                 processed += 1
 
-        skipped = len(submissions) - processed
-        logger.info(
-            "cancellation_poll_completed",
-            total=len(submissions),
-            processed=processed,
-            skipped=skipped,
-        )
-        return skipped
+        return len(submissions) - processed
 
     def _process_submission(self, sub: SurveySubmission) -> bool:
-        logger.info(
-            "cancellation_processing",
-            submission_id=sub.submission_id,
-            booking_key=sub.booking_key,
-            customer_name=sub.customer_name,
-            folder_name=sub.folder_name,
-        )
         thread_ts = self._reader.find_message_by_text(
             self._target_channel, sub.booking_key
         )
         if not thread_ts:
-            logger.info(
-                "cancellation_no_thread",
-                booking_key=sub.booking_key,
-                submission_id=sub.submission_id,
-            )
-            return False
-        logger.debug(
-            "cancellation_thread_found",
-            booking_key=sub.booking_key,
-            thread_ts=thread_ts,
-        )
-
-        folder_id = self._drive.find_folder(sub.folder_name)
-        if not folder_id:
-            logger.info(
-                "cancellation_no_folder",
-                folder_name=sub.folder_name,
-                submission_id=sub.submission_id,
-            )
             return False
 
-        files = self._drive.list_image_files(folder_id)
-        if not files:
-            logger.info(
-                "cancellation_no_images",
-                folder_name=sub.folder_name,
-            )
+        collected = self._file_collector.collect(sub.folder_name)
+        if collected is None:
             return False
-        logger.debug(
-            "cancellation_files_found",
-            booking_key=sub.booking_key,
-            file_count=len(files),
-            file_names=[f.name for f in files],
-            mime_types=[f.mime_type for f in files],
-        )
 
         # 운영현황 행 선점: 이미 존재하면 중복 처리 방지 (Slack 업로드/댓글 스킵)
         if not self._survey_sheet.write_formatted_row(sub):
-            logger.info(
-                "cancellation_already_processed",
-                booking_key=sub.booking_key,
-            )
             return True
-        logger.debug(
-            "cancellation_formatted_row_created",
-            booking_key=sub.booking_key,
-        )
-
-        downloads: list[tuple[str, bytes]] = []
-        has_pdf = False
-        for file in files:
-            try:
-                content = self._drive.download_file(file.id)
-                logger.debug(
-                    "cancellation_file_downloaded",
-                    file_name=file.name,
-                    size=len(content),
-                    mime_type=file.mime_type,
-                )
-                if file.mime_type == "application/pdf":
-                    images = self._convert_pdf_to_images(content, file.name)
-                    logger.info(
-                        "cancellation_pdf_converted",
-                        file_name=file.name,
-                        pages=len(images),
-                        booking_key=sub.booking_key,
-                    )
-                    downloads.extend(images)
-                    has_pdf = True
-                else:
-                    downloads.append((file.name, content))
-            except Exception:
-                logger.exception(
-                    "cancellation_download_failed",
-                    file_name=file.name,
-                    booking_key=sub.booking_key,
-                )
-
-        if not downloads:
-            return False
 
         self._writer.upload_files(
             channel=self._target_channel,
             thread_ts=thread_ts,
             file_uploads=[
                 {"content": data, "filename": name, "title": name}
-                for name, data in downloads
+                for name, data in collected.images
             ],
         )
-        uploaded = len(downloads)
-        collected_images = [data for _, data in downloads]
+        collected_images = [data for _, data in collected.images]
 
-        if has_pdf:
+        if collected.has_pdf:
             with suppress(SlackApiError):
                 self._writer.add_reaction(
                     channel=self._target_channel,
@@ -205,21 +100,7 @@ class CancellationImageService:
 
         if self._analyzer and collected_images:
             self._analyze_and_report(collected_images, sub, thread_ts)
-        else:
-            logger.warning(
-                "analysis_skipped",
-                booking_key=sub.booking_key,
-                reason="no_analyzer" if not self._analyzer else "no_images",
-                has_analyzer=self._analyzer is not None,
-                image_count=len(collected_images),
-            )
 
-        logger.info(
-            "cancellation_uploaded",
-            booking_key=sub.booking_key,
-            count=uploaded,
-            has_pdf=has_pdf,
-        )
         return True
 
     def _analyze_and_report(
@@ -228,69 +109,46 @@ class CancellationImageService:
         submission: SurveySubmission,
         thread_ts: str,
     ) -> None:
+        # 분석 — optional (AI API 실패 시 업로드만 유지)
         try:
-            logger.info(
-                "analysis_started",
-                booking_key=submission.booking_key,
-                image_count=len(image_data),
-                image_sizes=[len(img) for img in image_data],
-            )
             result = self._analyzer.analyze(image_data, submission)  # type: ignore[union-attr]
-            logger.info(
-                "analysis_completed",
-                booking_key=submission.booking_key,
-                document_type=result.document_type,
-                summary=result.summary[:200] if result.summary else "",
-                extracted_fields=result.extracted_fields,
+        except Exception:
+            return
+
+        # 이미지 품질 부적합 → X + 사유, 즉시 종료
+        if not result.is_valid:
+            reason_text = "부적합 사유:\n" + "\n".join(
+                f"- {r}" for r in result.rejection_reasons
             )
-
-            # 이미지 품질 부적합 → X + 사유, 즉시 종료
-            if not result.is_valid:
-                logger.info(
-                    "analysis_invalid_image",
-                    booking_key=submission.booking_key,
-                    rejection_reasons=result.rejection_reasons,
-                )
-                reason_text = "부적합 사유:\n" + "\n".join(
-                    f"- {r}" for r in result.rejection_reasons
-                )
-                self._writer.post_message(
-                    channel=self._target_channel,
-                    text=reason_text,
-                    thread_ts=thread_ts,
-                )
-                with suppress(SlackApiError):
-                    self._writer.add_reaction(
-                        channel=self._target_channel,
-                        timestamp=thread_ts,
-                        name=_INVALID_EMOJI,
-                    )
-                return
-
-            blocks = build_analysis_result_blocks(result)
             self._writer.post_message(
                 channel=self._target_channel,
-                text="검증 결과",
+                text=reason_text,
                 thread_ts=thread_ts,
-                blocks=blocks,
             )
-            self._survey_sheet.write_analysis_result(submission.submission_id, result)
-            logger.info(
-                "analysis_report_posted",
-                booking_key=submission.booking_key,
-            )
-            if self._cross_verifier:
-                try:
-                    self._cross_verify_and_report(result, submission, thread_ts)
-                except Exception:
-                    logger.exception(
-                        "cross_verification_failed",
-                        booking_key=submission.booking_key,
-                    )
-        except Exception:
-            logger.exception(
-                "image_analysis_failed", booking_key=submission.booking_key
-            )
+            with suppress(SlackApiError):
+                self._writer.add_reaction(
+                    channel=self._target_channel,
+                    timestamp=thread_ts,
+                    name=_INVALID_EMOJI,
+                )
+            return
+
+        # 결과 포스트 + 시트 기록 — critical (실패 시 전파)
+        blocks = build_analysis_result_blocks(result)
+        self._writer.post_message(
+            channel=self._target_channel,
+            text="검증 결과",
+            thread_ts=thread_ts,
+            blocks=blocks,
+        )
+        self._survey_sheet.write_analysis_result(submission.submission_id, result)
+
+        # 교차검증 — optional (실패해도 분석 결과는 이미 포스트됨)
+        if self._cross_verifier:
+            try:
+                self._cross_verify_and_report(result, submission, thread_ts)
+            except Exception:
+                return
 
     def _cross_verify_and_report(
         self,
@@ -299,7 +157,12 @@ class CancellationImageService:
         thread_ts: str,
     ) -> None:
         """예약 데이터를 찾아 교차검증하고 결과를 스레드에 포스트한다."""
-        location = self._find_reservation_data(submission.booking_key, submission.phone)
+        if self._reservation_locator is None:
+            location = None
+        else:
+            location = self._reservation_locator.find(
+                submission.booking_key, submission.phone
+            )
 
         if location is None:
             result = CrossVerificationResult(
@@ -319,11 +182,6 @@ class CancellationImageService:
             blocks=blocks,
         )
         self._survey_sheet.write_verification_result(submission.submission_id, result)
-        logger.info(
-            "cross_verification_posted",
-            booking_key=submission.booking_key,
-            verdict=result.verdict,
-        )
 
         if result.verdict == "반려":
             with suppress(SlackApiError):
@@ -362,85 +220,3 @@ class CancellationImageService:
                     text=cancel_permalink,
                     thread_ts=location.thread_ts,
                 )
-            logger.info(
-                "cancellation_bidirectional_links_posted",
-                booking_key=submission.booking_key,
-            )
-
-    def _find_reservation_data(
-        self, booking_key: str, phone: str = ""
-    ) -> ReservationLocation | None:
-        """예약번호로 검색 → 실패 시 전화번호 fallback."""
-        location = self._search_reservation_channels(booking_key)
-        if location:
-            return location
-        if phone:
-            logger.info(
-                "reservation_search_fallback_phone",
-                booking_key=booking_key,
-            )
-            return self._search_reservation_channels(phone)
-        return None
-
-    def _search_reservation_channels(
-        self, search_text: str
-    ) -> ReservationLocation | None:
-        """DB 캐시 → conversations.history 폴백으로 예약 스레드를 찾는다."""
-        # Stage 1: DB lookup
-        if self._thread_ref_store:
-            location = self._thread_ref_store.get_by_booking_key(search_text)
-            if location:
-                parent_text = self._reader.get_parent_message(
-                    location.channel_id, location.thread_ts
-                )
-                if parent_text:
-                    return ReservationLocation(
-                        data=parse_reservation_message(parent_text),
-                        channel=location.channel_id,
-                        thread_ts=location.thread_ts,
-                    )
-
-        # Stage 2: conversations.history 폴백 (최근 메시지 순차 스캔)
-        for channel in self._reservation_channels:
-            found_ts = self._reader.find_message_by_text(
-                channel, search_text, max_pages=50
-            )
-            if not found_ts:
-                continue
-            loc = self._build_location(search_text, channel, found_ts)
-            if loc:
-                return loc
-        return None
-
-    def _build_location(
-        self, search_text: str, channel: str, found_ts: str
-    ) -> ReservationLocation | None:
-        """채널+ts에서 parent 메시지를 읽어 ReservationLocation을 생성한다."""
-        parent_text = self._reader.get_parent_message(channel, found_ts)
-        if not parent_text:
-            return None
-        if self._thread_ref_store:
-            self._thread_ref_store.save(search_text, channel, found_ts)
-        return ReservationLocation(
-            data=parse_reservation_message(parent_text),
-            channel=channel,
-            thread_ts=found_ts,
-        )
-
-    @staticmethod
-    def _convert_pdf_to_images(
-        pdf_bytes: bytes, original_name: str
-    ) -> list[tuple[str, bytes]]:
-        """PDF를 페이지별 PNG 이미지로 변환한다."""
-        stem = PurePosixPath(original_name).stem
-        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
-        try:
-            pages = len(doc)
-            result = []
-            for i, page in enumerate(doc, 1):
-                pix = page.get_pixmap(dpi=150)
-                img_name = f"{stem}_p{i}.png" if pages > 1 else f"{stem}.png"
-                result.append((img_name, pix.tobytes("png")))
-            return result
-        finally:
-            doc.close()
