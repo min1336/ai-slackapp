@@ -37,11 +37,13 @@ class SellerChannel(StrEnum):
     KLOOK = "클룩"
     WEB_TOUR = "웹투어"
     YANOLJA = "야놀자"
-    INBOUND = "인바운드"
     TRAVEL_BUCKET = "트레블버킷"
-    LUA = "루아"
+    LUA = "우리카드누아"
     BIZ_PLAY = "비즈플레이"
     TRIP_DOT_COM = "트립닷컴"
+    QEEQ = "QEEQ"
+    ZUZUCHE = "ZUZUCHE"
+    JEJU_BAKSA = "제주박사"
 
     def to_slack_option(self) -> SlackOption:
         return {
