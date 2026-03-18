@@ -822,7 +822,9 @@ class TestCrossVerificationReactions:
         ]
         drive.file_contents["f1"] = b"fake-png-bytes"
 
-        reader.messages_by_text[(RESERVATION_CH, sub.booking_key)] = "reserve-thread-1"
+        reader.channel_messages[RESERVATION_CH] = [
+            {"text": SAMPLE_RESERVATION_MSG, "ts": "reserve-thread-1"},
+        ]
         reader.parent_messages[(RESERVATION_CH, "reserve-thread-1")] = (
             SAMPLE_RESERVATION_MSG
         )
@@ -909,6 +911,128 @@ class TestCrossVerificationReactions:
         assert len(link_msgs) == 0
 
 
+# 문서 간 날짜 불일치 — rejection_reasons 포함
+_DATE_INCONSISTENCY_RESPONSE = {
+    "document_type": "항공사 운항정보확인서",
+    "extracted_fields": {
+        "고객명": "홍길동",
+        "항공편": "OZ8197",
+        "날짜": "2018-03-26",
+        "결항사유": "기상악화",
+        "발급기관": "아시아나항공",
+    },
+    "summary": "아시아나 OZ8197편 결항 확인서",
+    "rejection_reasons": [
+        "제출된 두 문서(공식 확인서 및 카카오톡 알림톡)에서 동일 항공편(OZ8197)의 "
+        "결항 날짜가 각각 2018년 3월 26일과 2018년 3월 18일로 상이하여 "
+        "핵심 정보인 날짜의 일관성이 부족합니다."
+    ],
+}
+
+# 문서 간 편명 불일치 — rejection_reasons 포함
+_FLIGHT_INCONSISTENCY_RESPONSE = {
+    "document_type": "항공사 운항정보확인서",
+    "extracted_fields": {
+        "고객명": "홍길동",
+        "항공편": "KE123",
+        "날짜": "2026-02-28",
+        "결항사유": "기상악화",
+        "발급기관": "대한항공",
+    },
+    "summary": "대한항공 결항 확인서",
+    "rejection_reasons": [
+        "문서 1의 항공편(KE123)과 문서 2의 항공편(OZ456)이 상이합니다."
+    ],
+}
+
+
+class TestDocumentConsistencyIntegration:
+    """여러 문서 간 정보 불일치 시 전체 흐름 테스트."""
+
+    def _setup_with_response(self, gemini_response, *, with_cross_verifier=False):
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient(result=gemini_response)
+        analyzer = ImageAnalyzer(gemini)
+        cross_verifier = CrossVerifier(gateway=gemini) if with_cross_verifier else None
+
+        sub = _submission()
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="confirm.png", mime_type="image/png"),
+            DriveFile(id="f2", name="kakao.png", mime_type="image/png"),
+        ]
+        drive.file_contents["f1"] = b"fake-confirm-img"
+        drive.file_contents["f2"] = b"fake-kakao-img"
+
+        if with_cross_verifier:
+            reader.messages_by_text[(RESERVATION_CH, sub.booking_key)] = (
+                "reserve-thread-1"
+            )
+            reader.parent_messages[(RESERVATION_CH, "reserve-thread-1")] = (
+                SAMPLE_RESERVATION_MSG
+            )
+
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            cross_verifier=cross_verifier,
+            reservation_channels=[RESERVATION_CH] if with_cross_verifier else None,
+        )
+        return svc, writer, survey
+
+    def test_날짜_불일치_X리액션_사유댓글(self):
+        """문서 간 날짜 불일치 시 X 리액션 + 부적합 사유 댓글."""
+        svc, writer, _ = self._setup_with_response(_DATE_INCONSISTENCY_RESPONSE)
+        svc.poll_and_upload()
+
+        x_reactions = [r for r in writer.reactions if r["name"] == "x"]
+        assert len(x_reactions) == 1
+
+        rejection_msgs = [
+            m for m in writer.posted_messages if "부적합 사유" in m["text"]
+        ]
+        assert len(rejection_msgs) == 1
+        assert "날짜" in rejection_msgs[0]["text"]
+        assert "상이" in rejection_msgs[0]["text"]
+
+    def test_날짜_불일치_교차검증_스킵(self):
+        """문서 간 날짜 불일치 시 교차검증이 실행되지 않아야 한다."""
+        svc, writer, survey = self._setup_with_response(
+            _DATE_INCONSISTENCY_RESPONSE, with_cross_verifier=True
+        )
+        svc.poll_and_upload()
+
+        assert len(survey.verification_results) == 0
+        assert len(survey.analysis_results) == 0
+
+    def test_편명_불일치_X리액션_교차검증_스킵(self):
+        """문서 간 편명 불일치 시 X 리액션 + 교차검증 스킵."""
+        svc, writer, survey = self._setup_with_response(
+            _FLIGHT_INCONSISTENCY_RESPONSE, with_cross_verifier=True
+        )
+        svc.poll_and_upload()
+
+        x_reactions = [r for r in writer.reactions if r["name"] == "x"]
+        assert len(x_reactions) == 1
+        assert len(survey.verification_results) == 0
+
+    def test_날짜_불일치에도_이미지_업로드_유지(self):
+        """문서 부적합이어도 이미지 업로드 자체는 완료되어야 한다."""
+        svc, writer, survey = self._setup_with_response(_DATE_INCONSISTENCY_RESPONSE)
+        svc.poll_and_upload()
+
+        assert len(writer.uploaded_files) == 2
+        assert survey.processed_ids == ["1001"]
+
+
 class TestPhoneFallback:
     """전화번호 fallback 검색 테스트."""
 
@@ -931,7 +1055,9 @@ class TestPhoneFallback:
         drive.file_contents["f1"] = b"fake-png-bytes"
 
         # 예약번호로는 못 찾고, 전화번호로 찾음
-        reader.messages_by_text[(RESERVATION_CH, "010-1234-5678")] = "reserve-thread-1"
+        reader.channel_messages[RESERVATION_CH] = [
+            {"text": SAMPLE_RESERVATION_MSG, "ts": "reserve-thread-1"},
+        ]
         reader.parent_messages[(RESERVATION_CH, "reserve-thread-1")] = (
             SAMPLE_RESERVATION_MSG
         )
@@ -1019,7 +1145,9 @@ class TestReservationThreadDBLookup:
         drive.file_contents["f1"] = b"fake-png-bytes"
 
         # Slack API로 찾을 수 있게 세팅
-        reader.messages_by_text[(RESERVATION_CH, sub.booking_key)] = "reserve-thread-1"
+        reader.channel_messages[RESERVATION_CH] = [
+            {"text": SAMPLE_RESERVATION_MSG, "ts": "reserve-thread-1"},
+        ]
         reader.parent_messages[(RESERVATION_CH, "reserve-thread-1")] = (
             SAMPLE_RESERVATION_MSG
         )
@@ -1061,7 +1189,9 @@ class TestReservationThreadDBLookup:
         ]
         drive.file_contents["f1"] = b"fake-png-bytes"
 
-        reader.messages_by_text[(RESERVATION_CH, sub.booking_key)] = "reserve-thread-1"
+        reader.channel_messages[RESERVATION_CH] = [
+            {"text": SAMPLE_RESERVATION_MSG, "ts": "reserve-thread-1"},
+        ]
         reader.parent_messages[(RESERVATION_CH, "reserve-thread-1")] = (
             SAMPLE_RESERVATION_MSG
         )
