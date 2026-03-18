@@ -70,6 +70,19 @@ def _start_sync_worker(sync_service: SyncService, cron_expr: str) -> None:
     Thread(target=run, daemon=True).start()
 
 
+def _run_startup_cancellation_poll(service) -> None:
+    """서버 시작 시 미처리 설문을 백그라운드에서 처리한다."""
+
+    def run() -> None:
+        try:
+            remaining = service.poll_and_upload()
+            logger.info("startup_cancellation_poll_done", remaining=remaining)
+        except Exception:
+            logger.exception("startup_cancellation_poll_failed")
+
+    Thread(target=run, daemon=True).start()
+
+
 def _handle_shutdown(signum: int, frame) -> None:
     """SIGTERM/SIGINT 핸들러 - graceful shutdown 시작."""
     sig_name = signal.Signals(signum).name
@@ -116,6 +129,7 @@ def main():
             "cancellation_event_driven",
             channel=container.cancellation_target_channel,
         )
+        _run_startup_cancellation_poll(container.cancellation_image)
     else:
         logger.info("cancellation_image_disabled")
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
@@ -50,9 +51,18 @@ class CancellationImageService:
         self._analyzer = analyzer
         self._cross_verifier = cross_verifier
         self._reservation_locator = reservation_locator
+        self._poll_lock = threading.Lock()
 
     def poll_and_upload(self) -> int:
         """새 설문 응답을 폴링하고 이미지를 업로드한다. 미처리 건수를 반환."""
+        if not self._poll_lock.acquire(blocking=False):
+            return -1
+        try:
+            return self._poll_and_upload_locked()
+        finally:
+            self._poll_lock.release()
+
+    def _poll_and_upload_locked(self) -> int:
         submissions = self._survey_sheet.get_all_submissions()
         if not submissions:
             return 0

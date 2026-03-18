@@ -162,7 +162,6 @@ def _cache_reservation_origin_thread(message: dict, discovery) -> None:
     )
 
 
-_cancellation_poll_running = False
 _RETRY_DELAYS = (30, 60)  # 재시도 대기(초): 30s, 60s
 
 
@@ -171,19 +170,12 @@ def _trigger_cancellation_poll(service, channel_id: str) -> None:
 
     첫 시도 후 미처리 건이 남으면 Drive 폴더 생성 지연을 고려해
     최대 2회 재시도한다 (30초, 60초 간격).
+    poll_and_upload() 내부 lock이 동시 실행을 방지한다.
     """
-    global _cancellation_poll_running  # noqa: PLW0603
     from threading import Thread
     from time import sleep
 
-    if _cancellation_poll_running:
-        logger.info("cancellation_poll_already_running", channel=channel_id)
-        return
-
-    _cancellation_poll_running = True
-
     def _run() -> None:
-        global _cancellation_poll_running  # noqa: PLW0603
         sleep(5)  # Jotform→Sheet/Drive 동기화 대기
         try:
             remaining = service.poll_and_upload()
@@ -201,8 +193,6 @@ def _trigger_cancellation_poll(service, channel_id: str) -> None:
                 remaining = service.poll_and_upload()
         except Exception:
             logger.exception("cancellation_poll_triggered_failed", channel=channel_id)
-        finally:
-            _cancellation_poll_running = False
 
     Thread(target=_run, daemon=True).start()
 
