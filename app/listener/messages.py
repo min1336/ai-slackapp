@@ -142,11 +142,19 @@ def _cache_reservation_origin_thread(message: dict, discovery) -> None:
         logger.debug("reservation_cache_skip_no_booking_key", text_preview=text[:80])
         return
 
-    discovery.register_origin_thread(
-        booking_key=booking_key,
-        channel_id=channel_id,
-        thread_ts=message_ts,
-    )
+    try:
+        discovery.register_origin_thread(
+            booking_key=booking_key,
+            channel_id=channel_id,
+            thread_ts=message_ts,
+        )
+    except Exception:
+        logger.warning(
+            "reservation_thread_cache_failed",
+            booking_key=booking_key,
+            thread_ts=message_ts,
+        )
+        return
     logger.info(
         "reservation_thread_cached",
         booking_key=booking_key,

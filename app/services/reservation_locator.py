@@ -53,7 +53,11 @@ class ReservationLocator:
     def _search(self, search_text: str) -> ReservationLocation | None:
         """DB 캐시 → conversations.history 폴백으로 예약 스레드를 찾는다."""
         if self._thread_ref_store:
-            location = self._thread_ref_store.get_by_booking_key(search_text)
+            try:
+                location = self._thread_ref_store.get_by_booking_key(search_text)
+            except Exception:
+                logger.warning("reservation_db_lookup_failed", search_text=search_text)
+                location = None
             if location:
                 parent_text = self._reader.get_parent_message(
                     location.channel_id, location.thread_ts
@@ -66,9 +70,20 @@ class ReservationLocator:
                     )
 
         for channel in self._reservation_channels:
-            found_ts = self._reader.find_message_by_text(
-                channel, search_text, max_pages=50
-            )
+            loc = self._search_channel_by_text(channel, search_text)
+            if loc:
+                return loc
+        return None
+
+    def _search_channel_by_text(
+        self, channel: str, search_text: str
+    ) -> ReservationLocation | None:
+        """채널 히스토리에서 text 본문에 search_text가 포함된 메시지를 찾는다."""
+        for msg in self._reader.list_channel_messages(channel, max_pages=50):
+            text = msg.get("text", "")
+            if not text or search_text not in text:
+                continue
+            found_ts = msg.get("ts")
             if not found_ts:
                 continue
             loc = self._build_location(search_text, channel, found_ts)
@@ -84,7 +99,10 @@ class ReservationLocator:
         if not parent_text:
             return None
         if self._thread_ref_store:
-            self._thread_ref_store.save(search_text, channel, found_ts)
+            try:
+                self._thread_ref_store.save(search_text, channel, found_ts)
+            except Exception:
+                logger.warning("reservation_db_save_failed", search_text=search_text)
         return ReservationLocation(
             data=parse_reservation_message(parent_text),
             channel=channel,

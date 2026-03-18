@@ -18,6 +18,23 @@ SAMPLE_RESERVATION_MSG = """\
     총 결제금액 : 185,704원"""
 
 
+def _make_reader_with_reservation(
+    channel: str = RESERVATION_CH,
+    thread_ts: str = "thread-1",
+    text: str = SAMPLE_RESERVATION_MSG,
+    *,
+    bold: bool = False,
+) -> FakeSlackReader:
+    """채널에 예약 메시지가 있는 FakeSlackReader를 생성한다."""
+    reader = FakeSlackReader()
+    msg_text = text
+    if bold:
+        msg_text = text.replace("R12345", "*R12345*")
+    reader.channel_messages[channel] = [{"text": msg_text, "ts": thread_ts}]
+    reader.parent_messages[(channel, thread_ts)] = text
+    return reader
+
+
 def _locator(
     *,
     reader: FakeSlackReader | None = None,
@@ -33,10 +50,7 @@ def _locator(
 
 class TestFind:
     def test_Slack_API로_예약_검색(self):
-        reader = FakeSlackReader()
-        reader.messages_by_text[(RESERVATION_CH, "R12345")] = "thread-1"
-        reader.parent_messages[(RESERVATION_CH, "thread-1")] = SAMPLE_RESERVATION_MSG
-
+        reader = _make_reader_with_reservation()
         loc = _locator(reader=reader)
         result = loc.find("R12345")
 
@@ -46,10 +60,7 @@ class TestFind:
         assert result.data.booking_key == "R12345"
 
     def test_예약번호_실패_전화번호_fallback(self):
-        reader = FakeSlackReader()
-        reader.messages_by_text[(RESERVATION_CH, "010-1234-5678")] = "thread-1"
-        reader.parent_messages[(RESERVATION_CH, "thread-1")] = SAMPLE_RESERVATION_MSG
-
+        reader = _make_reader_with_reservation()
         loc = _locator(reader=reader)
         result = loc.find("R99999", phone="010-1234-5678")
 
@@ -62,11 +73,8 @@ class TestFind:
         assert result is None
 
     def test_여러_채널_순회(self):
-        reader = FakeSlackReader()
         second_ch = "C-RESERVE-2"
-        reader.messages_by_text[(second_ch, "R12345")] = "thread-2"
-        reader.parent_messages[(second_ch, "thread-2")] = SAMPLE_RESERVATION_MSG
-
+        reader = _make_reader_with_reservation(channel=second_ch, thread_ts="thread-2")
         loc = _locator(reader=reader, channels=[RESERVATION_CH, second_ch])
         result = loc.find("R12345")
 
@@ -93,12 +101,7 @@ class TestFind:
         fake_db = FakeDatabase()
         store = ThreadReferenceStore(fake_db.get_session)
 
-        reader = FakeSlackReader()
-        reader.messages_by_text[(RESERVATION_CH, "R12345")] = "found-thread"
-        reader.parent_messages[(RESERVATION_CH, "found-thread")] = (
-            SAMPLE_RESERVATION_MSG
-        )
-
+        reader = _make_reader_with_reservation(thread_ts="found-thread")
         loc = _locator(reader=reader, store=store)
         loc.find("R12345")
 
@@ -106,11 +109,64 @@ class TestFind:
         assert cached is not None
         assert cached.thread_ts == "found-thread"
 
-    def test_store_없이_기존_동작(self):
-        reader = FakeSlackReader()
-        reader.messages_by_text[(RESERVATION_CH, "R12345")] = "thread-1"
-        reader.parent_messages[(RESERVATION_CH, "thread-1")] = SAMPLE_RESERVATION_MSG
+    def test_DB_에러_시_Slack_폴백(self):
+        """DB 세션 생성 실패 시에도 Slack API 폴백으로 예약을 찾는다."""
 
+        def _broken_session():
+            raise ValueError("DATABASE_URL is not configured")
+
+        store = ThreadReferenceStore(_broken_session)
+        reader = _make_reader_with_reservation()
+
+        loc = _locator(reader=reader, store=store)
+        result = loc.find("R12345")
+
+        assert result is not None
+        assert result.channel == RESERVATION_CH
+        assert result.thread_ts == "thread-1"
+
+    def test_DB_저장_에러_시_결과_정상_반환(self):
+        """Slack 폴백 후 DB 캐시 저장이 실패해도 결과는 정상 반환한다."""
+
+        def _broken_session():
+            raise ValueError("DATABASE_URL is not configured")
+
+        store = ThreadReferenceStore(_broken_session)
+        reader = _make_reader_with_reservation()
+
+        loc = _locator(reader=reader, store=store)
+        result = loc.find("R12345")
+
+        assert result is not None
+        assert result.data.booking_key == "R12345"
+
+    def test_빈텍스트_메시지_스킵(self):
+        """text=""인 메시지(Jotform 등)는 스킵하고 실제 예약 메시지를 찾는다."""
+        reader = FakeSlackReader()
+        reader.channel_messages[RESERVATION_CH] = [
+            {"text": "", "ts": "jotform-ts"},  # Jotform: text 비어있음
+            {"text": SAMPLE_RESERVATION_MSG, "ts": "reserve-ts"},
+        ]
+        reader.parent_messages[(RESERVATION_CH, "reserve-ts")] = SAMPLE_RESERVATION_MSG
+
+        loc = _locator(reader=reader)
+        result = loc.find("R12345")
+
+        assert result is not None
+        assert result.thread_ts == "reserve-ts"
+        assert result.data.booking_key == "R12345"
+
+    def test_볼드_마크다운_포맷_매칭(self):
+        """Slack 볼드(*text*) 포맷이 있어도 substring 매칭으로 예약을 찾는다."""
+        reader = _make_reader_with_reservation(bold=True)
+        loc = _locator(reader=reader)
+        result = loc.find("R12345")
+
+        assert result is not None
+        assert result.data.booking_key == "R12345"
+
+    def test_store_없이_기존_동작(self):
+        reader = _make_reader_with_reservation()
         loc = _locator(reader=reader, store=None)
         result = loc.find("R12345")
 
