@@ -98,7 +98,8 @@ def find_message_by_text(
 
         for msg in result.get("messages", []):
             text = msg.get("text", "")
-            if search_text in text:
+            normalized = text.replace("*", "")
+            if search_text in normalized:
                 return msg.get("ts")
             for block in msg.get("blocks", []):
                 for field in block.get("fields", []):

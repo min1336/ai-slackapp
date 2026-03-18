@@ -146,6 +146,24 @@ class TestFindMessageByText:
         result = find_message_by_text(client, "C123", "BK-001")
         assert result == "444.444"
 
+    def test_bold_마크업_있는_텍스트에서_발견(self):
+        """Slack bold 마크업(*text*)이 포함된 메시지에서도 검색어 매칭."""
+        client = _FakeSlackClient(
+            [
+                _make_history_response(
+                    [
+                        {
+                            "text": "*[카모아 예약]*\n    예약번호 : *RB2069206*\n    예약자명 : *박수진*",
+                            "ts": "555.555",
+                        }
+                    ]
+                )
+            ]
+        )
+
+        result = find_message_by_text(client, "C123", "예약번호 : RB2069206")
+        assert result == "555.555"
+
     def test_cursor_없으면_다음_페이지_요청_안함(self):
         client = _FakeSlackClient(
             [
