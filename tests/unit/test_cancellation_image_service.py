@@ -779,12 +779,10 @@ class TestImageValidation:
         )
         return svc, writer, survey
 
-    def test_이미지_부적합_X리액션_사유댓글(self):
+    def test_이미지_부적합_사유댓글(self):
         svc, writer, _ = self._setup_with_response(_INVALID_IMAGE_RESPONSE)
         svc.poll_and_upload()
 
-        x_reactions = [r for r in writer.reactions if r["name"] == "x"]
-        assert len(x_reactions) == 1
         rejection_msgs = [
             m for m in writer.posted_messages if "부적합 사유" in m["text"]
         ]
@@ -848,12 +846,10 @@ class TestCrossVerificationReactions:
         )
         return svc, writer, survey
 
-    def test_교차검증_반려_X리액션_링크없음(self):
+    def test_교차검증_반려_링크없음(self):
         svc, writer, _ = self._setup_with_verdict(_REJECT_RESPONSE, with_links=True)
         svc.poll_and_upload()
 
-        x_reactions = [r for r in writer.reactions if r["name"] == "x"]
-        assert len(x_reactions) == 1
         link_msgs = [m for m in writer.posted_messages if "slack.com" in m["text"]]
         assert len(link_msgs) == 0
 
@@ -988,13 +984,10 @@ class TestDocumentConsistencyIntegration:
         )
         return svc, writer, survey
 
-    def test_날짜_불일치_X리액션_사유댓글(self):
-        """문서 간 날짜 불일치 시 X 리액션 + 부적합 사유 댓글."""
+    def test_날짜_불일치_사유댓글(self):
+        """문서 간 날짜 불일치 시 부적합 사유 댓글."""
         svc, writer, _ = self._setup_with_response(_DATE_INCONSISTENCY_RESPONSE)
         svc.poll_and_upload()
-
-        x_reactions = [r for r in writer.reactions if r["name"] == "x"]
-        assert len(x_reactions) == 1
 
         rejection_msgs = [
             m for m in writer.posted_messages if "부적합 사유" in m["text"]
@@ -1013,15 +1006,13 @@ class TestDocumentConsistencyIntegration:
         assert len(survey.verification_results) == 0
         assert len(survey.analysis_results) == 0
 
-    def test_편명_불일치_X리액션_교차검증_스킵(self):
-        """문서 간 편명 불일치 시 X 리액션 + 교차검증 스킵."""
+    def test_편명_불일치_교차검증_스킵(self):
+        """문서 간 편명 불일치 시 교차검증 스킵."""
         svc, writer, survey = self._setup_with_response(
             _FLIGHT_INCONSISTENCY_RESPONSE, with_cross_verifier=True
         )
         svc.poll_and_upload()
 
-        x_reactions = [r for r in writer.reactions if r["name"] == "x"]
-        assert len(x_reactions) == 1
         assert len(survey.verification_results) == 0
 
     def test_날짜_불일치에도_이미지_업로드_유지(self):

@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from app.services.reservation_locator import ReservationLocation, ReservationLocator
 
 _PDF_EMOJI = "pdf"
-_INVALID_EMOJI = "x"
 
 
 class CancellationImageService:
@@ -135,12 +134,6 @@ class CancellationImageService:
                 text=reason_text,
                 thread_ts=thread_ts,
             )
-            with suppress(SlackApiError):
-                self._writer.add_reaction(
-                    channel=self._target_channel,
-                    timestamp=thread_ts,
-                    name=_INVALID_EMOJI,
-                )
             return
 
         # 결과 포스트 + 시트 기록 — critical (실패 시 전파)
@@ -196,13 +189,6 @@ class CancellationImageService:
                 thread_ts=thread_ts,
                 blocks=blocks,
             )
-            if result.verdict == "반려":
-                with suppress(SlackApiError):
-                    self._writer.add_reaction(
-                        channel=self._target_channel,
-                        timestamp=thread_ts,
-                        name=_INVALID_EMOJI,
-                    )
 
     def _post_bidirectional_links(
         self,
