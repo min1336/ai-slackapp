@@ -184,24 +184,25 @@ class CancellationImageService:
                 analysis_result, location.data, submission
             )
 
-        blocks = build_cross_verification_blocks(result)
-        self._writer.post_message(
-            channel=self._target_channel,
-            text=f"교차검증: {result.verdict}",
-            thread_ts=thread_ts,
-            blocks=blocks,
-        )
         self._survey_sheet.write_verification_result(submission.submission_id, result)
 
-        if result.verdict == "반려":
-            with suppress(SlackApiError):
-                self._writer.add_reaction(
-                    channel=self._target_channel,
-                    timestamp=thread_ts,
-                    name=_INVALID_EMOJI,
-                )
-        elif result.verdict == "승인" and location is not None:
+        if result.verdict == "승인" and location is not None:
             self._post_bidirectional_links(thread_ts, location, submission)
+        elif result.verdict != "승인":
+            blocks = build_cross_verification_blocks(result)
+            self._writer.post_message(
+                channel=self._target_channel,
+                text=f"교차검증: {result.verdict}",
+                thread_ts=thread_ts,
+                blocks=blocks,
+            )
+            if result.verdict == "반려":
+                with suppress(SlackApiError):
+                    self._writer.add_reaction(
+                        channel=self._target_channel,
+                        timestamp=thread_ts,
+                        name=_INVALID_EMOJI,
+                    )
 
     def _post_bidirectional_links(
         self,
