@@ -87,6 +87,6 @@ cancellation:
     survey_sheet_name: "결항데이터"
     formatted_sheet_name: "결항관리"
   analysis:
-    enabled: true
+    enabled: false
     gemini_model: "gemini-2.5-flash"
     timeout_seconds: 60
