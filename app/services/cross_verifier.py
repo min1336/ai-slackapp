@@ -52,7 +52,7 @@ class CrossVerifier:
         verdict = self._rule_based_verdict(analysis, comparisons)
 
         if verdict is not None:
-            reason = self._build_reason(verdict, comparisons)
+            reason = self._build_reason(verdict, comparisons, analysis)
             return CrossVerificationResult(
                 verdict=verdict,
                 reason=reason,
@@ -144,6 +144,10 @@ class CrossVerifier:
         analysis: AnalysisResult,
         comparisons: list[FieldComparison],
     ) -> str | None:
+        # AI가 감지한 반려 사유 (흐릿한 이미지, 지연 문서, 위조 의심 등)
+        if analysis.rejection_reasons:
+            return "반려"
+
         # 문서 유형 확인
         if analysis.document_type not in _VALID_DOC_TYPES:
             return None
@@ -223,10 +227,20 @@ class CrossVerifier:
                 ai_used=True,
             )
 
-    def _build_reason(self, verdict: str, comparisons: list[FieldComparison]) -> str:
+    def _build_reason(
+        self,
+        verdict: str,
+        comparisons: list[FieldComparison],
+        analysis: AnalysisResult | None = None,
+    ) -> str:
         if verdict == "반려":
+            reasons: list[str] = []
+            if analysis and analysis.rejection_reasons:
+                reasons.extend(analysis.rejection_reasons)
             mismatched = [c.field_name for c in comparisons if c.status == "불일치"]
-            return f"불일치 필드: {', '.join(mismatched)}"
+            if mismatched:
+                reasons.append(f"불일치 필드: {', '.join(mismatched)}")
+            return "\n".join(reasons) if reasons else "반려 사유 불명"
         if verdict == "승인":
             return "모든 필드 검증 통과"
         return "자동 판단 불가 — 수동 검토 필요"
