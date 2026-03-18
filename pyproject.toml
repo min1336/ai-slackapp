@@ -102,6 +102,7 @@ line-ending = "auto"
 
 [dependency-groups]
 dev = [
+    "pillow>=12.1.1",
     "pre-commit>=4.5.1",
     "pytest-cov>=6.0.0",
     "ruff>=0.14.13",

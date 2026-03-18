@@ -172,10 +172,13 @@ service = ThreadDiscoveryService(store, FakeSlackReader())
   - `settlement`: 승인자 목록, 스프레드시트 ID, 채널 ID
   - `cancellation`: 결항 검증 대상 채널, Drive 폴더, 설문 시트, 분석 모델 설정
 
-**결항 분석 환경변수** (`.env`, 선택):
-- `GEMINI_API_KEY`: Gemini Flash API (primary 분석)
-- `OPENAI_API_KEY`: GPT-4o-mini Vision (fallback 분석)
-- 둘 다 없으면 이미지 분석 비활성, 이미지 업로드만 수행
+**결항 분석 활성화 조건** (두 가지 모두 충족해야 활성):
+1. `config.{env}.yaml`의 `cancellation.analysis.enabled: true` (feature flag)
+2. `.env`에 API 키 설정:
+   - `GEMINI_API_KEY`: Gemini Flash API (primary 분석)
+   - `OPENAI_API_KEY`: GPT-4o-mini Vision (fallback 분석)
+   - 둘 다 없으면 `enabled: true`여도 분석 비활성, 이미지 업로드만 수행
+- 현재 상태: `config.dev.yaml` → `enabled: true`, `config.prod.yaml` → `enabled: false`
 
 ## 데이터베이스
 
