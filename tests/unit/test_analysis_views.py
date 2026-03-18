@@ -147,28 +147,6 @@ class TestBuildCrossVerificationBlocks:
         assert "large_yellow_circle" in all_text
         assert "보류" in all_text
 
-    def test_비교항목_fields_표시(self):
-        blocks = build_cross_verification_blocks(_verification())
-        has_fields = any("fields" in b for b in blocks)
-        assert has_fields
-        all_text = _extract_all_text(blocks)
-        assert "고객명" in all_text
-        assert "박성구" in all_text
-
-    def test_비교항목_status별_이모지(self):
-        comparisons = [
-            FieldComparison("A", "v1", "v1", "일치"),
-            FieldComparison("B", "v2", "v3", "불일치"),
-            FieldComparison("C", "v4", "", "확인불가"),
-            FieldComparison("D", "", "", "비교불필요"),
-        ]
-        blocks = build_cross_verification_blocks(_verification(comparisons=comparisons))
-        all_text = _extract_all_text(blocks)
-        assert "✓" in all_text
-        assert "✗" in all_text
-        assert "?" in all_text
-        assert "—" in all_text
-
     def test_판단사유_표시(self):
         blocks = build_cross_verification_blocks(
             _verification(reason="고객명이 불일치합니다.")

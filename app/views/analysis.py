@@ -113,22 +113,6 @@ def build_cross_verification_blocks(result: CrossVerificationResult) -> list[dic
         }
     )
 
-    # 필드 비교 그리드
-    if result.field_comparisons:
-        fields = []
-        for fc in result.field_comparisons:
-            status_emoji = _STATUS_EMOJI.get(fc.status, fc.status)
-            fields.append(
-                {
-                    "type": "mrkdwn",
-                    "text": (
-                        f"*{fc.field_name}* {status_emoji} {fc.status}\n"
-                        f"문서: {fc.document_value} / 예약: {fc.reservation_value}"
-                    ),
-                }
-            )
-        blocks.append({"type": "section", "fields": fields[:10]})
-
     # 판단 사유
     blocks.append(
         {
