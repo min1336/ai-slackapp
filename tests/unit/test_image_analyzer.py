@@ -175,6 +175,88 @@ class TestImageAnalyzerAnalyze:
         assert result.extracted_fields["결항사유"] == "태풍"
 
 
+class TestDocumentConsistency:
+    """여러 문서 간 정보 일관성 검증 테스트."""
+
+    def test_프롬프트에_문서간_일관성_검증_지시_포함(self):
+        """AI 프롬프트에 문서 간 정보 불일치 검증 항목이 포함되어야 한다."""
+        from app.services.image_analyzer import _ANALYSIS_PROMPT
+
+        assert "문서 간" in _ANALYSIS_PROMPT
+
+    def test_프롬프트에_GDS_날짜_형식_가이드_포함(self):
+        """AI 프롬프트에 항공 GDS 날짜(DDMmmYY) 파싱 가이드가 포함되어야 한다."""
+        from app.services.image_analyzer import _ANALYSIS_PROMPT
+
+        assert "DDMmmYY" in _ANALYSIS_PROMPT
+        assert "18MAR26" in _ANALYSIS_PROMPT
+
+    def test_문서간_날짜_불일치_rejection(self):
+        """두 문서에서 동일 항공편의 결항 날짜가 상이하면 is_valid=False."""
+        response = {
+            "document_type": "항공사 운항정보확인서",
+            "extracted_fields": {
+                "고객명": "홍길동",
+                "항공편": "OZ8197",
+                "날짜": "2018-03-26",
+                "결항사유": "기상악화",
+                "발급기관": "아시아나항공",
+            },
+            "summary": "아시아나 OZ8197편 결항 확인서",
+            "rejection_reasons": [
+                "제출된 두 문서에서 동일 항공편(OZ8197)의 결항 날짜가 "
+                "2018년 3월 26일과 2018년 3월 18일로 상이"
+            ],
+        }
+        gemini = FakeGeminiClient(result=response)
+        analyzer = ImageAnalyzer(gemini)
+        result = analyzer.analyze([b"img1", b"img2"], _submission())
+
+        assert not result.is_valid
+        assert len(result.rejection_reasons) == 1
+        assert "상이" in result.rejection_reasons[0]
+
+    def test_문서간_편명_불일치_rejection(self):
+        """두 문서에서 항공편 번호가 다르면 is_valid=False."""
+        response = {
+            "document_type": "항공사 운항정보확인서",
+            "extracted_fields": {
+                "고객명": "김철수",
+                "항공편": "KE123",
+                "날짜": "2026-01-15",
+                "결항사유": "기상악화",
+            },
+            "summary": "편명 불일치 문서",
+            "rejection_reasons": [
+                "문서 1의 항공편(KE123)과 문서 2의 항공편(OZ456)이 상이"
+            ],
+        }
+        gemini = FakeGeminiClient(result=response)
+        analyzer = ImageAnalyzer(gemini)
+        result = analyzer.analyze([b"img1", b"img2"], _submission())
+
+        assert not result.is_valid
+        assert "상이" in result.rejection_reasons[0]
+
+    def test_문서간_다중_불일치_모두_포함(self):
+        """날짜 + 편명 등 여러 불일치가 모두 rejection_reasons에 포함."""
+        response = {
+            "document_type": "항공사 운항정보확인서",
+            "extracted_fields": {"고객명": "홍길동", "날짜": "2026-01-15"},
+            "summary": "다중 불일치",
+            "rejection_reasons": [
+                "동일 항공편의 날짜가 문서 간 상이",
+                "항공편 번호가 문서 간 상이",
+            ],
+        }
+        gemini = FakeGeminiClient(result=response)
+        analyzer = ImageAnalyzer(gemini)
+        result = analyzer.analyze([b"img1", b"img2"], _submission())
+
+        assert not result.is_valid
+        assert len(result.rejection_reasons) == 2
+
+
 class TestAnalysisResultBlocks:
     def test_파싱불가_날짜_환불기한_생략(self):
         result = AnalysisResult(
