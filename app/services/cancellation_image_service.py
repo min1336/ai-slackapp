@@ -124,8 +124,14 @@ class CancellationImageService:
         except Exception:
             return
 
-        # 이미지 품질 부적합 → X + 사유, 즉시 종료
+        # 이미지 품질 부적합 → X 리액션 + 사유, 즉시 종료
         if not result.is_valid:
+            with suppress(SlackApiError):
+                self._writer.add_reaction(
+                    channel=self._target_channel,
+                    timestamp=thread_ts,
+                    name="x",
+                )
             reason_text = "부적합 사유:\n" + "\n".join(
                 f"- {r}" for r in result.rejection_reasons
             )
