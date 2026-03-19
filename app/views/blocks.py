@@ -258,6 +258,11 @@ def build_approval_request_message(
                     "type": "plain_text",
                     "text": _display_cost(data.seller_channel_cost),
                 },
+            ],
+        },
+        {
+            "type": "section",
+            "fields": [
                 {
                     "type": "mrkdwn",
                     "text": f"*{LabelText.USER_REFUND_COST}*",
