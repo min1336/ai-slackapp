@@ -16,12 +16,8 @@ class FakeGeminiClient:
             raise self.result
         if self.result is None:
             return {
-                "is_valid": True,
-                "confidence": 0.95,
-                "document_type": "결항확인서",
                 "extracted_fields": {},
-                "mismatches": [],
-                "quality_issues": [],
-                "reasoning": "테스트 기본 응답",
+                "summary": "테스트 기본 응답",
+                "rejection_reasons": [],
             }
         return self.result

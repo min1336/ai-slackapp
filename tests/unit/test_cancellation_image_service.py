@@ -22,7 +22,6 @@ RESERVATION_CH = "C-RESERVE"
 
 # 교차검증 "승인" 유도 — 날짜가 렌트기간 내, 모든 필드 일치
 _APPROVE_RESPONSE = {
-    "document_type": "항공사 운항정보확인서",
     "extracted_fields": {
         "고객명": "홍길동",
         "예약번호": "R12345",
@@ -37,7 +36,6 @@ _APPROVE_RESPONSE = {
 
 # 교차검증 "반려" 유도 — 날짜가 렌트기간 밖
 _REJECT_RESPONSE = {
-    "document_type": "항공사 운항정보확인서",
     "extracted_fields": {
         "고객명": "홍길동",
         "예약번호": "R12345",
@@ -52,7 +50,6 @@ _REJECT_RESPONSE = {
 
 # 이미지 부적합 — rejection_reasons 포함
 _INVALID_IMAGE_RESPONSE = {
-    "document_type": "기타",
     "extracted_fields": {},
     "summary": "이미지가 흐려 내용 확인 불가",
     "rejection_reasons": ["이미지가 흐리거나 텍스트를 읽을 수 없음"],
@@ -909,7 +906,6 @@ class TestCrossVerificationReactions:
 
 # 문서 간 날짜 불일치 — rejection_reasons 포함
 _DATE_INCONSISTENCY_RESPONSE = {
-    "document_type": "항공사 운항정보확인서",
     "extracted_fields": {
         "고객명": "홍길동",
         "항공편": "OZ8197",
@@ -927,7 +923,6 @@ _DATE_INCONSISTENCY_RESPONSE = {
 
 # 문서 간 편명 불일치 — rejection_reasons 포함
 _FLIGHT_INCONSISTENCY_RESPONSE = {
-    "document_type": "항공사 운항정보확인서",
     "extracted_fields": {
         "고객명": "홍길동",
         "항공편": "KE123",

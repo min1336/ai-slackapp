@@ -50,12 +50,14 @@ def build_analysis_result_blocks(result: AnalysisResult) -> list[dict]:
     """분석 결과를 Block Kit blocks로 변환한다."""
     blocks: list[dict] = []
 
-    # 헤더: 문서유형
-    doc_type = result.document_type or "문서"
+    # 헤더
     blocks.append(
         {
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f":page_facing_up: *{doc_type}*"},
+            "text": {
+                "type": "mrkdwn",
+                "text": ":page_facing_up: *결항확인서 분석 결과*",
+            },
         }
     )
 

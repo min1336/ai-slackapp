@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import TYPE_CHECKING
 
 from app.core import get_logger
@@ -15,39 +16,32 @@ _MAX_IMAGE_SIZE = 4 * 1024 * 1024  # 4MB
 _MAX_IMAGE_COUNT = 10
 
 _ANALYSIS_PROMPT = """\
+오늘 날짜는 {today}입니다.
 예약번호 {booking_key} (고객명: {customer_name})에 대한 결항확인 증빙 이미지입니다.
 이미지에서 정보를 추출하고 요약해주세요.
 
 ## 작업
 
-1. 문서 유형을 분류하세요:
-   - "항공사 운항정보확인서": 항공사가 발급한 운항 변경/결항 확인 문서
-   - "해운사 결항확인서": 해운사/선사가 발급한 결항 확인 문서
-   - "기타": 위에 해당하지 않는 문서
-2. 문서에서 읽을 수 있는 모든 정보를 key-value 형태로 추출하세요.
-   다음 핵심 필드는 해당 key 이름으로 반드시 포함 (읽을 수 없으면 빈 문자열):
+1. 문서에서 읽을 수 있는 모든 정보를 key-value 형태로 추출하세요.
+   다음 핵심 필드는 해당 key 이름으로 반드시 포함 (문서에 없으면 빈 문자열).
+   문서에 실제로 기재된 정보만 추출하고, 프롬프트 컨텍스트 값은 사용 금지:
    고객명, 예약번호, 날짜, 항공편, 결항사유, 발급기관.
+   고객명은 띄어쓰기를 제거하고, 여러 명이면 /로 구분하세요 (예: 최원순/태영미).
+   예약번호, 항공권번호, 이름 등 중요한 정보는 한 글자씩 정확히 읽으세요.
    그 외 문서에 표시된 모든 정보(노선, 출발시각, 대체편, PNR/확인번호, 발급일 등)도
    적절한 key를 지어 추출하세요.
    날짜 필드는 반드시 YYYY-MM-DD 형식으로 변환하세요.
    항공 GDS 날짜(DDMmmYY)에 주의: 18MAR26 → 2026-03-18, 05JAN25 → 2025-01-05.
-3. 추출한 정보를 바탕으로 문서 내용을 1~2문장으로 요약하세요.
-4. 문서의 유효성을 검증하세요. 다음 중 해당하는 문제가 있으면 rejection_reasons에 추가:
+2. 문서의 유효성을 검증하세요. 다음 중 해당하는 문제가 있으면 rejection_reasons에 추가:
    - 이미지가 흐리거나 텍스트를 읽을 수 없는 경우
    - 결항이 아닌 지연(delay) 안내 문서인 경우
-   - 문서가 위조/변조된 것으로 의심되는 경우
-   - 고객명, 항공편/선편 번호, 날짜 등 핵심 정보가 누락된 경우
-   - 문서에 표시된 고객명이 제출된 고객명({customer_name})과 명백히 다른 경우
-   - 여러 문서가 제출된 경우, 동일 항공편/선편의 날짜 등 핵심 정보가 문서 간 상이한 경우
-   주의: 예약번호는 렌트카 예약번호와 항공/선박 예약번호가
-   다른 시스템이므로 비교하지 마세요.
+   - 고객명, 날짜 정보가 누락된 경우
 
 ## 응답 형식
 
 여러 이미지가 있더라도 하나의 JSON 객체로 통합하여 응답하세요.
 반드시 아래 JSON 형식으로만 응답하세요 (배열이 아닌 단일 객체):
 {{
-  "document_type": "항공사 운항정보확인서" | "해운사 결항확인서" | "기타" | null,
   "extracted_fields": {{
     "고객명": "...", "예약번호": "...", "날짜": "...",
     "항공편": "...", "결항사유": "...", "발급기관": "...",
@@ -81,12 +75,12 @@ class ImageAnalyzer:
 
         if not filtered:
             return AnalysisResult(
-                document_type=None,
                 quality_issues=quality_issues,
                 summary="분석 가능한 이미지가 없습니다.",
             )
 
         prompt = _ANALYSIS_PROMPT.format(
+            today=date.today().isoformat(),
             customer_name=submission.customer_name,
             booking_key=submission.booking_key,
         )
@@ -96,12 +90,10 @@ class ImageAnalyzer:
         logger.debug(
             "gemini_raw_response",
             raw_keys=list(raw.keys()),
-            document_type=raw.get("document_type"),
         )
         result = self._parse_response(raw, quality_issues)
         logger.info(
             "analysis_result",
-            document_type=result.document_type,
             is_valid=result.is_valid,
             extracted_fields=result.extracted_fields,
             summary=result.summary[:200] if result.summary else "",
@@ -147,16 +139,14 @@ class ImageAnalyzer:
             if not isinstance(rejection, list):
                 rejection = []
             result = AnalysisResult(
-                document_type=raw.get("document_type"),
-                extracted_fields=raw.get("extracted_fields", {}),
-                summary=raw.get("summary", ""),
+                extracted_fields=raw.get("extracted_fields") or {},
+                summary=raw.get("summary") or "",
                 quality_issues=extra_issues,
                 rejection_reasons=rejection,
             )
         except (TypeError, ValueError, AttributeError):
             logger.warning("gemini_response_parse_failed", raw=raw)
             result = AnalysisResult(
-                document_type=None,
                 quality_issues=extra_issues,
                 summary="응답 파싱 실패",
             )

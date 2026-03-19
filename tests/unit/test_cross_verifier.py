@@ -9,12 +9,10 @@ from tests.fakes.fake_gemini import FakeGeminiClient
 
 
 def _analysis(
-    document_type="항공사 운항정보확인서",
     fields=None,
     quality_issues=None,
 ) -> AnalysisResult:
     return AnalysisResult(
-        document_type=document_type,
         extracted_fields=fields
         or {
             "고객명": "박성구",
@@ -194,10 +192,8 @@ class TestCompareFields:
         assert comp.status == "불일치"
 
     def test_추출필드_빈값이면_확인불가(self):
-        # Use 해운사 document_type so empty name is NOT 비교불필요
         verifier = CrossVerifier()
         analysis = _analysis(
-            document_type="해운사 결항확인서",
             fields={
                 "고객명": "",
                 "예약번호": "OR2017576",
@@ -211,62 +207,10 @@ class TestCompareFields:
         assert comp.status == "확인불가"
 
     def test_추출필드_None이면_확인불가(self):
-        # Use 해운사 document_type so None name is NOT 비교불필요
         verifier = CrossVerifier()
         analysis = _analysis(
-            document_type="해운사 결항확인서",
             fields={
                 "고객명": None,
-                "예약번호": "OR2017576",
-                "날짜": "2026-02-27",
-                "결항사유": "기상악화",
-            },
-        )
-        result = verifier.verify(analysis, _reservation(), _submission())
-        comp = _get_comparison(result, "고객명")
-        assert comp is not None
-        assert comp.status == "확인불가"
-
-
-class TestAirlineDocumentException:
-    def test_항공사문서_고객명_미기재_비교불필요(self):
-        verifier = CrossVerifier()
-        analysis = _analysis(
-            document_type="항공사 운항정보확인서",
-            fields={
-                "고객명": "",
-                "예약번호": "",
-                "날짜": "2026-02-27",
-                "결항사유": "기상악화",
-            },
-        )
-        result = verifier.verify(analysis, _reservation(), _submission())
-        comp = _get_comparison(result, "고객명")
-        assert comp is not None
-        assert comp.status == "비교불필요"
-
-    def test_항공사문서_예약번호_미기재_비교불필요(self):
-        verifier = CrossVerifier()
-        analysis = _analysis(
-            document_type="항공사 운항정보확인서",
-            fields={
-                "고객명": "",
-                "예약번호": "",
-                "날짜": "2026-02-27",
-                "결항사유": "기상악화",
-            },
-        )
-        result = verifier.verify(analysis, _reservation(), _submission())
-        comp = _get_comparison(result, "예약번호")
-        assert comp is not None
-        assert comp.status == "비교불필요"
-
-    def test_해운사문서_고객명_미기재는_확인불가(self):
-        verifier = CrossVerifier()
-        analysis = _analysis(
-            document_type="해운사 결항확인서",
-            fields={
-                "고객명": "",
                 "예약번호": "OR2017576",
                 "날짜": "2026-02-27",
                 "결항사유": "기상악화",
@@ -297,34 +241,6 @@ class TestRuleBasedVerdict:
         )
         result = verifier.verify(analysis, _reservation(), _submission())
         assert result.verdict == "반려"
-
-    def test_문서유형_기타이면_AI위임_없으면_보류(self):
-        verifier = CrossVerifier(gateway=None)
-        analysis = _analysis(
-            document_type="기타",
-            fields={
-                "고객명": "박성구",
-                "예약번호": "OR2017576",
-                "날짜": "2026-02-27",
-                "결항사유": "기상악화",
-            },
-        )
-        result = verifier.verify(analysis, _reservation(), _submission())
-        assert result.verdict == "보류"
-
-    def test_문서유형_None이면_보류(self):
-        verifier = CrossVerifier(gateway=None)
-        analysis = _analysis(
-            document_type=None,
-            fields={
-                "고객명": "박성구",
-                "예약번호": "OR2017576",
-                "날짜": "2026-02-27",
-                "결항사유": "기상악화",
-            },
-        )
-        result = verifier.verify(analysis, _reservation(), _submission())
-        assert result.verdict == "보류"
 
     def test_편명_미추출이면_보류(self):
         verifier = CrossVerifier(gateway=None)
@@ -358,10 +274,9 @@ class TestRuleBasedVerdict:
         assert result.verdict == "보류"
 
     def test_확인불가_필드만_있으면_승인_아닌_보류(self):
-        # 해운사 doc: identity fields all 확인불가 → not enough evidence → 보류
+        # identity fields all 확인불가 → not enough evidence → 보류
         verifier = CrossVerifier(gateway=None)
         analysis = _analysis(
-            document_type="해운사 결항확인서",
             fields={
                 "고객명": "",
                 "예약번호": "",
@@ -372,36 +287,12 @@ class TestRuleBasedVerdict:
         result = verifier.verify(analysis, _reservation(), _submission())
         assert result.verdict == "보류"
 
-    def test_항공사문서_비교불필요_포함_승인(self):
-        # Airline doc: name/key are 비교불필요, date matches → should still reach 승인
-        verifier = CrossVerifier()
-        analysis = _analysis(
-            document_type="항공사 운항정보확인서",
-            fields={
-                "고객명": "",
-                "예약번호": "",
-                "날짜": "2026-02-27",
-                "항공편": "LJ473",
-                "결항사유": "기상악화",
-            },
-        )
-        result = verifier.verify(analysis, _reservation(), _submission())
-        assert result.verdict == "승인"
-
 
 class TestAIFallback:
     def test_애매한_케이스_ai_호출(self):
         gemini = FakeGeminiClient(result={"verdict": "승인", "reasoning": "AI 판단"})
         verifier = CrossVerifier(gateway=gemini)
-        analysis = _analysis(
-            document_type="기타",
-            fields={
-                "고객명": "박성구",
-                "예약번호": "OR2017576",
-                "날짜": "2026-02-27",
-                "결항사유": "기상악화",
-            },
-        )
+        analysis = _analysis(quality_issues=["이미지 품질 이슈"])
         verifier.verify(analysis, _reservation(), _submission())
         assert len(gemini.calls) == 1
 
@@ -410,15 +301,7 @@ class TestAIFallback:
             result={"verdict": "승인", "reasoning": "AI 승인 이유"}
         )
         verifier = CrossVerifier(gateway=gemini)
-        analysis = _analysis(
-            document_type="기타",
-            fields={
-                "고객명": "박성구",
-                "예약번호": "OR2017576",
-                "날짜": "2026-02-27",
-                "결항사유": "기상악화",
-            },
-        )
+        analysis = _analysis(quality_issues=["이미지 품질 이슈"])
         result = verifier.verify(analysis, _reservation(), _submission())
         assert result.verdict == "승인"
         assert result.ai_used is True
@@ -429,15 +312,7 @@ class TestAIFallback:
             result={"verdict": "반려", "reasoning": "불일치 발견"}
         )
         verifier = CrossVerifier(gateway=gemini)
-        analysis = _analysis(
-            document_type="기타",
-            fields={
-                "고객명": "박성구",
-                "예약번호": "OR2017576",
-                "날짜": "2026-02-27",
-                "결항사유": "기상악화",
-            },
-        )
+        analysis = _analysis(quality_issues=["이미지 품질 이슈"])
         result = verifier.verify(analysis, _reservation(), _submission())
         assert result.verdict == "반려"
         assert result.ai_used is True
@@ -445,30 +320,14 @@ class TestAIFallback:
     def test_ai_실패시_보류_반환(self):
         gemini = FakeGeminiClient(result=Exception("API 오류"))
         verifier = CrossVerifier(gateway=gemini)
-        analysis = _analysis(
-            document_type="기타",
-            fields={
-                "고객명": "박성구",
-                "예약번호": "OR2017576",
-                "날짜": "2026-02-27",
-                "결항사유": "기상악화",
-            },
-        )
+        analysis = _analysis(quality_issues=["이미지 품질 이슈"])
         result = verifier.verify(analysis, _reservation(), _submission())
         assert result.verdict == "보류"
         assert result.ai_used is True
 
     def test_gateway_없으면_ai_스킵_보류(self):
         verifier = CrossVerifier(gateway=None)
-        analysis = _analysis(
-            document_type="기타",
-            fields={
-                "고객명": "박성구",
-                "예약번호": "OR2017576",
-                "날짜": "2026-02-27",
-                "결항사유": "기상악화",
-            },
-        )
+        analysis = _analysis(quality_issues=["이미지 품질 이슈"])
         result = verifier.verify(analysis, _reservation(), _submission())
         assert result.verdict == "보류"
         assert result.ai_used is False
@@ -476,15 +335,7 @@ class TestAIFallback:
     def test_ai_무효_verdict_보류_변환(self):
         gemini = FakeGeminiClient(result={"verdict": "확인", "reasoning": "판단"})
         verifier = CrossVerifier(gateway=gemini)
-        analysis = _analysis(
-            document_type="기타",
-            fields={
-                "고객명": "박성구",
-                "날짜": "2026-02-27",
-                "항공편": "LJ473",
-                "결항사유": "기상악화",
-            },
-        )
+        analysis = _analysis(quality_issues=["이미지 품질 이슈"])
         result = verifier.verify(analysis, _reservation(), _submission())
         assert result.verdict == "보류"
         assert result.ai_used is True

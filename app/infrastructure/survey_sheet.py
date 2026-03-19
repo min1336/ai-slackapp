@@ -292,7 +292,6 @@ class SurveySheetReader:
         # 추출 필드 + 요약 저장 (헤더가 있는 컬럼만)
         extracted = result.extracted_fields or {}
         field_map = {
-            "문서유형": result.document_type or "",
             "결항일자": extracted.get("날짜", ""),
             "항공편/선편": extracted.get("항공편", ""),
             "결항사유": extracted.get("결항사유", ""),
@@ -307,7 +306,6 @@ class SurveySheetReader:
         logger.info(
             "analysis_result_written",
             submission_id=submission_id,
-            document_type=result.document_type,
         )
 
     def write_verification_result(

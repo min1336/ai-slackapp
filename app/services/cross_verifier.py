@@ -15,12 +15,12 @@ from app.models.cancellation import ReservationData, SurveySubmission
 logger = get_logger(__name__)
 
 _DATE_FORMATS = ["%Y-%m-%d", "%Y.%m.%d", "%Y/%m/%d", "%Y년 %m월 %d일"]
-_AIRLINE_DOC_TYPES = {"항공사 운항정보확인서"}
-_VALID_DOC_TYPES = {"항공사 운항정보확인서", "해운사 결항확인서"}
 
 
-def _normalize_name(name: str) -> str:
-    return re.sub(r"\s+", "", name)
+def _split_names(name: str) -> list[str]:
+    """구분자로 분리 후 각 이름의 공백을 제거한 리스트를 반환한다."""
+    parts = re.split(r"[/,·]+", name)
+    return [re.sub(r"\s+", "", p) for p in parts if re.sub(r"\s+", "", p)]
 
 
 def _digits_only(phone: str) -> str:
@@ -76,24 +76,20 @@ class CrossVerifier:
         submission: SurveySubmission,
     ) -> list[FieldComparison]:
         fields = analysis.extracted_fields
-        is_airline = analysis.document_type in _AIRLINE_DOC_TYPES
         comparisons: list[FieldComparison] = []
 
         # 고객명
         doc_name = fields.get("고객명") or ""
         res_name = reservation.customer_name
-        if is_airline and not doc_name:
-            comparisons.append(
-                FieldComparison("고객명", doc_name, res_name, "비교불필요")
-            )
-        elif not doc_name:
+        if not doc_name:
             comparisons.append(
                 FieldComparison("고객명", doc_name, res_name, "확인불가")
             )
         else:
-            a = _normalize_name(doc_name)
-            b = _normalize_name(res_name)
-            status = "일치" if (a in b or b in a) else "불일치"
+            doc_names = _split_names(doc_name)
+            res_names = _split_names(res_name)
+            matched = any(d in r or r in d for d in doc_names for r in res_names)
+            status = "일치" if matched else "불일치"
             comparisons.append(FieldComparison("고객명", doc_name, res_name, status))
 
         # 예약번호 — 항공 PNR ≠ 렌트카 예약번호이므로 비교 불필요
@@ -148,10 +144,6 @@ class CrossVerifier:
         if analysis.rejection_reasons:
             return "반려"
 
-        # 문서 유형 확인
-        if analysis.document_type not in _VALID_DOC_TYPES:
-            return None
-
         # 이미지 품질 문제
         if analysis.quality_issues:
             return None
@@ -195,7 +187,6 @@ class CrossVerifier:
         json_instruction = '{"verdict": "승인|반려|보류", "reasoning": "판단 이유"}'
         prompt = (
             "다음은 결항확인서 교차검증 결과입니다. 판단이 필요합니다.\n\n"
-            f"문서 유형: {analysis.document_type}\n"
             f"요약: {analysis.summary}\n"
             f"추출 필드: {analysis.extracted_fields}\n"
             f"품질 이슈: {analysis.quality_issues}\n\n"

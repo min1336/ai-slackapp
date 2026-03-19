@@ -9,7 +9,6 @@ from app.views.analysis import build_analysis_result_blocks
 from tests.fakes.fake_gemini import FakeGeminiClient
 
 _SAMPLE_RESPONSE = {
-    "document_type": "항공사 운항정보확인서",
     "extracted_fields": {
         "고객명": "홍길동",
         "예약번호": "R12345",
@@ -31,21 +30,18 @@ class TestImageAnalyzerAnalyze:
         gemini = FakeGeminiClient(result=_SAMPLE_RESPONSE)
         analyzer = ImageAnalyzer(gemini)
         result = analyzer.analyze([b"fake-png"], _submission())
-        assert result.document_type == "항공사 운항정보확인서"
         assert result.extracted_fields["항공편"] == "KE123"
         assert "기상악화" in result.summary
         assert len(gemini.calls) == 1
 
     def test_other_doc_type(self):
         response = {
-            "document_type": "기타",
             "extracted_fields": {},
             "summary": "결항확인서가 아닌 일반 영수증.",
         }
         gemini = FakeGeminiClient(result=response)
         analyzer = ImageAnalyzer(gemini)
         result = analyzer.analyze([b"fake-png"], _submission())
-        assert result.document_type == "기타"
         assert "영수증" in result.summary
 
     def test_api_failure_raises(self):
@@ -57,8 +53,7 @@ class TestImageAnalyzerAnalyze:
     def test_malformed_response_returns_fallback(self):
         gemini = FakeGeminiClient(result={"unexpected": "format"})
         analyzer = ImageAnalyzer(gemini)
-        result = analyzer.analyze([b"fake-png"], _submission())
-        assert result.document_type is None
+        analyzer.analyze([b"fake-png"], _submission())
 
     def test_oversized_image_filtered(self):
         gemini = FakeGeminiClient(result=_SAMPLE_RESPONSE)
@@ -82,19 +77,16 @@ class TestImageAnalyzerAnalyze:
         analyzer = ImageAnalyzer(gemini)
         big = b"x" * (4 * 1024 * 1024 + 1)
         result = analyzer.analyze([big], _submission())
-        assert result.document_type is None
         assert "분석 가능한 이미지가 없습니다" in result.summary
         assert len(gemini.calls) == 0
 
     def test_list_response_normalized_to_first_element(self):
         response = [
             {
-                "document_type": "항공사 운항정보확인서",
                 "extracted_fields": {"고객명": "홍길동"},
                 "summary": "첫 번째 문서",
             },
             {
-                "document_type": "해운사 결항확인서",
                 "extracted_fields": {"고객명": "김영희"},
                 "summary": "두 번째 문서",
             },
@@ -102,18 +94,15 @@ class TestImageAnalyzerAnalyze:
         gemini = FakeGeminiClient(result=response)
         analyzer = ImageAnalyzer(gemini)
         result = analyzer.analyze([b"img1", b"img2"], _submission())
-        assert result.document_type == "항공사 운항정보확인서"
         assert result.extracted_fields["고객명"] == "홍길동"
 
     def test_empty_list_response_returns_fallback(self):
         gemini = FakeGeminiClient(result=[])
         analyzer = ImageAnalyzer(gemini)
-        result = analyzer.analyze([b"img"], _submission())
-        assert result.document_type is None
+        analyzer.analyze([b"img"], _submission())
 
     def test_rejection_reasons_파싱(self):
         response = {
-            "document_type": "항공사 운항정보확인서",
             "extracted_fields": {"고객명": "홍길동"},
             "summary": "문서 요약",
             "rejection_reasons": ["흐린 이미지"],
@@ -126,7 +115,6 @@ class TestImageAnalyzerAnalyze:
 
     def test_rejection_reasons_빈배열이면_valid(self):
         response = {
-            "document_type": "항공사 운항정보확인서",
             "extracted_fields": {},
             "summary": "정상 문서",
             "rejection_reasons": [],
@@ -146,7 +134,6 @@ class TestImageAnalyzerAnalyze:
 
     def test_rejection_reasons_문자열이면_빈리스트로_정규화(self):
         response = {
-            "document_type": "항공사 운항정보확인서",
             "extracted_fields": {},
             "summary": "문서 요약",
             "rejection_reasons": "문자열로 왔음",
@@ -159,7 +146,6 @@ class TestImageAnalyzerAnalyze:
 
     def test_maritime_doc_extracts_fields(self):
         response = {
-            "document_type": "해운사 결항확인서",
             "extracted_fields": {
                 "고객명": "김영희",
                 "날짜": "2025-12-13",
@@ -171,18 +157,11 @@ class TestImageAnalyzerAnalyze:
         gemini = FakeGeminiClient(result=response)
         analyzer = ImageAnalyzer(gemini)
         result = analyzer.analyze([b"fake-png"], _submission())
-        assert result.document_type == "해운사 결항확인서"
         assert result.extracted_fields["결항사유"] == "태풍"
 
 
 class TestDocumentConsistency:
     """여러 문서 간 정보 일관성 검증 테스트."""
-
-    def test_프롬프트에_문서간_일관성_검증_지시_포함(self):
-        """AI 프롬프트에 문서 간 정보 불일치 검증 항목이 포함되어야 한다."""
-        from app.services.image_analyzer import _ANALYSIS_PROMPT
-
-        assert "문서 간" in _ANALYSIS_PROMPT
 
     def test_프롬프트에_GDS_날짜_형식_가이드_포함(self):
         """AI 프롬프트에 항공 GDS 날짜(DDMmmYY) 파싱 가이드가 포함되어야 한다."""
@@ -194,7 +173,6 @@ class TestDocumentConsistency:
     def test_문서간_날짜_불일치_rejection(self):
         """두 문서에서 동일 항공편의 결항 날짜가 상이하면 is_valid=False."""
         response = {
-            "document_type": "항공사 운항정보확인서",
             "extracted_fields": {
                 "고객명": "홍길동",
                 "항공편": "OZ8197",
@@ -219,7 +197,6 @@ class TestDocumentConsistency:
     def test_문서간_편명_불일치_rejection(self):
         """두 문서에서 항공편 번호가 다르면 is_valid=False."""
         response = {
-            "document_type": "항공사 운항정보확인서",
             "extracted_fields": {
                 "고객명": "김철수",
                 "항공편": "KE123",
@@ -241,7 +218,6 @@ class TestDocumentConsistency:
     def test_문서간_다중_불일치_모두_포함(self):
         """날짜 + 편명 등 여러 불일치가 모두 rejection_reasons에 포함."""
         response = {
-            "document_type": "항공사 운항정보확인서",
             "extracted_fields": {"고객명": "홍길동", "날짜": "2026-01-15"},
             "summary": "다중 불일치",
             "rejection_reasons": [
@@ -260,7 +236,6 @@ class TestDocumentConsistency:
 class TestAnalysisResultBlocks:
     def test_파싱불가_날짜_환불기한_생략(self):
         result = AnalysisResult(
-            document_type="항공사 운항정보확인서",
             extracted_fields={"고객명": "홍길동", "날짜": "어제"},
         )
         blocks = build_analysis_result_blocks(result)
@@ -270,7 +245,6 @@ class TestAnalysisResultBlocks:
 
     def test_정상_날짜_환불기한_표시(self):
         result = AnalysisResult(
-            document_type="항공사 운항정보확인서",
             extracted_fields={"날짜": "2026-02-24"},
         )
         blocks = build_analysis_result_blocks(result)
