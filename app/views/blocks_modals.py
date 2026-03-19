@@ -166,6 +166,7 @@ def build_registration_modal(
     company_sub_name: str = "",
     settlement_cost: str = "",
     carmore_cost: str = "",
+    seller_channel_cost: str = "",
     user_refund_cost: str = "",
     seller_channel: str = "",
     description: str = "",
@@ -216,6 +217,17 @@ def build_registration_modal(
                 False,
             ),
         ],
+    )
+
+    _add_select_with_initial(
+        blocks=blocks,
+        block_id=BlockId.SELLER_CHANNEL_BLOCK,
+        label_text=LabelText.SELLER_CHANNEL,
+        action_id=ActionId.SELLER_CHANNEL_INPUT,
+        placeholder_text=CommonText.SELECT,
+        options=SELLER_CHANNEL_OPTIONS,
+        initial_option=seller_channel_initial,
+        is_required=True,
     )
 
     _add_datepicker_with_initial(
@@ -281,6 +293,13 @@ def build_registration_modal(
                 True,
             ),
             (
+                BlockId.SELLER_CHANNEL_COST_BLOCK,
+                LabelText.SELLER_CHANNEL_COST,
+                ActionId.SELLER_CHANNEL_COST_INPUT,
+                seller_channel_cost,
+                True,
+            ),
+            (
                 BlockId.USER_REFUND_COST_BLOCK,
                 LabelText.USER_REFUND_COST,
                 ActionId.USER_REFUND_COST_INPUT,
@@ -288,17 +307,6 @@ def build_registration_modal(
                 True,
             ),
         ],
-    )
-
-    _add_select_with_initial(
-        blocks=blocks,
-        block_id=BlockId.SELLER_CHANNEL_BLOCK,
-        label_text=LabelText.SELLER_CHANNEL,
-        action_id=ActionId.SELLER_CHANNEL_INPUT,
-        placeholder_text=CommonText.SELECT,
-        options=SELLER_CHANNEL_OPTIONS,
-        initial_option=seller_channel_initial,
-        is_required=True,
     )
 
     # 동적 폼: 내용 - 셀렉트 항상 렌더링, "기타" 선택 시 텍스트 입력 추가

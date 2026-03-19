@@ -15,6 +15,7 @@ class LabelText:
     PRINCIPAL = "원금"  # 이관 예약용
     CARMORE_COST = "카모아 부담비용"
     CARMORE_BURDEN = "카모아 부담금"  # 이관 예약용 (다른 표현)
+    SELLER_CHANNEL_COST = "판매채널부담금"
     USER_REFUND_COST = "고객 환불 금액"
     SELLER_CHANNEL = "판매채널"
     DESCRIPTION = "내용"

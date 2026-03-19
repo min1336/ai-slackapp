@@ -41,6 +41,7 @@ settlement:
           "업체명2(대신배차)": company_sub_name
           "정산기준금액": settlement_cost
           "카모아 부담비용": carmore_cost
+          "판매채널부담금": seller_channel_cost
           "고객환불금액": user_refund_cost
           "내용": description
           "판매채널": sales_channel
@@ -63,6 +64,7 @@ settlement:
           "업체명2(대신배차)": company_sub_name
           "정산기준금액": settlement_cost
           "카모아 부담비용": carmore_cost
+          "판매채널부담금": seller_channel_cost
           "고객환불금액": user_refund_cost
           "판매채널": sales_channel
           "내용": description

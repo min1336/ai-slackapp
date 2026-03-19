@@ -95,6 +95,11 @@ def register_view_handlers(app: App, container: ServiceContainer) -> None:
                 BlockId.CARMORE_COST_BLOCK,
                 ActionId.CARMORE_COST_INPUT,
             ),
+            seller_channel_cost=text_value(
+                values,
+                BlockId.SELLER_CHANNEL_COST_BLOCK,
+                ActionId.SELLER_CHANNEL_COST_INPUT,
+            ),
             user_refund_cost=text_value(
                 values,
                 BlockId.USER_REFUND_COST_BLOCK,

@@ -27,7 +27,9 @@ def _parse_cost(value: str) -> int | None:
         return None
 
 
-_COST_FIELDS = frozenset({"settlement_cost", "carmore_cost", "user_refund_cost"})
+_COST_FIELDS = frozenset(
+    {"settlement_cost", "carmore_cost", "seller_channel_cost", "user_refund_cost"}
+)
 
 _SHARED_FIELDS: tuple[str, ...] = (
     "settlement_day",
@@ -37,6 +39,7 @@ _SHARED_FIELDS: tuple[str, ...] = (
     "company_sub_name",
     "settlement_cost",
     "carmore_cost",
+    "seller_channel_cost",
     "user_refund_cost",
     "issue_type",
     "sales_channel",

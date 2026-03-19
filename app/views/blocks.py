@@ -252,6 +252,14 @@ def build_approval_request_message(
                 },
                 {
                     "type": "mrkdwn",
+                    "text": f"*{LabelText.SELLER_CHANNEL_COST}*",
+                },
+                {
+                    "type": "plain_text",
+                    "text": _display_cost(data.seller_channel_cost),
+                },
+                {
+                    "type": "mrkdwn",
                     "text": f"*{LabelText.USER_REFUND_COST}*",
                 },
                 {

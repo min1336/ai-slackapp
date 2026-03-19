@@ -29,6 +29,7 @@ def sample_row():
         company_sub_name="부서",
         settlement_cost="100000",
         carmore_cost="5000",
+        seller_channel_cost="",
         user_refund_cost="0",
         issue_type="환불",
         sales_channel="온라인",

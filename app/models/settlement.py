@@ -37,6 +37,7 @@ class SettlementData(BaseModel):
     # ── 금액 정보 ──
     settlement_cost: int | None = None
     carmore_cost: int | None = None
+    seller_channel_cost: int | None = None
     user_refund_cost: int | None = None
 
     # ── 이슈 정보 ──
@@ -54,7 +55,11 @@ class SettlementData(BaseModel):
     original_message_ts: str | None = None  # 대기중 메시지 ts (업데이트용)
 
     @field_validator(
-        "settlement_cost", "carmore_cost", "user_refund_cost", mode="before"
+        "settlement_cost",
+        "carmore_cost",
+        "seller_channel_cost",
+        "user_refund_cost",
+        mode="before",
     )
     @classmethod
     def parse_cost(cls, v: str | int | None) -> int | None:
@@ -110,6 +115,7 @@ class RowConvertible(Protocol):
     company_sub_name: str
     settlement_cost: int | None
     carmore_cost: int | None
+    seller_channel_cost: int | None
     user_refund_cost: int | None
     issue_type: str
     sales_channel: str
@@ -133,6 +139,7 @@ class SettlementRow:
     company_sub_name: str
     settlement_cost: str
     carmore_cost: str
+    seller_channel_cost: str
     user_refund_cost: str
     description: str
     status: str
@@ -167,6 +174,7 @@ class SettlementRow:
             company_sub_name=data.company_sub_name or "",
             settlement_cost=format_cost(data.settlement_cost),
             carmore_cost=format_cost(data.carmore_cost),
+            seller_channel_cost=format_cost(data.seller_channel_cost),
             user_refund_cost=format_cost(data.user_refund_cost),
             issue_type=data.issue_type,
             sales_channel=data.seller_channel or "",
@@ -204,6 +212,7 @@ class SettlementRow:
             company_sub_name=entity.company_sub_name,
             settlement_cost=format_cost(entity.settlement_cost),
             carmore_cost=format_cost(entity.carmore_cost),
+            seller_channel_cost=format_cost(entity.seller_channel_cost),
             user_refund_cost=format_cost(entity.user_refund_cost),
             issue_type=entity.issue_type,
             sales_channel=entity.sales_channel,

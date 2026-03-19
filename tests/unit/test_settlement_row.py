@@ -19,6 +19,7 @@ class TestSettlementRow:
             company_sub_name="업체2",
             settlement_cost="100000",
             carmore_cost="5000",
+            seller_channel_cost="",
             user_refund_cost="10000",
             description="내용",
             status="승인",
@@ -60,6 +61,7 @@ class TestSettlementRow:
             company_sub_name="",
             settlement_cost="100000",
             carmore_cost="",
+            seller_channel_cost="",
             user_refund_cost="",
             description="",
             status="승인",
@@ -91,6 +93,7 @@ class TestSettlementRow:
             company_sub_name="",
             settlement_cost="100000",
             carmore_cost="",
+            seller_channel_cost="",
             user_refund_cost="",
             description="",
             status="승인",
@@ -98,7 +101,7 @@ class TestSettlementRow:
         )
 
         result = row.to_dict()
-        assert len(result) == 21
+        assert len(result) == 22
 
     def test_to_dict_키가_SETTLEMENT_FIELDS와_일치(self):
         """to_dict()의 키가 SETTLEMENT_FIELDS와 동일한지 확인"""
@@ -111,6 +114,7 @@ class TestSettlementRow:
             company_sub_name="",
             settlement_cost="100000",
             carmore_cost="",
+            seller_channel_cost="",
             user_refund_cost="",
             description="",
             status="승인",
