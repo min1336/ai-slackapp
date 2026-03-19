@@ -200,11 +200,18 @@ class CancellationAnalysisConfig(BaseModel):
     timeout_seconds: int = 30
 
 
+class OverseasConfig(BaseModel):
+    prefixes: list[str] = []
+    mention: str = ""
+    reaction: str = "flag-jp"
+
+
 class CancellationConfig(BaseModel):
     slack_channels: CancellationSlackChannelsConfig = CancellationSlackChannelsConfig()
     drive: CancellationDriveConfig = CancellationDriveConfig()
     spreadsheet: CancellationSpreadsheetConfig = CancellationSpreadsheetConfig()
     analysis: CancellationAnalysisConfig = CancellationAnalysisConfig()
+    overseas: OverseasConfig = OverseasConfig()
 
 
 class AppConfig(BaseModel):

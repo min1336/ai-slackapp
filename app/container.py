@@ -236,6 +236,9 @@ class ServiceContainer:
                 analyzer=_analyzer,
                 cross_verifier=_cross_verifier,
                 reservation_locator=_reservation_locator,
+                overseas_prefixes=cancel_cfg.overseas.prefixes,
+                overseas_mention=cancel_cfg.overseas.mention,
+                overseas_reaction=cancel_cfg.overseas.reaction,
             )
         else:
             self.cancellation_image = None  # type: ignore[assignment]

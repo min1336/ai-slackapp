@@ -110,6 +110,9 @@ def _make_service(
     reservation_locator: ReservationLocator | None = None,
     reservation_channels: list[str] | None = None,
     thread_ref_store: ThreadReferenceStore | None = None,
+    overseas_prefixes: list[str] | None = None,
+    overseas_mention: str = "",
+    overseas_reaction: str = "",
 ) -> CancellationImageService:
     _reader = reader or FakeSlackReader()
     _drive = drive or FakeDrive()
@@ -125,6 +128,9 @@ def _make_service(
         analyzer=analyzer,
         cross_verifier=cross_verifier,
         reservation_locator=_locator,
+        overseas_prefixes=overseas_prefixes,
+        overseas_mention=overseas_mention,
+        overseas_reaction=overseas_reaction,
     )
 
 
@@ -1195,3 +1201,82 @@ class TestReservationThreadDBLookup:
         svc.poll_and_upload()
 
         assert len(survey.verification_results) == 1
+
+
+class TestOverseasHandling:
+    """해외(일본) 결항 건 분기 처리 테스트."""
+
+    def _setup_overseas(self, *, booking_key="OT12345", prefixes=None):
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient()
+        analyzer = ImageAnalyzer(gemini)
+
+        sub = _submission(key=booking_key)
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, booking_key)] = "thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            overseas_prefixes=(
+                prefixes if prefixes is not None else ["OT", "HG", "KL", "IM"]
+            ),
+            overseas_mention="<!subteam^S03KUCG1H53>",
+            overseas_reaction="flag-jp",
+        )
+        return svc, writer, survey
+
+    def test_해외_prefix_매칭_시_멘션_댓글(self):
+        svc, writer, _ = self._setup_overseas(booking_key="OT12345")
+        svc.poll_and_upload()
+
+        mention_msgs = [m for m in writer.posted_messages if "S03KUCG1H53" in m["text"]]
+        assert len(mention_msgs) == 1
+        assert "확인 부탁드립니다" in mention_msgs[0]["text"]
+
+    def test_해외_prefix_매칭_시_국기_리액션(self):
+        svc, writer, _ = self._setup_overseas(booking_key="HG99999")
+        svc.poll_and_upload()
+
+        jp_reactions = [r for r in writer.reactions if r["name"] == "flag-jp"]
+        assert len(jp_reactions) == 1
+
+    def test_해외_건_분석_스킵(self):
+        svc, writer, survey = self._setup_overseas(booking_key="KL54321")
+        svc.poll_and_upload()
+
+        assert len(survey.analysis_results) == 0
+        assert len(survey.verification_results) == 0
+
+    def test_해외_건_이미지_업로드_유지(self):
+        svc, writer, survey = self._setup_overseas(booking_key="IM77777")
+        svc.poll_and_upload()
+
+        assert len(writer.uploaded_files) == 1
+        assert survey.processed_ids == ["1001"]
+
+    def test_국내_건_기존_로직_유지(self):
+        svc, writer, survey = self._setup_overseas(booking_key="R12345")
+        svc.poll_and_upload()
+
+        assert len(survey.analysis_results) == 1
+        mention_msgs = [m for m in writer.posted_messages if "S03KUCG1H53" in m["text"]]
+        assert len(mention_msgs) == 0
+
+    def test_overseas_prefixes_비어있으면_모두_국내(self):
+        svc, writer, _ = self._setup_overseas(booking_key="OT12345", prefixes=[])
+        svc.poll_and_upload()
+
+        jp_reactions = [r for r in writer.reactions if r["name"] == "flag-jp"]
+        assert len(jp_reactions) == 0

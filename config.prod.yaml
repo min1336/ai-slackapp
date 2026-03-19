@@ -94,3 +94,7 @@ cancellation:
     enabled: false
     gemini_model: "gemini-2.5-flash"
     timeout_seconds: 60
+  overseas:
+    prefixes: ["OT", "HG", "KL", "IM"]
+    mention: "<!subteam^S03KUCG1H53>"
+    reaction: "flag-jp"

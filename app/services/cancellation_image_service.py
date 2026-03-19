@@ -41,6 +41,9 @@ class CancellationImageService:
         analyzer: ImageAnalyzer | None = None,
         cross_verifier: CrossVerifier | None = None,
         reservation_locator: ReservationLocator | None = None,
+        overseas_prefixes: list[str] | None = None,
+        overseas_mention: str = "",
+        overseas_reaction: str = "",
     ) -> None:
         self._survey_sheet = survey_sheet
         self._file_collector = file_collector
@@ -51,6 +54,9 @@ class CancellationImageService:
         self._cross_verifier = cross_verifier
         self._reservation_locator = reservation_locator
         self._poll_lock = threading.Lock()
+        self._overseas_prefixes = tuple(p.upper() for p in (overseas_prefixes or ()))
+        self._overseas_mention = overseas_mention
+        self._overseas_reaction = overseas_reaction
 
     def poll_and_upload(self) -> int:
         """새 설문 응답을 폴링하고 이미지를 업로드한다. 미처리 건수를 반환."""
@@ -107,10 +113,34 @@ class CancellationImageService:
                     name=_PDF_EMOJI,
                 )
 
+        if self._is_overseas(sub.booking_key):
+            self._handle_overseas(thread_ts)
+            return True
+
         if self._analyzer and collected_images:
             self._analyze_and_report(collected_images, sub, thread_ts)
 
         return True
+
+    def _is_overseas(self, booking_key: str) -> bool:
+        if not self._overseas_prefixes:
+            return False
+        return booking_key[:2].upper() in self._overseas_prefixes
+
+    def _handle_overseas(self, thread_ts: str) -> None:
+        if self._overseas_mention:
+            self._writer.post_message(
+                channel=self._target_channel,
+                text=f"{self._overseas_mention} 확인 부탁드립니다!",
+                thread_ts=thread_ts,
+            )
+        if self._overseas_reaction:
+            with suppress(SlackApiError):
+                self._writer.add_reaction(
+                    channel=self._target_channel,
+                    timestamp=thread_ts,
+                    name=self._overseas_reaction,
+                )
 
     def _analyze_and_report(
         self,
