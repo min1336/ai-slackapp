@@ -114,7 +114,7 @@ class CancellationImageService:
                 )
 
         if self._is_overseas(sub.booking_key):
-            self._handle_overseas(thread_ts)
+            self._handle_overseas(thread_ts, sub.booking_key)
             return True
 
         if self._analyzer and collected_images:
@@ -125,13 +125,18 @@ class CancellationImageService:
     def _is_overseas(self, booking_key: str) -> bool:
         if not self._overseas_prefixes:
             return False
-        return booking_key[:2].upper() in self._overseas_prefixes
+        key_upper = booking_key.upper()
+        return any(key_upper.startswith(p) for p in self._overseas_prefixes)
 
-    def _handle_overseas(self, thread_ts: str) -> None:
+    def _handle_overseas(self, thread_ts: str, booking_key: str) -> None:
         if self._overseas_mention:
             self._writer.post_message(
                 channel=self._target_channel,
-                text=f"{self._overseas_mention} 확인 부탁드립니다!",
+                text=(
+                    f"{self._overseas_mention}"
+                    f" [{booking_key}] 해외 결항 건"
+                    " — 확인 부탁드립니다."
+                ),
                 thread_ts=thread_ts,
             )
         if self._overseas_reaction:

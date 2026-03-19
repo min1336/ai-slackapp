@@ -20,7 +20,7 @@ _DATE_FORMATS = ["%Y-%m-%d", "%Y.%m.%d", "%Y/%m/%d", "%Y년 %m월 %d일"]
 def _split_names(name: str) -> list[str]:
     """구분자로 분리 후 각 이름의 공백을 제거한 리스트를 반환한다."""
     parts = re.split(r"[/,·]+", name)
-    return [re.sub(r"\s+", "", p) for p in parts if re.sub(r"\s+", "", p)]
+    return [cleaned for p in parts if (cleaned := re.sub(r"\s+", "", p))]
 
 
 def _digits_only(phone: str) -> str:
@@ -88,7 +88,11 @@ class CrossVerifier:
         else:
             doc_names = _split_names(doc_name)
             res_names = _split_names(res_name)
-            matched = any(d in r or r in d for d in doc_names for r in res_names)
+            matched = any(
+                (d in r or r in d) and min(len(d), len(r)) >= 2
+                for d in doc_names
+                for r in res_names
+            )
             status = "일치" if matched else "불일치"
             comparisons.append(FieldComparison("고객명", doc_name, res_name, status))
 

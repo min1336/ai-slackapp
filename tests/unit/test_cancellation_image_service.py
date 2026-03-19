@@ -1243,7 +1243,8 @@ class TestOverseasHandling:
 
         mention_msgs = [m for m in writer.posted_messages if "S03KUCG1H53" in m["text"]]
         assert len(mention_msgs) == 1
-        assert "확인 부탁드립니다" in mention_msgs[0]["text"]
+        assert "해외 결항 건" in mention_msgs[0]["text"]
+        assert "OT12345" in mention_msgs[0]["text"]
 
     def test_해외_prefix_매칭_시_국기_리액션(self):
         svc, writer, _ = self._setup_overseas(booking_key="HG99999")
