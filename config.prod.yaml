@@ -16,6 +16,8 @@ settlement:
       - "CD7HGH37W"      # 카모아_예약이_월렌트
       - "C03BS2EML14"    # 카모아_월구독_조기반납
       - "C01L1TVPHBR"    # 카모아_월렌트_조기반납
+      - "CMYP675PB"      # 카모아_api_통신오류
+      - "C016ET970MV"    # dev_test
 
   # 시트 동기화 배치 스케줄 (cron 표현식)
   sync_schedule: "0 8 * * *"  # 매일 08:00
