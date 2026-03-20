@@ -1281,3 +1281,68 @@ class TestOverseasHandling:
 
         jp_reactions = [r for r in writer.reactions if r["name"] == "flag-jp"]
         assert len(jp_reactions) == 0
+
+    def test_해외_멘션_실패_시에도_처리_완료(self, monkeypatch):
+        """P0: post_message 실패 시에도 mark_processed + 리액션 유지."""
+        from unittest.mock import Mock
+
+        from slack_sdk.errors import SlackApiError
+
+        svc, writer, survey = self._setup_overseas(booking_key="OT12345")
+
+        def _raise(**_kwargs):
+            raise SlackApiError("mention_failed", Mock())
+
+        monkeypatch.setattr(writer, "post_message", _raise)
+        svc.poll_and_upload()
+
+        # 멘션 실패해도 처리 완료
+        assert survey.processed_ids == ["1001"]
+        # 리액션은 여전히 시도됨
+        jp_reactions = [r for r in writer.reactions if r["name"] == "flag-jp"]
+        assert len(jp_reactions) == 1
+
+    def test_해외_빈_prefix_무시(self):
+        """P1: 빈 문자열 prefix가 있어도 전건 해외 처리되면 안 됨."""
+        svc, writer, _ = self._setup_overseas(booking_key="R12345", prefixes=["", "OT"])
+        svc.poll_and_upload()
+
+        # R12345는 국내 건 — 빈 prefix가 전건 매칭하면 안 됨
+        mention_msgs = [m for m in writer.posted_messages if "S03KUCG1H53" in m["text"]]
+        assert len(mention_msgs) == 0
+
+    def test_해외_건_cross_verifier_설정되어도_스킵(self):
+        """P3: cross_verifier가 있어도 해외 건은 교차검증을 건너뛴다."""
+        survey = FakeSurveySheet()
+        drive = FakeDrive()
+        writer = FakeSlackWriter()
+        reader = FakeSlackReader()
+        gemini = FakeGeminiClient(result=_APPROVE_RESPONSE)
+        analyzer = ImageAnalyzer(gemini)
+        cross_verifier = CrossVerifier(gateway=gemini)
+
+        sub = _submission(key="OT12345")
+        survey.submissions = [sub]
+        reader.messages_by_text[(TARGET_CH, "OT12345")] = "thread-1"
+        drive.folders[sub.folder_name] = "folder-1"
+        drive.files["folder-1"] = [
+            DriveFile(id="f1", name="doc.png", mime_type="image/png")
+        ]
+        drive.file_contents["f1"] = b"fake-png-bytes"
+
+        svc = _make_service(
+            survey=survey,
+            drive=drive,
+            writer=writer,
+            reader=reader,
+            analyzer=analyzer,
+            cross_verifier=cross_verifier,
+            overseas_prefixes=["OT", "HG", "KL", "IM"],
+            overseas_mention="<!subteam^S03KUCG1H53>",
+            overseas_reaction="flag-jp",
+        )
+        svc.poll_and_upload()
+
+        assert len(survey.analysis_results) == 0
+        assert len(survey.verification_results) == 0
+        assert survey.processed_ids == ["1001"]

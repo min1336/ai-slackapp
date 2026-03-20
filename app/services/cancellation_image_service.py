@@ -6,11 +6,14 @@ from typing import TYPE_CHECKING
 
 from slack_sdk.errors import SlackApiError
 
+from app.core import get_logger
 from app.models.analysis import CrossVerificationResult
 from app.views.analysis import (
     build_analysis_result_blocks,
     build_cross_verification_blocks,
 )
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from app.infrastructure.protocols import (
@@ -54,7 +57,9 @@ class CancellationImageService:
         self._cross_verifier = cross_verifier
         self._reservation_locator = reservation_locator
         self._poll_lock = threading.Lock()
-        self._overseas_prefixes = tuple(p.upper() for p in (overseas_prefixes or ()))
+        self._overseas_prefixes = tuple(
+            p.upper() for p in (overseas_prefixes or ()) if p
+        )
         self._overseas_mention = overseas_mention
         self._overseas_reaction = overseas_reaction
 
@@ -130,15 +135,18 @@ class CancellationImageService:
 
     def _handle_overseas(self, thread_ts: str, booking_key: str) -> None:
         if self._overseas_mention:
-            self._writer.post_message(
-                channel=self._target_channel,
-                text=(
-                    f"{self._overseas_mention}"
-                    f" [{booking_key}] 해외 결항 건"
-                    " — 확인 부탁드립니다."
-                ),
-                thread_ts=thread_ts,
-            )
+            try:
+                self._writer.post_message(
+                    channel=self._target_channel,
+                    text=(
+                        f"{self._overseas_mention}"
+                        f" [{booking_key}] 해외 결항 건"
+                        " — 확인 부탁드립니다."
+                    ),
+                    thread_ts=thread_ts,
+                )
+            except SlackApiError:
+                logger.exception("overseas_mention_failed", booking_key=booking_key)
         if self._overseas_reaction:
             with suppress(SlackApiError):
                 self._writer.add_reaction(
