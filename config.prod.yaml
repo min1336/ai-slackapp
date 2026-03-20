@@ -9,18 +9,18 @@ settlement:
   slack_channels:
     transfer_reservation: "C0115V08YS1" # 카모아_업체이관
     error: "C0AANUJGPAB" # ai-test
-    approval: "C0AGV65DXMX"  # 정산이슈_확인
+    approval: "C0AGV65DXMX" # 정산이슈_확인
     reservation:
-      - "C9P7XQAFR"      # 카모아_예약이
-      - "C03BC09MB5M"    # 카모아_예약이_월구독
-      - "CD7HGH37W"      # 카모아_예약이_월렌트
-      - "C03BS2EML14"    # 카모아_월구독_조기반납
-      - "C01L1TVPHBR"    # 카모아_월렌트_조기반납
-      - "CMYP675PB"      # 카모아_api_통신오류
-      - "C016ET970MV"    # dev_test
+      - "C9P7XQAFR" # 카모아_예약이
+      - "C03BC09MB5M" # 카모아_예약이_월구독
+      - "CD7HGH37W" # 카모아_예약이_월렌트
+      - "C03BS2EML14" # 카모아_월구독_조기반납
+      - "C01L1TVPHBR" # 카모아_월렌트_조기반납
+      - "CMYP675PB" # 카모아_api_통신오류
+      - "C016ET970MV" # dev_test
 
   # 시트 동기화 배치 스케줄 (cron 표현식)
-  sync_schedule: "0 8 * * *"  # 매일 08:00
+  sync_schedule: "0 8 * * *" # 매일 08:00
 
   # Spread Sheet ID
   # 아래의 URL의 작업 할 시트의 id를 추출해서 작성한다
@@ -30,7 +30,7 @@ settlement:
     sheets:
       settlement:
         name: "정산용(AI연동)"
-        header_row: 2  # 1행은 메모용, 2행부터 헤더
+        header_row: 2 # 1행은 메모용, 2행부터 헤더
         # 헤더 이름 → 코드 필드 매핑
         # 시트 헤더 이름이 바뀌면 왼쪽(헤더명)만 바꾸세요.
         # config에 없는 필드는 시트에 기록되지 않습니다.
@@ -83,7 +83,7 @@ settlement:
 
 cancellation:
   slack_channels:
-    target: "C03ACLFMAFN"  # 카모아_알림_결항확인서
+    target: "C03ACLFMAFN" # 카모아_알림_결항확인서
   drive:
     parent_folder_id: "1Dweyik2uICV-3ly_iMDbRS0BEDEZW0J3"
   spreadsheet:
@@ -91,7 +91,7 @@ cancellation:
     survey_sheet_name: "결항데이터"
     formatted_sheet_name: "결항관리"
   analysis:
-    enabled: false
+    enabled: true
     gemini_model: "gemini-2.5-flash"
     timeout_seconds: 60
   overseas:
