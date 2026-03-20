@@ -127,6 +127,7 @@ def _sample_row(
         company_sub_name="서브업체",
         settlement_cost="100000",
         carmore_cost="1000",
+        seller_channel_cost="0",
         user_refund_cost="0",
         issue_type="결제 오류",
         sales_channel="직접판매",
