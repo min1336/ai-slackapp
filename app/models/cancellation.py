@@ -19,8 +19,14 @@ class SurveySubmission:
 
     @property
     def folder_name(self) -> str:
-        """Google Drive 폴더명: 성함_예약번호."""
-        return f"{self.customer_name}_{self.booking_key}"
+        """Google Drive 폴더명: 성함_예약번호_제출날짜."""
+        date_str = self.submission_date
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+            date_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            pass
+        return f"{self.customer_name}_{self.booking_key}_{date_str}"
 
 
 @dataclass

@@ -77,9 +77,21 @@ class CancellationImageService:
         if not submissions:
             return 0
 
+        # 같은 booking_key 중 최신 제출만 처리, 이전 제출은 마킹만
+        latest_by_key: dict[str, SurveySubmission] = {}
+        for sub in submissions:
+            prev = latest_by_key.get(sub.booking_key)
+            if prev is None or sub.submission_date > prev.submission_date:
+                latest_by_key[sub.booking_key] = sub
+
         processed = 0
         for sub in submissions:
-            if self._process_submission(sub):
+            if sub is latest_by_key.get(sub.booking_key):
+                if self._process_submission(sub):
+                    self._survey_sheet.mark_processed(sub.submission_id)
+                    processed += 1
+            else:
+                # 이전 제출 → 처리 완료로 마킹만
                 self._survey_sheet.mark_processed(sub.submission_id)
                 processed += 1
 

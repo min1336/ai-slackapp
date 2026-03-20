@@ -41,22 +41,28 @@ _DATE_FORMATS = (
 _EXCEL_EPOCH = datetime(1899, 12, 30)
 
 
-def _normalize_date(raw: str) -> str:
-    """날짜 문자열을 YYYY-MM-DD 형태로 정규화한다."""
+def _normalize_date(raw: str, *, with_time: bool = False) -> str:
+    """날짜 문자열을 정규화한다.
+
+    with_time=False → YYYY-MM-DD (기본, 하위호환)
+    with_time=True  → YYYY-MM-DD HH:MM:SS
+    """
     if not raw:
         return ""
+
+    out_fmt = "%Y-%m-%d %H:%M:%S" if with_time else "%Y-%m-%d"
 
     # Excel 시리얼 날짜 (예: 46092.37943)
     try:
         serial = float(str(raw).strip())
         if 40000 < serial < 55000:
-            return (_EXCEL_EPOCH + timedelta(days=serial)).strftime("%Y-%m-%d")
+            return (_EXCEL_EPOCH + timedelta(days=serial)).strftime(out_fmt)
     except (ValueError, TypeError):
         pass
 
     for fmt in _DATE_FORMATS:
         try:
-            return datetime.strptime(raw.strip(), fmt).strftime("%Y-%m-%d")
+            return datetime.strptime(raw.strip(), fmt).strftime(out_fmt)
         except ValueError:
             continue
     return raw.split(" ")[0]
@@ -143,9 +149,16 @@ class SurveySheetReader:
             if not (customer_name and booking_key):
                 continue
             if not submission_id:
+                # 폴백: inbox URL에서 추출 (https://www.jotform.com/inbox/{id})
+                inbox_url = str(row.get("Submission URL", "")).strip()
+                if "/inbox/" in inbox_url:
+                    submission_id = inbox_url.rsplit("/inbox/", 1)[-1].strip()
+            if not submission_id:
                 submission_id = booking_key
 
-            submission_date = str(row.get("Submission Date", "")).strip()
+            submission_date = _normalize_date(
+                str(row.get("Submission Date", "")).strip(), with_time=True
+            )
             company_name = str(_get_row_value(row, "업체명")).strip()
             phone = str(_get_row_value(row, "전화번호")).strip()
             image_url = str(_get_row_value(row, "결항확인서")).strip()
@@ -226,20 +239,21 @@ class SurveySheetReader:
                 sheet_name=self._formatted_sheet_name,
             )
 
-        # 중복 체크 (예약번호 + 고객명으로)
+        date_str = _normalize_date(submission.submission_date, with_time=True)
+
+        # 중복 체크 (예약번호 + 고객명 + 작성일자)
         existing = worksheet.get_all_records()
         for row in existing:
             if (
                 str(row.get("예약번호", "")).strip() == submission.booking_key
                 and str(row.get("고객명", "")).strip() == submission.customer_name
+                and str(row.get("작성일자", "")).strip() == date_str
             ):
                 logger.debug(
                     "survey_formatted_row_exists",
                     booking_key=submission.booking_key,
                 )
                 return False
-
-        date_str = _normalize_date(submission.submission_date)
 
         row_data = [
             date_str,  # 작성일자

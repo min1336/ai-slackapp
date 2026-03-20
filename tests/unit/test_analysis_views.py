@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import pytest
-
 from app.models.analysis import AnalysisResult, CrossVerificationResult, FieldComparison
 from app.views.analysis import (
-    _calc_refund_deadline,
     build_analysis_result_blocks,
     build_cross_verification_blocks,
 )
@@ -42,48 +39,11 @@ class TestBuildAnalysisResultBlocks:
         all_text = _extract_all_text(blocks)
         assert "대한항공" in all_text
 
-    def test_refund_deadline_shown_when_date_exists(self):
-        result = AnalysisResult(
-            extracted_fields={"날짜": "2025-12-13", "항공편": "KE123"},
-        )
-        blocks = build_analysis_result_blocks(result)
-        all_text = _extract_all_text(blocks)
-        assert "환불 기한" in all_text
-        assert "2026-01-12" in all_text
-
-    def test_refund_deadline_not_shown_when_no_date(self):
-        result = AnalysisResult(
-            extracted_fields={"고객명": "홍길동"},
-        )
-        blocks = build_analysis_result_blocks(result)
-        all_text = _extract_all_text(blocks)
-        assert "환불 기한" not in all_text
-
     def test_empty_fields_no_grid(self):
         result = AnalysisResult(extracted_fields={})
         blocks = build_analysis_result_blocks(result)
         has_fields = any("fields" in b for b in blocks)
         assert not has_fields
-
-
-class TestCalcRefundDeadline:
-    @pytest.mark.parametrize(
-        ("date_str", "expected"),
-        [
-            ("2025-12-13", "2026-01-12"),
-            ("2025.12.13", "2026-01-12"),
-            ("2025/12/13", "2026-01-12"),
-            ("2025년 12월 13일", "2026-01-12"),
-        ],
-    )
-    def test_various_date_formats(self, date_str: str, expected: str):
-        assert _calc_refund_deadline(date_str) == expected
-
-    def test_unparseable_date_returns_none(self):
-        assert _calc_refund_deadline("날짜불명") is None
-
-    def test_empty_string_returns_none(self):
-        assert _calc_refund_deadline("") is None
 
 
 def _verification(

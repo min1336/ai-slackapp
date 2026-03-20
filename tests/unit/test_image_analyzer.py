@@ -234,20 +234,12 @@ class TestDocumentConsistency:
 
 
 class TestAnalysisResultBlocks:
-    def test_파싱불가_날짜_환불기한_생략(self):
+    def test_날짜_필드_표시(self):
         result = AnalysisResult(
-            extracted_fields={"고객명": "홍길동", "날짜": "어제"},
+            extracted_fields={"고객명": "홍길동", "날짜": "2026-02-24"},
         )
         blocks = build_analysis_result_blocks(result)
         all_text = str(blocks)
+        assert "홍길동" in all_text
+        assert "2026-02-24" in all_text
         assert "환불 기한" not in all_text
-        assert "홍길동" in all_text  # 고객명은 _PRIORITY_FIELDS에 포함
-
-    def test_정상_날짜_환불기한_표시(self):
-        result = AnalysisResult(
-            extracted_fields={"날짜": "2026-02-24"},
-        )
-        blocks = build_analysis_result_blocks(result)
-        all_text = str(blocks)
-        assert "환불 기한" in all_text
-        assert "2026-03-26" in all_text

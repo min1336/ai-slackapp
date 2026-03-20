@@ -88,12 +88,14 @@ def _submission(
     sid: str = "1001",
     name: str = "홍길동",
     key: str = "R12345",
+    submission_date: str = "2026-03-20 09:55:05",
     **kwargs,
 ) -> SurveySubmission:
     return SurveySubmission(
         submission_id=sid,
         customer_name=name,
         booking_key=key,
+        submission_date=submission_date,
         **kwargs,
     )
 
@@ -141,7 +143,7 @@ class TestPollAndUpload:
         survey.submissions = [sub]
 
         drive = FakeDrive()
-        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.folders[sub.folder_name] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="img.jpg", mime_type="image/jpeg")
         ]
@@ -202,13 +204,47 @@ class TestPollAndUpload:
         reader = FakeSlackReader()
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
         drive = FakeDrive()
-        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.folders[sub.folder_name] = "folder-1"
         drive.files["folder-1"] = []  # 파일 없음
 
         svc = _make_service(survey=survey, drive=drive, reader=reader)
         svc.poll_and_upload()
 
         assert len(survey.processed_ids) == 0
+
+    def test_같은_예약번호_중복제출_시_최신만_처리(self):
+        old_sub = _submission(sid="1001", submission_date="2026-03-20 09:55:05")
+        new_sub = _submission(sid="1002", submission_date="2026-03-20 10:08:04")
+        survey = FakeSurveySheet()
+        survey.submissions = [old_sub, new_sub]
+
+        drive = FakeDrive()
+        # 구 폴더 (처리 안 돼야 함)
+        drive.folders[old_sub.folder_name] = "folder-old"
+        drive.files["folder-old"] = [
+            DriveFile(id="f-old", name="old.jpg", mime_type="image/jpeg")
+        ]
+        drive.file_contents["f-old"] = b"\xff\xd8"
+        # 신규 폴더 (처리 돼야 함)
+        drive.folders[new_sub.folder_name] = "folder-new"
+        drive.files["folder-new"] = [
+            DriveFile(id="f-new", name="new.jpg", mime_type="image/jpeg")
+        ]
+        drive.file_contents["f-new"] = b"\x89PNG"
+
+        reader = FakeSlackReader()
+        reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
+        writer = FakeSlackWriter()
+
+        svc = _make_service(survey=survey, drive=drive, writer=writer, reader=reader)
+        svc.poll_and_upload()
+
+        # 최신 제출만 업로드
+        assert len(writer.uploaded_files) == 1
+        assert writer.uploaded_files[0]["filename"] == "new.jpg"
+        # 이전 제출도 처리 완료로 마킹
+        assert "1001" in survey.processed_ids
+        assert "1002" in survey.processed_ids
 
 
 class TestProcessSubmission:
@@ -221,7 +257,7 @@ class TestProcessSubmission:
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
 
         drive = FakeDrive()
-        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.folders[sub.folder_name] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="bad.jpg", mime_type="image/jpeg"),
         ]
@@ -242,7 +278,7 @@ class TestProcessSubmission:
         writer = FakeSlackWriter()
 
         drive = FakeDrive()
-        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.folders[sub.folder_name] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="a.jpg", mime_type="image/jpeg"),
             DriveFile(id="f2", name="b.png", mime_type="image/png"),
@@ -265,7 +301,7 @@ class TestProcessSubmission:
         writer = FakeSlackWriter()
 
         drive = FakeDrive()
-        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.folders[sub.folder_name] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="bad.jpg", mime_type="image/jpeg"),
             DriveFile(id="f2", name="ok.jpg", mime_type="image/jpeg"),
@@ -300,7 +336,7 @@ class TestPdfConversion:
         writer = FakeSlackWriter()
 
         drive = FakeDrive()
-        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.folders[sub.folder_name] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="cert.pdf", mime_type="application/pdf")
         ]
@@ -324,7 +360,7 @@ class TestPdfConversion:
         writer = FakeSlackWriter()
 
         drive = FakeDrive()
-        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.folders[sub.folder_name] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="multi.pdf", mime_type="application/pdf")
         ]
@@ -348,7 +384,7 @@ class TestPdfConversion:
         writer = FakeSlackWriter()
 
         drive = FakeDrive()
-        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.folders[sub.folder_name] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="cert.pdf", mime_type="application/pdf")
         ]
@@ -370,7 +406,7 @@ class TestPdfConversion:
         writer = FakeSlackWriter()
 
         drive = FakeDrive()
-        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.folders[sub.folder_name] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="photo.jpg", mime_type="image/jpeg")
         ]
@@ -391,7 +427,7 @@ class TestPdfConversion:
         writer = FakeSlackWriter()
 
         drive = FakeDrive()
-        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.folders[sub.folder_name] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="broken.pdf", mime_type="application/pdf"),
             DriveFile(id="f2", name="ok.jpg", mime_type="image/jpeg"),
@@ -420,7 +456,7 @@ class TestFormattedSheet:
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
 
         drive = FakeDrive()
-        drive.folders["홍길동_R12345"] = "folder-1"
+        drive.folders[sub.folder_name] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="img.jpg", mime_type="image/jpeg")
         ]
