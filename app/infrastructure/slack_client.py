@@ -49,6 +49,7 @@ def list_channel_messages(
     channel_id: str,
     *,
     oldest: float = 0,
+    latest: float = 0,
     max_pages: int = 10,
     page_size: int = 200,
 ) -> Iterator[dict]:
@@ -60,7 +61,9 @@ def list_channel_messages(
             "limit": page_size,
         }
         if oldest:
-            kwargs["oldest"] = str(oldest)
+            kwargs["oldest"] = str(int(oldest))
+        if latest:
+            kwargs["latest"] = str(int(latest))
         if cursor:
             kwargs["cursor"] = cursor
 
