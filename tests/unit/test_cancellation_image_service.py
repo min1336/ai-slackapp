@@ -615,6 +615,15 @@ class TestCrossVerification:
         # 교차검증 결과가 시트에 기록됨
         assert len(survey.verification_results) == 1
 
+        # 교차검증 결과 간단 메시지가 스레드에 포스트됨
+        verdict = survey.verification_results[0][1].verdict
+        if verdict != "승인":
+            verify_msgs = [
+                m for m in writer.posted_messages if "교차검증:" in m.get("text", "")
+            ]
+            assert len(verify_msgs) == 1
+            assert verdict in verify_msgs[0]["text"]
+
     def test_예약_스레드_없으면_보류_포스트(self):
         """예약 채널에서 스레드를 못 찾으면 verdict='보류'로 포스트한다."""
         survey = FakeSurveySheet()
@@ -649,6 +658,13 @@ class TestCrossVerification:
         # 보류 결과가 기록됨
         assert len(survey.verification_results) == 1
         assert survey.verification_results[0][1].verdict == "보류"
+
+        # 보류 메시지가 스레드에 포스트됨
+        verify_msgs = [
+            m for m in writer.posted_messages if "교차검증:" in m.get("text", "")
+        ]
+        assert len(verify_msgs) == 1
+        assert "보류" in verify_msgs[0]["text"]
 
     def test_교차검증_실패해도_분석결과_유지(self):
         """교차검증 중 예외가 발생해도 이미지 업로드 + 분석 결과는 유지된다."""

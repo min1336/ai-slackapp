@@ -239,6 +239,12 @@ class CancellationImageService:
 
         if result.verdict == "승인" and location is not None:
             self._post_bidirectional_links(thread_ts, location, submission)
+        else:
+            self._writer.post_message(
+                channel=self._target_channel,
+                text=f"교차검증: {result.verdict} — {result.reason}",
+                thread_ts=thread_ts,
+            )
 
     def _post_bidirectional_links(
         self,
