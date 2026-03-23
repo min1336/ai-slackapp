@@ -8,10 +8,7 @@ from slack_sdk.errors import SlackApiError
 
 from app.core import get_logger
 from app.models.analysis import CrossVerificationResult
-from app.views.analysis import (
-    build_analysis_result_blocks,
-    build_cross_verification_blocks,
-)
+from app.views.analysis import build_analysis_result_blocks
 
 logger = get_logger(__name__)
 
@@ -44,9 +41,9 @@ class CancellationImageService:
         analyzer: ImageAnalyzer | None = None,
         cross_verifier: CrossVerifier | None = None,
         reservation_locator: ReservationLocator | None = None,
-        overseas_prefixes: list[str] | None = None,
-        overseas_mention: str = "",
-        overseas_reaction: str = "",
+        overseas_prefixes: list[str] | None = None,  # 해외 결항 건 예약번호 접두사
+        overseas_mention: str = "",  # 해외 결항 건 언급
+        overseas_reaction: str = "",  # 해외 결항 건 리액션
     ) -> None:
         self._survey_sheet = survey_sheet
         self._file_collector = file_collector
@@ -242,14 +239,6 @@ class CancellationImageService:
 
         if result.verdict == "승인" and location is not None:
             self._post_bidirectional_links(thread_ts, location, submission)
-        elif result.verdict != "승인":
-            blocks = build_cross_verification_blocks(result)
-            self._writer.post_message(
-                channel=self._target_channel,
-                text=f"교차검증: {result.verdict}",
-                thread_ts=thread_ts,
-                blocks=blocks,
-            )
 
     def _post_bidirectional_links(
         self,

@@ -608,24 +608,12 @@ class TestCrossVerification:
         return svc, writer, survey, gemini
 
     def test_분석후_교차검증_실행(self):
-        """분석 완료 후 예약 메시지를 찾아 교차검증하고, 검증 결과를 스레드에 포스트한다."""
+        """분석 완료 후 예약 메시지를 찾아 교차검증하고, 결과를 시트에 기록한다."""
         svc, writer, survey, _ = self._setup_full_chain()
         svc.poll_and_upload()
 
-        # 분석 결과 댓글 (기존) + 교차검증 결과 댓글 = 최소 2개
-        assert len(writer.posted_messages) >= 2
         # 교차검증 결과가 시트에 기록됨
         assert len(survey.verification_results) == 1
-
-    def test_교차검증_verdict_포함_댓글(self):
-        """교차검증 결과 댓글에 verdict 관련 텍스트가 포함된다."""
-        svc, writer, survey, _ = self._setup_full_chain()
-        svc.poll_and_upload()
-
-        # 마지막 posted_message가 교차검증 결과
-        verification_msg = writer.posted_messages[-1]
-        assert verification_msg["thread_ts"] == "cancel-thread-1"
-        assert verification_msg["blocks"] is not None
 
     def test_예약_스레드_없으면_보류_포스트(self):
         """예약 채널에서 스레드를 못 찾으면 verdict='보류'로 포스트한다."""
