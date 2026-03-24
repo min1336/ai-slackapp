@@ -6,7 +6,6 @@ import pymupdf
 
 from app.models import DriveFile, SurveySubmission
 from app.services.cancellation_image_service import CancellationImageService
-from app.services.cross_verifier import CrossVerifier
 from app.services.drive_file_collector import DriveFileCollector
 from app.services.image_analyzer import ImageAnalyzer
 from app.services.pdf_converter import PdfConverter
@@ -108,7 +107,6 @@ def _make_service(
     reader: FakeSlackReader | None = None,
     file_collector: DriveFileCollector | None = None,
     analyzer: ImageAnalyzer | None = None,
-    cross_verifier: CrossVerifier | None = None,
     reservation_locator: ReservationLocator | None = None,
     reservation_channels: list[str] | None = None,
     thread_ref_store: ThreadReferenceStore | None = None,
@@ -128,7 +126,6 @@ def _make_service(
         reader=_reader,
         target_channel=TARGET_CH,
         analyzer=analyzer,
-        cross_verifier=cross_verifier,
         reservation_locator=_locator,
         overseas_prefixes=overseas_prefixes,
         overseas_mention=overseas_mention,
@@ -579,7 +576,6 @@ class TestCrossVerification:
         reader = FakeSlackReader()
         gemini = FakeGeminiClient(result=gemini_result)
         analyzer = ImageAnalyzer(gemini)
-        cross_verifier = CrossVerifier(gateway=gemini)
 
         sub = _submission()
         survey.submissions = [sub]
@@ -602,7 +598,6 @@ class TestCrossVerification:
             writer=writer,
             reader=reader,
             analyzer=analyzer,
-            cross_verifier=cross_verifier,
             reservation_channels=[RESERVATION_CH],
         )
         return svc, writer, survey, gemini
@@ -632,7 +627,6 @@ class TestCrossVerification:
         reader = FakeSlackReader()
         gemini = FakeGeminiClient()
         analyzer = ImageAnalyzer(gemini)
-        cross_verifier = CrossVerifier(gateway=gemini)
 
         sub = _submission()
         survey.submissions = [sub]
@@ -650,7 +644,6 @@ class TestCrossVerification:
             writer=writer,
             reader=reader,
             analyzer=analyzer,
-            cross_verifier=cross_verifier,
             reservation_channels=[RESERVATION_CH],
         )
         svc.poll_and_upload()
@@ -674,7 +667,6 @@ class TestCrossVerification:
         reader = FakeSlackReader()
         gemini = FakeGeminiClient()
         analyzer = ImageAnalyzer(gemini)
-        cross_verifier = CrossVerifier(gateway=gemini)
 
         sub = _submission()
         survey.submissions = [sub]
@@ -691,15 +683,14 @@ class TestCrossVerification:
             writer=writer,
             reader=reader,
             analyzer=analyzer,
-            cross_verifier=cross_verifier,
             reservation_channels=[RESERVATION_CH],
         )
 
-        # _cross_verify_and_report가 예외를 던지도록 조작
+        # _verify_and_report가 예외를 던지도록 조작
         def _boom(self_inner, *a, **kw):
             raise RuntimeError("cross verify exploded")
 
-        svc._cross_verify_and_report = types.MethodType(_boom, svc)
+        svc._verify_and_report = types.MethodType(_boom, svc)
 
         svc.poll_and_upload()
 
@@ -710,8 +701,8 @@ class TestCrossVerification:
         # submission은 처리 완료 마킹됨
         assert sub.submission_id in survey.processed_ids
 
-    def test_cross_verifier_없으면_교차검증_스킵(self):
-        """cross_verifier=None이면 분석만 하고 교차검증은 실행하지 않는다."""
+    def test_reservation_locator_없으면_교차검증_스킵(self):
+        """reservation_locator가 없으면 분석만 하고 교차검증은 실행하지 않는다."""
         survey = FakeSurveySheet()
         drive = FakeDrive()
         writer = FakeSlackWriter()
@@ -728,14 +719,13 @@ class TestCrossVerification:
         ]
         drive.file_contents["f1"] = b"fake-png-bytes"
 
-        # cross_verifier=None → 교차검증 스킵
+        # reservation_channels 미설정 → reservation_locator=None → 교차검증 스킵
         svc = _make_service(
             survey=survey,
             drive=drive,
             writer=writer,
             reader=reader,
             analyzer=analyzer,
-            cross_verifier=None,
         )
         svc.poll_and_upload()
 
@@ -751,7 +741,6 @@ class TestCrossVerification:
         reader = FakeSlackReader()
         gemini = FakeGeminiClient()
         analyzer = ImageAnalyzer(gemini)
-        cross_verifier = CrossVerifier(gateway=gemini)
 
         sub = _submission()
         survey.submissions = [sub]
@@ -773,7 +762,6 @@ class TestCrossVerification:
             writer=writer,
             reader=reader,
             analyzer=analyzer,
-            cross_verifier=cross_verifier,
             reservation_channels=[RESERVATION_CH, second_ch],
         )
         svc.poll_and_upload()
@@ -785,14 +773,13 @@ class TestCrossVerification:
 class TestImageValidation:
     """이미지 유효성 검증 및 X 리액션 테스트."""
 
-    def _setup_with_response(self, gemini_response, *, with_cross_verifier=False):
+    def _setup_with_response(self, gemini_response, *, with_reservation_locator=False):
         survey = FakeSurveySheet()
         drive = FakeDrive()
         writer = FakeSlackWriter()
         reader = FakeSlackReader()
         gemini = FakeGeminiClient(result=gemini_response)
         analyzer = ImageAnalyzer(gemini)
-        cross_verifier = CrossVerifier(gateway=gemini) if with_cross_verifier else None
 
         sub = _submission()
         survey.submissions = [sub]
@@ -803,7 +790,7 @@ class TestImageValidation:
         ]
         drive.file_contents["f1"] = b"fake-png-bytes"
 
-        if with_cross_verifier:
+        if with_reservation_locator:
             reader.messages_by_text[(RESERVATION_CH, sub.booking_key)] = (
                 "reserve-thread-1"
             )
@@ -817,8 +804,9 @@ class TestImageValidation:
             writer=writer,
             reader=reader,
             analyzer=analyzer,
-            cross_verifier=cross_verifier,
-            reservation_channels=[RESERVATION_CH] if with_cross_verifier else None,
+            reservation_channels=(
+                [RESERVATION_CH] if with_reservation_locator else None
+            ),
         )
         return svc, writer, survey
 
@@ -834,7 +822,7 @@ class TestImageValidation:
 
     def test_이미지_부적합_교차검증_스킵(self):
         svc, writer, survey = self._setup_with_response(
-            _INVALID_IMAGE_RESPONSE, with_cross_verifier=True
+            _INVALID_IMAGE_RESPONSE, with_reservation_locator=True
         )
         svc.poll_and_upload()
 
@@ -852,7 +840,6 @@ class TestCrossVerificationReactions:
         reader = FakeSlackReader()
         gemini = FakeGeminiClient(result=gemini_response)
         analyzer = ImageAnalyzer(gemini)
-        cross_verifier = CrossVerifier(gateway=gemini)
 
         sub = _submission()
         survey.submissions = [sub]
@@ -884,7 +871,6 @@ class TestCrossVerificationReactions:
             writer=writer,
             reader=reader,
             analyzer=analyzer,
-            cross_verifier=cross_verifier,
             reservation_channels=[RESERVATION_CH],
         )
         return svc, writer, survey
@@ -921,7 +907,6 @@ class TestCrossVerificationReactions:
         reader = FakeSlackReader()
         gemini = FakeGeminiClient(result=_APPROVE_RESPONSE)
         analyzer = ImageAnalyzer(gemini)
-        cross_verifier = CrossVerifier(gateway=gemini)
 
         sub = _submission()
         survey.submissions = [sub]
@@ -939,7 +924,6 @@ class TestCrossVerificationReactions:
             writer=writer,
             reader=reader,
             analyzer=analyzer,
-            cross_verifier=cross_verifier,
             reservation_channels=[RESERVATION_CH],
         )
         svc.poll_and_upload()
@@ -986,14 +970,13 @@ _FLIGHT_INCONSISTENCY_RESPONSE = {
 class TestDocumentConsistencyIntegration:
     """여러 문서 간 정보 불일치 시 전체 흐름 테스트."""
 
-    def _setup_with_response(self, gemini_response, *, with_cross_verifier=False):
+    def _setup_with_response(self, gemini_response, *, with_reservation_locator=False):
         survey = FakeSurveySheet()
         drive = FakeDrive()
         writer = FakeSlackWriter()
         reader = FakeSlackReader()
         gemini = FakeGeminiClient(result=gemini_response)
         analyzer = ImageAnalyzer(gemini)
-        cross_verifier = CrossVerifier(gateway=gemini) if with_cross_verifier else None
 
         sub = _submission()
         survey.submissions = [sub]
@@ -1006,7 +989,7 @@ class TestDocumentConsistencyIntegration:
         drive.file_contents["f1"] = b"fake-confirm-img"
         drive.file_contents["f2"] = b"fake-kakao-img"
 
-        if with_cross_verifier:
+        if with_reservation_locator:
             reader.messages_by_text[(RESERVATION_CH, sub.booking_key)] = (
                 "reserve-thread-1"
             )
@@ -1020,8 +1003,9 @@ class TestDocumentConsistencyIntegration:
             writer=writer,
             reader=reader,
             analyzer=analyzer,
-            cross_verifier=cross_verifier,
-            reservation_channels=[RESERVATION_CH] if with_cross_verifier else None,
+            reservation_channels=(
+                [RESERVATION_CH] if with_reservation_locator else None
+            ),
         )
         return svc, writer, survey
 
@@ -1040,7 +1024,7 @@ class TestDocumentConsistencyIntegration:
     def test_날짜_불일치_교차검증_스킵(self):
         """문서 간 날짜 불일치 시 교차검증이 실행되지 않아야 한다."""
         svc, writer, survey = self._setup_with_response(
-            _DATE_INCONSISTENCY_RESPONSE, with_cross_verifier=True
+            _DATE_INCONSISTENCY_RESPONSE, with_reservation_locator=True
         )
         svc.poll_and_upload()
 
@@ -1050,7 +1034,7 @@ class TestDocumentConsistencyIntegration:
     def test_편명_불일치_교차검증_스킵(self):
         """문서 간 편명 불일치 시 교차검증 스킵."""
         svc, writer, survey = self._setup_with_response(
-            _FLIGHT_INCONSISTENCY_RESPONSE, with_cross_verifier=True
+            _FLIGHT_INCONSISTENCY_RESPONSE, with_reservation_locator=True
         )
         svc.poll_and_upload()
 
@@ -1075,7 +1059,6 @@ class TestPhoneFallback:
         reader = FakeSlackReader()
         gemini = FakeGeminiClient(result=_APPROVE_RESPONSE)
         analyzer = ImageAnalyzer(gemini)
-        cross_verifier = CrossVerifier(gateway=gemini)
 
         sub = _submission(phone="010-1234-5678")
         survey.submissions = [sub]
@@ -1100,7 +1083,6 @@ class TestPhoneFallback:
             writer=writer,
             reader=reader,
             analyzer=analyzer,
-            cross_verifier=cross_verifier,
             reservation_channels=[RESERVATION_CH],
         )
         svc.poll_and_upload()
@@ -1124,7 +1106,6 @@ class TestReservationThreadDBLookup:
         reader = FakeSlackReader()
         gemini = FakeGeminiClient(result=_APPROVE_RESPONSE)
         analyzer = ImageAnalyzer(gemini)
-        cross_verifier = CrossVerifier(gateway=gemini)
 
         sub = _submission()
         survey.submissions = [sub]
@@ -1146,7 +1127,6 @@ class TestReservationThreadDBLookup:
             writer=writer,
             reader=reader,
             analyzer=analyzer,
-            cross_verifier=cross_verifier,
             reservation_channels=[RESERVATION_CH],
             thread_ref_store=store,
         )
@@ -1165,7 +1145,6 @@ class TestReservationThreadDBLookup:
         reader = FakeSlackReader()
         gemini = FakeGeminiClient(result=_APPROVE_RESPONSE)
         analyzer = ImageAnalyzer(gemini)
-        cross_verifier = CrossVerifier(gateway=gemini)
 
         sub = _submission()
         survey.submissions = [sub]
@@ -1190,7 +1169,6 @@ class TestReservationThreadDBLookup:
             writer=writer,
             reader=reader,
             analyzer=analyzer,
-            cross_verifier=cross_verifier,
             reservation_channels=[RESERVATION_CH],
             thread_ref_store=store,
         )
@@ -1210,7 +1188,6 @@ class TestReservationThreadDBLookup:
         reader = FakeSlackReader()
         gemini = FakeGeminiClient(result=_APPROVE_RESPONSE)
         analyzer = ImageAnalyzer(gemini)
-        cross_verifier = CrossVerifier(gateway=gemini)
 
         sub = _submission()
         survey.submissions = [sub]
@@ -1234,7 +1211,6 @@ class TestReservationThreadDBLookup:
             writer=writer,
             reader=reader,
             analyzer=analyzer,
-            cross_verifier=cross_verifier,
             reservation_channels=[RESERVATION_CH],
             thread_ref_store=None,
         )
@@ -1351,15 +1327,14 @@ class TestOverseasHandling:
         mention_msgs = [m for m in writer.posted_messages if "S03KUCG1H53" in m["text"]]
         assert len(mention_msgs) == 0
 
-    def test_해외_건_cross_verifier_설정되어도_스킵(self):
-        """P3: cross_verifier가 있어도 해외 건은 교차검증을 건너뛴다."""
+    def test_해외_건_reservation_locator_설정되어도_스킵(self):
+        """P3: reservation_locator가 있어도 해외 건은 교차검증을 건너뛴다."""
         survey = FakeSurveySheet()
         drive = FakeDrive()
         writer = FakeSlackWriter()
         reader = FakeSlackReader()
         gemini = FakeGeminiClient(result=_APPROVE_RESPONSE)
         analyzer = ImageAnalyzer(gemini)
-        cross_verifier = CrossVerifier(gateway=gemini)
 
         sub = _submission(key="OT12345")
         survey.submissions = [sub]
@@ -1376,7 +1351,7 @@ class TestOverseasHandling:
             writer=writer,
             reader=reader,
             analyzer=analyzer,
-            cross_verifier=cross_verifier,
+            reservation_channels=[RESERVATION_CH],
             overseas_prefixes=["OT", "HG", "KL", "IM"],
             overseas_mention="<!subteam^S03KUCG1H53>",
             overseas_reaction="flag-jp",

@@ -21,7 +21,6 @@ from app.infrastructure.spreadsheet import SCOPES, SpreadsheetService
 from app.infrastructure.survey_sheet import SurveySheetReader
 from app.services.approval_service import ApprovalService
 from app.services.cancellation_image_service import CancellationImageService
-from app.services.cross_verifier import CrossVerifier
 from app.services.drive_file_collector import DriveFileCollector
 from app.services.image_analyzer import ImageAnalyzer
 from app.services.pdf_converter import PdfConverter
@@ -196,17 +195,11 @@ class ServiceContainer:
                 if _gateway:
                     _analyzer = ImageAnalyzer(_gateway)
 
-            # Cross-verification (분석 활성 + gateway 있을 때만)
-            _cross_verifier = None
-            if cancel_cfg.analysis.enabled and _analyzer is not None:
-                _cross_verifier = CrossVerifier(gateway=_gateway)
-
             if _analyzer:
                 logger.info(
                     "cancellation_analyzer_ready",
                     model=cancel_cfg.analysis.gemini_model,
                     gateway_type=type(_gateway).__name__,
-                    has_cross_verifier=_cross_verifier is not None,
                 )
             elif not cancel_cfg.analysis.enabled:
                 logger.info(
@@ -235,7 +228,6 @@ class ServiceContainer:
                 reader=self.reader,
                 target_channel=cancel_target,
                 analyzer=_analyzer,
-                cross_verifier=_cross_verifier,
                 reservation_locator=_reservation_locator,
                 overseas_prefixes=cancel_cfg.overseas.prefixes,
                 overseas_mention=cancel_cfg.overseas.mention,

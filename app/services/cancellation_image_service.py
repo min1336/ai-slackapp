@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 from contextlib import suppress
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from slack_sdk.errors import SlackApiError
@@ -20,10 +21,21 @@ if TYPE_CHECKING:
     )
     from app.models import SurveySubmission
     from app.models.analysis import AnalysisResult
-    from app.services.cross_verifier import CrossVerifier
     from app.services.drive_file_collector import DriveFileCollector
     from app.services.image_analyzer import ImageAnalyzer
     from app.services.reservation_locator import ReservationLocation, ReservationLocator
+
+_DATE_FORMATS = ["%Y-%m-%d", "%Y.%m.%d", "%Y/%m/%d", "%Y년 %m월 %d일"]
+
+
+def _parse_date(date_str: str) -> date | None:
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(date_str, fmt).date()
+        except ValueError:
+            continue
+    return None
+
 
 _PDF_EMOJI = "pdf"
 
@@ -39,7 +51,6 @@ class CancellationImageService:
         reader: SlackMessageReader,
         target_channel: str,
         analyzer: ImageAnalyzer | None = None,
-        cross_verifier: CrossVerifier | None = None,
         reservation_locator: ReservationLocator | None = None,
         overseas_prefixes: list[str] | None = None,  # 해외 결항 건 예약번호 접두사
         overseas_mention: str = "",  # 해외 결항 건 언급
@@ -51,7 +62,6 @@ class CancellationImageService:
         self._reader = reader
         self._target_channel = target_channel
         self._analyzer = analyzer
-        self._cross_verifier = cross_verifier
         self._reservation_locator = reservation_locator
         self._poll_lock = threading.Lock()
         self._overseas_prefixes = tuple(
@@ -205,25 +215,22 @@ class CancellationImageService:
         self._survey_sheet.write_analysis_result(submission.submission_id, result)
 
         # 교차검증 — optional (실패해도 분석 결과는 이미 포스트됨)
-        if self._cross_verifier:
+        if self._reservation_locator:
             try:
-                self._cross_verify_and_report(result, submission, thread_ts)
+                self._verify_and_report(result, submission, thread_ts)
             except Exception:
                 return
 
-    def _cross_verify_and_report(
+    def _verify_and_report(
         self,
         analysis_result: AnalysisResult,
         submission: SurveySubmission,
         thread_ts: str,
     ) -> None:
-        """예약 데이터를 찾아 교차검증하고 결과를 스레드에 포스트한다."""
-        if self._reservation_locator is None:
-            location = None
-        else:
-            location = self._reservation_locator.find(
-                submission.booking_key, submission.phone
-            )
+        """예약 스레드를 찾아 날짜를 비교하고 결과를 포스트한다."""
+        location = self._reservation_locator.find(  # type: ignore[union-attr]
+            submission.booking_key, submission.phone
+        )
 
         if location is None:
             result = CrossVerificationResult(
@@ -231,9 +238,7 @@ class CancellationImageService:
                 reason="예약 스레드를 찾지 못했습니다.",
             )
         else:
-            result = self._cross_verifier.verify(  # type: ignore[union-attr]
-                analysis_result, location.data, submission
-            )
+            result = self._check_date_range(analysis_result, location)
 
         self._survey_sheet.write_verification_result(submission.submission_id, result)
 
@@ -245,6 +250,32 @@ class CancellationImageService:
                 text=f"교차검증: {result.verdict} — {result.reason}",
                 thread_ts=thread_ts,
             )
+
+    @staticmethod
+    def _check_date_range(
+        analysis: AnalysisResult,
+        location: ReservationLocation,
+    ) -> CrossVerificationResult:
+        """결항일이 대여 기간 내인지 확인한다."""
+        doc_date_str = analysis.extracted_fields.get("날짜") or ""
+        start = location.data.rental_period_start
+        end = location.data.rental_period_end
+
+        if not doc_date_str or start is None or end is None:
+            return CrossVerificationResult(verdict="보류", reason="날짜 확인불가")
+
+        parsed = _parse_date(doc_date_str)
+        if parsed is None:
+            return CrossVerificationResult(verdict="보류", reason="날짜 파싱 실패")
+
+        range_start = start.date() - timedelta(days=1)
+        range_end = end.date() + timedelta(days=1)
+        if range_start <= parsed <= range_end:
+            return CrossVerificationResult(verdict="승인", reason="날짜 검증 통과")
+        return CrossVerificationResult(
+            verdict="반려",
+            reason=f"결항일({doc_date_str})이 대여기간({start.date()}~{end.date()}) 밖",
+        )
 
     def _post_bidirectional_links(
         self,
