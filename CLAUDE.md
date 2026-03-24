@@ -10,6 +10,7 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 **Don't assume. Don't hide confusion. Surface tradeoffs.**
 
 Before implementing:
+
 - State your assumptions explicitly. If uncertain, ask.
 - If multiple interpretations exist, present them - don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
@@ -32,12 +33,14 @@ Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, sim
 **Touch only what you must. Clean up only your own mess.**
 
 When editing existing code:
+
 - Don't "improve" adjacent code, comments, or formatting.
 - Don't refactor things that aren't broken.
 - Match existing style, even if you'd do it differently.
 - If you notice unrelated dead code, mention it - don't delete it.
 
 When your changes create orphans:
+
 - Remove imports/variables/functions that YOUR changes made unused.
 - Don't remove pre-existing dead code unless asked.
 
@@ -48,12 +51,14 @@ The test: Every changed line should trace directly to the user's request.
 **Define success criteria. Loop until verified.**
 
 Transform tasks into verifiable goals:
+
 - "Add validation" → "Write tests for invalid inputs, then make them pass"
 - "Fix the bug" → "Write a test that reproduces it, then make it pass"
 - "Refactor X" → "Ensure tests pass before and after"
 
 For multi-step tasks, state a brief plan:
-```
+
+```text
 1. [Step] → verify: [check]
 2. [Step] → verify: [check]
 3. [Step] → verify: [check]
@@ -64,9 +69,6 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
-
-
-# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -102,7 +104,7 @@ uv run pre-commit install
 
 레이어드 아키텍처를 따르며, **레이어를 건너뛰어 호출하지 않는다**:
 
-```
+```text
 listener/ (Thin Controller)   ← Slack 이벤트 수신, 파싱 → container 서비스 위임
     ├── payload.py            ← Slack body 파싱 헬퍼 (TypedDict, MessageContext)
     ↓
@@ -147,6 +149,7 @@ core/                         ← 공통 유틸 (logger.py: structlog 설정)
 ```
 
 **경계 규칙:**
+
 - `listener/` → `infrastructure/` 직접 호출 금지
 - `services/` → `listener/` 호출 금지
 - `views/`는 순수하게 Block Kit JSON만 생성
@@ -173,18 +176,20 @@ service = ThreadDiscoveryService(store, FakeSlackReader())
   - `cancellation`: 결항 검증 대상 채널, Drive 폴더, 설문 시트, 분석 모델 설정
 
 **결항 분석 활성화 조건** (두 가지 모두 충족해야 활성):
+
 1. `config.{env}.yaml`의 `cancellation.analysis.enabled: true` (feature flag)
 2. `.env`에 API 키 설정:
    - `GEMINI_API_KEY`: Gemini Flash API (primary 분석)
    - `OPENAI_API_KEY`: GPT-4o-mini Vision (fallback 분석)
    - 둘 다 없으면 `enabled: true`여도 분석 비활성, 이미지 업로드만 수행
-- 현재 상태: `config.dev.yaml` → `enabled: true`, `config.prod.yaml` → `enabled: false`
+- 현재 상태: `config.dev.yaml` → `enabled: true`, `config.prod.yaml` → `enabled: true`
 
 ## 데이터베이스
 
 Supabase (PostgreSQL)를 캐시 레이어로 사용. Google Sheets가 primary storage.
 
 **동기화 방향:**
+
 - DB → Sheets: `SettlementWriter.save()` → `after_commit` → `SyncProcessor.after_commit()` (활성)
 - Sheets → DB: `SyncService.reverse_sync_settlement_completed()` — Sheets 정산완료(TRUE)를 DB에 역동기화 (cron 매일 실행)
 
@@ -209,7 +214,7 @@ uv run alembic check
 ## 데이터 모델
 
 | 용도 | 모델 타입 |
-|------|-----------|
+| ------ | ----------- |
 | JSON 직렬화/검증 필요 (Slack 버튼 value 등) | Pydantic `BaseModel` |
 | 단순 데이터 홀더 (스프레드시트 행 등) | `@dataclass` |
 
@@ -218,6 +223,7 @@ uv run alembic check
 **금액 필드:** `int | None` (모델 내부), Slack UI 경계에서만 `str` 변환. `parse_cost` validator가 `"1,000,000원"` → `1000000` 자동 변환.
 
 **새 필드 추가 시 체크리스트:**
+
 1. `models/settlement.py` - Pydantic/dataclass 필드
 2. `models/__init__.py` - 새 모델 export 추가 (누락 시 런타임 ImportError)
 3. `infrastructure/database/repository.py` - `_SHARED_FIELDS` 튜플에 추가 (save/add_log 자동 반영)
@@ -244,7 +250,8 @@ uv run alembic check
 
 ### 패턴 선택 가이드
 
-**1. 예상된 비즈니스 에러 → 명시적 try/except**
+#### 1. 예상된 비즈니스 에러 → 명시적 try/except
+
 ```python
 try:
     save_settlement(data, status, approver_name)
@@ -259,11 +266,13 @@ except ValidationError:
 ```
 
 **언제**:
+
 - 비즈니스 로직에서 예상되는 에러 (AlreadyProcessedError, ValidationError)
 - 에러 타입별로 다른 처리가 필요한 경우
 - 사용자에게 다른 메시지를 보여줘야 하는 경우
 
-**2. Best-effort cleanup → contextlib.suppress (구체적 타입)**
+#### 2. Best-effort cleanup → contextlib.suppress (구체적 타입)
+
 ```python
 from contextlib import suppress
 
@@ -277,17 +286,20 @@ with suppress(Exception):  # KeyError, AttributeError까지 숨김!
 ```
 
 **언제**:
+
 - Cleanup 작업 (메시지 삭제, 임시 데이터 정리)
 - 실패해도 주 작업에 영향 없는 부가 작업
 - **반드시 구체적인 예외 타입 사용** (SlackApiError, SQLAlchemyError, APIError 등)
 
-**3. 사용자 알림 → 서비스 내 private 메서드**
+#### 3. 사용자 알림 → 서비스 내 private 메서드
+
 ```python
 # 각 서비스에서 _notify_user_safe() private 메서드로 처리
 self._notify_user_safe(user_id, "⚠️ 오류 메시지")
 ```
 
 **언제**:
+
 - 사용자에게 에러 알림을 보낼 때
 - 알림 실패가 주 작업 실패로 이어지지 않아야 할 때
 
@@ -336,10 +348,12 @@ except SlackApiError:
   - `fake_survey.py` — `FakeSurveySheet` (SurveySheetGateway Fake, 설문/분석결과 기록)
 - `tests/conftest.py` — 공유 픽스처: `fake_db`, `fake_reader`, `fake_writer`, `sample_settlement_data` 등
 - **테스트 DI 패턴:** 서비스 생성자에 Fake 직접 주입 — monkeypatch 불필요
+
   ```python
   sync_proc = SyncProcessor(fake_db.get_session, fake_sheets)
   writer = SettlementWriter(fake_db.get_session, sync_proc)
   ```
+
 - **Mock vs Fake 기준:** DB/Sheets 의존 → `FakeDatabase`/`FakeSpreadsheet` (상태 검증), Slack SDK(`WebClient`) 직접 호출 → `Mock()` (행위 검증). `SlackApiError` 생성: `SlackApiError(message="error", response=Mock())` (response 필수)
 - **에러 경로 테스트:** 내부 메서드 실패 시뮬레이션은 `monkeypatch.setattr(instance, "method", _raise)` 허용 (DI 대상이 아닌 self 메서드 한정)
 - Pre-commit 훅: ruff + ruff-format + pytest-unit (3개 모두 커밋 시 자동 실행)
@@ -353,6 +367,7 @@ Red-Green-Refactor 사이클로 구현한다:
 3. **Refactor**: 중복 제거, 네이밍 개선 (테스트는 계속 통과해야 함)
 
 **원칙:**
+
 - 새 메서드/클래스 추가 시 테스트를 먼저 작성한 뒤 구현
 - 기존 메서드 삭제/변경 시 관련 테스트를 먼저 삭제/수정한 뒤 코드 변경
 - Fake로 테스트 가능한 설계를 우선 — `Mock()`보다 `FakeDatabase`, `FakeSpreadsheet` 선호
@@ -365,6 +380,7 @@ Red-Green-Refactor 사이클로 구현한다:
 - 상수(`ActionId`, `BlockId`): `StrEnum` 사용, `app/constants/slack_ids.py`에 정의
 
 **Pythonic 관용구:**
+
 - dataclass는 순수 데이터 홀더 — `__post_init__` 사이드이펙트 금지, 생성 로직은 `@classmethod` 팩토리에
 - 반복 필드 매핑은 튜플/dict 상수로 DRY 처리 (예: `repository.py`의 `_SHARED_FIELDS`)
 - Slack body 파싱 등 외부 데이터 접근 시 EAFP(try/except) 선호 — LBYL(isinstance 체크) 대신
@@ -384,10 +400,12 @@ Red-Green-Refactor 사이클로 구현한다:
 ## CI/CD
 
 **CI (`ci.yml`):** 모든 PR에서 2개 job 병렬 실행:
+
 - `lint`: `ruff check` + `ruff format --check`
 - `test`: `pytest tests/unit -v`
 
 **Migration Check (`ci-migration.yml`):** PR → main 시에만 실행:
+
 - `alembic`: fresh SQLite에서 `alembic heads` (단일 head 확인) → `upgrade head` → `check`
 
 **배포 (`deploy.yml`):** main push 시 Docker 빌드 → 프로덕션 배포. `entrypoint.sh`가 `alembic upgrade head` 실행 후 앱 시작.
