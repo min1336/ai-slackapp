@@ -40,11 +40,13 @@ def _locator(
     reader: FakeSlackReader | None = None,
     channels: list[str] | None = None,
     store: ThreadReferenceStore | None = None,
+    exclude_text: str | None = None,
 ) -> ReservationLocator:
     return ReservationLocator(
         reader=reader or FakeSlackReader(),
         reservation_channels=channels or [RESERVATION_CH],
         thread_ref_store=store,
+        exclude_text=exclude_text,
     )
 
 
@@ -171,3 +173,40 @@ class TestFind:
         result = loc.find("R12345")
 
         assert result is not None
+
+    def test_예약취소_메시지_건너뛰고_예약이_매칭(self):
+        """운영툴 예약취소 메시지가 먼저 있어도 예약이 메시지를 찾는다."""
+        cancel_msg = (
+            "[카모아 예약취소 (운영툴)]\n    예약번호 : R12345\n    예약자명 : 홍길동"
+        )
+        reader = FakeSlackReader()
+        reader.channel_messages[RESERVATION_CH] = [
+            {"text": cancel_msg, "ts": "cancel-ts"},  # newest first
+            {"text": SAMPLE_RESERVATION_MSG, "ts": "reserve-ts"},
+        ]
+        reader.parent_messages[(RESERVATION_CH, "reserve-ts")] = SAMPLE_RESERVATION_MSG
+
+        loc = _locator(reader=reader, exclude_text="예약취소")
+        result = loc.find("R12345")
+
+        assert result is not None
+        assert result.thread_ts == "reserve-ts"
+        assert result.data.booking_key == "R12345"
+
+    def test_exclude_text_미지정시_첫_매칭(self):
+        """exclude_text 없으면 기존대로 첫 매칭 반환."""
+        cancel_msg = (
+            "[카모아 예약취소 (운영툴)]\n    예약번호 : R12345\n    예약자명 : 홍길동"
+        )
+        reader = FakeSlackReader()
+        reader.channel_messages[RESERVATION_CH] = [
+            {"text": cancel_msg, "ts": "cancel-ts"},
+            {"text": SAMPLE_RESERVATION_MSG, "ts": "reserve-ts"},
+        ]
+        reader.parent_messages[(RESERVATION_CH, "cancel-ts")] = cancel_msg
+
+        loc = _locator(reader=reader)
+        result = loc.find("R12345")
+
+        assert result is not None
+        assert result.thread_ts == "cancel-ts"

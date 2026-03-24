@@ -82,6 +82,7 @@ def find_message_by_text(
     channel_id: str,
     search_text: str,
     *,
+    exclude_text: str | None = None,
     max_pages: int = 10,
     page_size: int = 100,
 ) -> str | None:
@@ -103,6 +104,8 @@ def find_message_by_text(
             text = msg.get("text", "")
             normalized = text.replace("*", "")
             if search_text in normalized:
+                if exclude_text and exclude_text in normalized:
+                    continue
                 return msg.get("ts")
             for block in msg.get("blocks", []):
                 for field in block.get("fields", []):

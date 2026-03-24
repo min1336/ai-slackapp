@@ -164,6 +164,64 @@ class TestFindMessageByText:
         result = find_message_by_text(client, "C123", "예약번호 : RB2069206")
         assert result == "555.555"
 
+    def test_exclude_text로_메시지_제외(self):
+        """exclude_text가 포함된 메시지는 건너뛰고 다음 매칭을 반환한다."""
+        client = _FakeSlackClient(
+            [
+                _make_history_response(
+                    [
+                        {
+                            "text": "[카모아 예약취소 (운영툴)]\n    예약번호 : BK-001",
+                            "ts": "cancel.111",
+                        },
+                        {
+                            "text": "[카모아 예약]\n    예약번호 : BK-001",
+                            "ts": "reserve.222",
+                        },
+                    ]
+                )
+            ]
+        )
+
+        result = find_message_by_text(client, "C123", "BK-001", exclude_text="예약취소")
+        assert result == "reserve.222"
+
+    def test_exclude_text_None이면_기존_동작(self):
+        """exclude_text 미지정 시 첫 매칭을 반환한다 (기존 동작)."""
+        client = _FakeSlackClient(
+            [
+                _make_history_response(
+                    [
+                        {
+                            "text": "[카모아 예약취소 (운영툴)]\n    예약번호 : BK-001",
+                            "ts": "cancel.111",
+                        },
+                    ]
+                )
+            ]
+        )
+
+        result = find_message_by_text(client, "C123", "BK-001")
+        assert result == "cancel.111"
+
+    def test_exclude_text로_모두_제외되면_None(self):
+        """모든 매칭이 exclude_text에 해당하면 None을 반환한다."""
+        client = _FakeSlackClient(
+            [
+                _make_history_response(
+                    [
+                        {
+                            "text": "[카모아 예약취소 (운영툴)]\n    예약번호 : BK-001",
+                            "ts": "cancel.111",
+                        },
+                    ]
+                )
+            ]
+        )
+
+        result = find_message_by_text(client, "C123", "BK-001", exclude_text="예약취소")
+        assert result is None
+
     def test_cursor_없으면_다음_페이지_요청_안함(self):
         client = _FakeSlackClient(
             [

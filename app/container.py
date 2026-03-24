@@ -225,6 +225,7 @@ class ServiceContainer:
                 reader=self.reader,
                 reservation_channels=config.settlement.slack_channels.reservation,
                 thread_ref_store=self.thread_ref_store,
+                exclude_text="예약취소",
             )
 
             self.cancellation_image = CancellationImageService(

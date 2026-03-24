@@ -51,6 +51,7 @@ class SlackMessageReader(Protocol):
         channel_id: str,
         search_text: str,
         *,
+        exclude_text: str | None = None,
         max_pages: int = 10,
     ) -> str | None: ...
 

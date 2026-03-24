@@ -33,6 +33,7 @@ class FakeSlackReader:
         channel_id: str,
         search_text: str,
         *,
+        exclude_text: str | None = None,
         max_pages: int = 10,
     ) -> str | None:
         return self.messages_by_text.get((channel_id, search_text))

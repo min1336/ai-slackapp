@@ -39,10 +39,15 @@ class SlackReader:
         channel_id: str,
         search_text: str,
         *,
+        exclude_text: str | None = None,
         max_pages: int = 10,
     ) -> str | None:
         return _find_message_by_text(
-            self._client, channel_id, search_text, max_pages=max_pages
+            self._client,
+            channel_id,
+            search_text,
+            exclude_text=exclude_text,
+            max_pages=max_pages,
         )
 
     def list_channel_messages(

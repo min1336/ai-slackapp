@@ -32,10 +32,12 @@ class ReservationLocator:
         reader: SlackMessageReader,
         reservation_channels: list[str],
         thread_ref_store: ThreadReferenceStore | None = None,
+        exclude_text: str | None = None,
     ) -> None:
         self._reader = reader
         self._reservation_channels = reservation_channels
         self._thread_ref_store = thread_ref_store
+        self._exclude_text = exclude_text
 
     def find(self, booking_key: str, phone: str = "") -> ReservationLocation | None:
         """예약번호로 검색 → 실패 시 전화번호 fallback."""
@@ -82,6 +84,8 @@ class ReservationLocator:
         for msg in self._reader.list_channel_messages(channel, max_pages=50):
             text = msg.get("text", "")
             if not text or search_text not in text:
+                continue
+            if self._exclude_text and self._exclude_text in text:
                 continue
             found_ts = msg.get("ts")
             if not found_ts:
