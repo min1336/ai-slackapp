@@ -36,5 +36,3 @@ class CrossVerificationResult:
     verdict: str  # "승인", "반려", "보류"
     reason: str
     field_comparisons: list[FieldComparison] = field(default_factory=list)
-    ai_used: bool = False
-    ai_reasoning: str = ""

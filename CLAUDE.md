@@ -126,8 +126,7 @@ services/ (Components)        ← 단일 책임 컴포넌트
     ├── sync_processor.py     ← Processor: DB→Sheets 즉시 동기화
     ├── thread_reference_store.py ← Store: 스레드 참조 CRUD
     ├── message_parser.py     ← Parser: 텍스트 파싱 (순수 함수)
-    ├── image_analyzer.py     ← Analyzer: AI 이미지 분석 (Gemini/GPT)
-    └── cross_verifier.py     ← Verifier: 예약 데이터 교차검증
+    └── image_analyzer.py     ← Analyzer: AI 이미지 분석 (Gemini/GPT)
     ↓
 infrastructure/               ← 외부 시스템 통신 (Slack API, Google Sheets, AI API)
     ├── protocols.py          ← Protocol 인터페이스 (SlackMessageReader/Writer, SpreadsheetGateway, SurveySheetGateway, DriveImageGateway, ImageAnalysisGateway)

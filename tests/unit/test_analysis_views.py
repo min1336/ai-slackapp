@@ -52,15 +52,31 @@ class TestBuildAnalysisResultBlocks:
         idx_issuer = next(i for i, t in enumerate(field_texts) if "발급기관" in t)
         assert idx_customer < idx_flight < idx_issuer
 
-    def test_summary_not_rendered(self):
-        """요약은 블록에 포함되지 않는다."""
+    def test_summary_rendered(self):
+        """요약이 블록에 표시된다."""
         result = AnalysisResult(
             extracted_fields={"고객명": "홍길동"},
             summary="KE123편이 기상악화로 결항.",
         )
         blocks = build_analysis_result_blocks(result)
         all_text = _extract_all_text(blocks)
-        assert "기상악화" not in all_text
+        assert "기상악화" in all_text
+
+    def test_empty_summary_not_rendered(self):
+        """빈 요약은 블록에 포함되지 않는다."""
+        result = AnalysisResult(
+            extracted_fields={"고객명": "홍길동"},
+            summary="",
+        )
+        blocks = build_analysis_result_blocks(result)
+        sections = _blocks_of_type(blocks, "section")
+        # 헤더 + 필드 section만 있어야 함 (요약 section 없음)
+        section_texts = [
+            s["text"]["text"]
+            for s in sections
+            if "text" in s and isinstance(s["text"], dict)
+        ]
+        assert len(section_texts) == 1  # 헤더만
 
     def test_quality_issues_displayed(self):
         """quality_issues가 있으면 표시된다."""

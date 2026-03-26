@@ -184,6 +184,7 @@ class CancellationImageService:
         try:
             result = self._analyzer.analyze(image_data, submission)  # type: ignore[union-attr]
         except Exception:
+            logger.exception("analysis_failed", booking_key=submission.booking_key)
             return
 
         # 이미지 품질 부적합 → X 리액션 + 사유, 즉시 종료
@@ -219,6 +220,10 @@ class CancellationImageService:
             try:
                 self._verify_and_report(result, submission, thread_ts)
             except Exception:
+                logger.exception(
+                    "cross_verification_failed",
+                    booking_key=submission.booking_key,
+                )
                 return
 
     def _verify_and_report(

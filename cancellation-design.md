@@ -1,7 +1,7 @@
 # 결항확인서 검증 시스템 — 기술 설계 문서
 
 > 대상 독자: 이 프로젝트에 처음 합류하는 개발자
-> 최종 수정: 2026-03-24
+> 최종 수정: 2026-03-25
 
 이 문서는 [Diataxis 프레임워크](https://docs.divio.com/documentation-system/)에 따라 4개 파트로 구성되어 있다.
 
@@ -93,8 +93,6 @@ CancellationImageService (Orchestrator)
 ├── SlackMessageReader           ← Slack 메시지 조회
 ├── ImageAnalyzer?               ← AI 이미지 분석 (optional)
 │   └── ImageAnalysisGateway     ← Gemini 또는 GPT API
-├── CrossVerifier?               ← 교차검증 (optional)
-│   └── ImageAnalysisGateway?    ← AI 판단 fallback (optional)
 └── ReservationLocator?          ← 예약 스레드 검색 (optional)
     ├── ThreadReferenceStore?    ← DB 캐시 (optional)
     └── SlackMessageReader       ← Slack API 폴백
@@ -124,8 +122,8 @@ Infrastructure         → 외부 API 통신 (Slack, Drive, Sheets, Gemini, GPT)
 |--------|-----------|------|
 | `poll_and_upload()` | `int` | 처리 건수. Lock 실패 시 `-1` |
 | `_process_submission()` | `bool` | `True`=처리 완료(성공 또는 중복), `False`=처리 불가(스레드/파일 없음) |
-| `_analyze_and_report()` | `None` | 분석+포스트 부작용 함수. 실패해도 예외를 전파하지 않음 |
-| `_cross_verify_and_report()` | `None` | 검증+포스트 부작용 함수. 실패해도 예외를 전파하지 않음 |
+| `_analyze_and_report()` | `None` | 분석+포스트 부작용 함수. 실패 시 로그 후 return (예외 전파 안 함) |
+| `_verify_and_report()` | `None` | 검증+포스트 부작용 함수. 실패 시 로그 후 return (예외 전파 안 함) |
 
 ### `poll_and_upload()` — 진입점
 
@@ -185,7 +183,7 @@ _process_submission(submission)
 _analyze_and_report(images, submission, thread_ts)
 │
 ├─ analyzer.analyze(images, submission)
-│  └─ 실패 시 → return (업로드는 이미 완료, 분석만 생략)
+│  └─ 실패 시 → logger.exception("analysis_failed") → return (업로드는 이미 완료, 분석만 생략)
 │
 ├─ result.is_valid == false?
 │  ├─ :x: 리액션 + 부적합 사유 포스트
@@ -197,15 +195,16 @@ _analyze_and_report(images, submission, thread_ts)
 ├─ survey_sheet.write_analysis_result(...)
 │  └─ 분석 결과를 시트에 기록
 │
-└─ cross_verifier 있으면 → _cross_verify_and_report()
+└─ reservation_locator 있으면 → _verify_and_report()
+   │  └─ 실패 시 → logger.exception("cross_verification_failed") → return
    │
    ├─ reservation_locator.find(booking_key, phone)
    │  └─ DB 캐시 → Slack API 폴백으로 예약 스레드 검색
    │
    ├─ 못 찾으면 → verdict="보류", reason="예약 스레드를 찾지 못했습니다."
    │
-   ├─ cross_verifier.verify(analysis, reservation, submission)
-   │  └─ 규칙 기반 판정 → 불확실하면 AI 판정
+   ├─ _check_date_range(analysis, location)
+   │  └─ 결항일이 대여기간 ±1일 이내 → 승인, 밖이면 → 반려
    │
    ├─ survey_sheet.write_verification_result(...)
    │
@@ -259,54 +258,36 @@ uv run python -m app.main
   예약 데이터: customer_name="홍길동", phone="01012345678",
               rental_period_start=2026-03-18, rental_period_end=2026-03-21
 
-[1단계: 필드 비교]
-  고객명:  "홍 길동" vs "홍길동"
-           → 공백 제거 후 "홍길동" vs "홍길동"
-           → _split_names로 분리 → ["홍길동"] vs ["홍길동"]
-           → "홍길동" in "홍길동" and len("홍길동") >= 2 → ✅ 일치
+[1단계: 날짜 비교 (_check_date_range)]
+  결항일:  2026-03-18
+  대여기간: 2026-03-18 ~ 2026-03-21
+  허용 범위 = [2026-03-17, 2026-03-22] (start-1 ~ end+1)
+  2026-03-17 ≤ 2026-03-18 ≤ 2026-03-22 → ✅ 범위 내
 
-  예약번호: 비교하지 않음 (항공 PNR ≠ 렌트카 예약번호) → 비교불필요
-
-  날짜:    결항일 2026-03-18
-           허용 범위 = [2026-03-17, 2026-03-22] (start-1 ~ end+1)
-           2026-03-17 ≤ 2026-03-18 ≤ 2026-03-22 → ✅ 일치
-
-  연락처:  설문 "010-1234-5678" → _digits_only → "01012345678"
-           예약 "01012345678" → _digits_only → "01012345678"
-           완전 일치 → ✅ 일치
-
-[2단계: 규칙 판정]
-  rejection_reasons = [] → 부적합 사유 없음
-  quality_issues = []    → 품질 이슈 없음
-  결항사유 "기상악화"     → 추출됨 ✅
-  항공편 "KE123"         → 추출됨 ✅
-  불일치 필드             → 없음 ✅
-  고객명 확인불가         → 아님 (일치) ✅
-
-  → 판정: 승인 ✓
+[2단계: 판정]
+  → 판정: 승인 ✓ ("날짜 검증 통과")
 
 [3단계: 후속 처리]
   시트에 "교차검증결과: 승인" 기록
   양방향 permalink 생성 (예약 스레드 ↔ 결항 스레드)
 ```
 
-**반려 예시** — 같은 상황에서 날짜가 `2026-03-10`이라면:
+**반려 예시** — 같은 상황에서 결항일이 `2026-03-10`이라면:
 
 ```text
-  날짜:    결항일 2026-03-10
-           허용 범위 = [2026-03-17, 2026-03-22]
-           2026-03-10 < 2026-03-17 → ❌ 불일치
+  결항일:  2026-03-10
+  허용 범위 = [2026-03-17, 2026-03-22]
+  2026-03-10 < 2026-03-17 → ❌ 범위 밖
 
-  → 불일치 필드 있음 → 판정: 반려 (사유: "날짜 불일치")
+  → 판정: 반려 (사유: "결항일(2026-03-10)이 대여기간(2026-03-18~2026-03-21) 밖")
 ```
 
-**보류 예시** — 항공편이 추출되지 않은 경우:
+**보류 예시** — 날짜가 추출되지 않은 경우:
 
 ```text
-  AI 분석 결과: 항공편="" (추출 실패)
+  AI 분석 결과: 날짜="" (추출 실패)
 
-  → 항공편/선편 추출 안 됨 → 규칙 판단 불가
-  → AI gateway 있으면 AI 판정 위임, 없으면 → 보류 (수동 검토 필요)
+  → 판정: 보류 (사유: "날짜 확인불가")
 ```
 
 ## 2.3 전체 흐름 시퀀스 다이어그램
@@ -321,7 +302,6 @@ sequenceDiagram
     participant Slack as SlackWriter/Reader
     participant Analyzer as ImageAnalyzer
     participant AI as Gemini/GPT
-    participant CV as CrossVerifier
     participant RL as ReservationLocator
 
     Main->>CIS: poll_and_upload()
@@ -361,11 +341,10 @@ sequenceDiagram
                 CIS->>Slack: post_message(분석 결과 블록)
                 CIS->>Survey: write_analysis_result()
 
-                opt cross_verifier 활성
+                opt reservation_locator 활성
                     CIS->>RL: find(booking_key, phone)
                     RL-->>CIS: ReservationLocation | None
-                    CIS->>CV: verify(analysis, reservation, submission)
-                    CV-->>CIS: CrossVerificationResult
+                    Note over CIS: _check_date_range()<br/>결항일 vs 대여기간 ±1일
 
                     CIS->>Survey: write_verification_result()
 
@@ -402,7 +381,7 @@ sequenceDiagram
 
 - `threading.Lock`으로 동시 폴링 방지 (중복 처리 차단)
   - **왜 `threading.Lock`?** 이 앱은 Slack Bolt 동기 모드(Socket Mode)로 동작하며, 폴링은 `threading.Thread`에서 실행된다. asyncio 기반이 아니므로 `threading.Lock`이 자연스럽다.
-- optional 컴포넌트(`analyzer`, `cross_verifier`, `reservation_locator`)는 `None` 체크 후 호출
+- optional 컴포넌트(`analyzer`, `reservation_locator`)는 `None` 체크 후 호출
 - 각 단계는 이전 단계 실패와 독립적 — 이미지 업로드 후 분석이 실패해도 업로드는 유지
 
 ### ImageAnalyzer
@@ -440,14 +419,6 @@ sequenceDiagram
 - 여러 문서를 함께 업로드한 경우, **문서 간 날짜/편명 불일치** 감지
 
 > `quality_issues`와 `rejection_reasons`의 차이: `quality_issues`는 이미지 필터링 단계의 문제(크기, 개수)이고, `rejection_reasons`는 AI가 판별한 부적합 사유다. 둘 다 동시에 존재할 수 있다.
-
-### CrossVerifier
-
-**역할**: 분석 결과(문서)와 예약 데이터를 비교하여 승인/반려/보류 판정.
-
-**파일**: `app/services/cross_verifier.py`
-
-> 판정 로직 상세는 [3.3 교차검증 판정 로직](#33-교차검증-판정-로직) 참조
 
 ### DriveFileCollector
 
@@ -593,117 +564,49 @@ class CrossVerificationResult:
     verdict: str               # "승인", "반려", "보류"
     reason: str                # 판단 근거
     field_comparisons: list[FieldComparison]
-    ai_used: bool              # AI 판단 사용 여부
-    ai_reasoning: str          # AI 판단 근거
 ```
 
 ---
 
 ## 3.3 교차검증 판정 로직
 
-교차검증은 **규칙 기반 → AI 폴백** 순서로 판정한다.
+교차검증은 `CancellationImageService._check_date_range()` 인라인 메서드로 수행한다. 결항일이 대여기간 내(±1일 여유)인지만 비교하는 단순한 규칙이다.
 
-### 비교 대상 필드
+### 비교 대상
 
-| 필드 | 비교 방법 | 비고 |
+| 항목 | 비교 방법 | 비고 |
 |------|-----------|------|
-| **고객명** | 퍼지 매칭: 2글자 이상 부분 문자열 포함 관계 | `/`, `,`, `·`로 분리 후 각각 비교 |
-| **예약번호** | **비교하지 않음** | 항공 PNR ≠ 렌트카 예약번호 |
 | **날짜** | 대여기간 ±1일 범위 내 포함 여부 | `rental_period_start-1 ≤ 결항일 ≤ rental_period_end+1` |
-| **연락처** | 숫자만 추출 후 완전 일치 | 설문 제출 전화번호 vs 예약 전화번호 |
 
 **설계 근거:**
 
-- **예약번호를 비교하지 않는 이유**: 결항확인서의 번호는 항공사 PNR(예: `ABC123`)이고, 우리 시스템의 `booking_key`는 렌트카 예약번호(예: `R240318001`)다. 서로 다른 체계이므로 비교가 무의미하다.
-- **고객명이 퍼지 매칭인 이유**: 결항확인서의 이름 표기(영문, 축약, 오탈자)가 예약 시스템과 정확히 일치하지 않는 경우가 많다. 부분 일치를 허용해야 실무에서 쓸 수 있다.
-- **연락처가 완전 일치인 이유**: 전화번호는 표기만 다를 뿐(`010-1234-5678` vs `01012345678`) 숫자 자체는 변하지 않으므로, 숫자 추출 후 정확 비교가 가능하다.
-- **날짜 ±1일 여유**: 결항일이 대여 전날이나 반납 다음날이어도, 실제로는 해당 예약에 영향을 줄 수 있다 (전날 출발편, 당일 새벽 도착 등).
+- **날짜만 비교하는 이유**: 고객명/연락처 비교는 표기 차이(영문, 축약, 오탈자)로 인해 오판율이 높았다. 날짜 비교만으로도 핵심 검증이 가능하므로 인라인화하여 단순화했다.
+- **±1일 여유**: 결항일이 대여 전날이나 반납 다음날이어도, 실제로는 해당 예약에 영향을 줄 수 있다 (전날 출발편, 당일 새벽 도착 등).
 
-### 판정 흐름도
+### 판정 흐름
 
 ```text
-  ┌──────────────────────────────────┐
-  │ AI 부적합 사유(rejection_reasons) │
-  │ 있음?                            │
-  └──────┬───────────────────────────┘
-         │ Yes → 반려
-         │ No
-         ▼
-  ┌──────────────────────────────────┐
-  │ 이미지 품질 이슈(quality_issues) │
-  │ 있음?                            │
-  └──────┬───────────────────────────┘
-         │ Yes → 규칙 판단 불가 (AI 또는 보류)
-         │ No
-         ▼
-  ┌──────────────────────────────────┐
-  │ 결항사유 추출됨?                   │
-  └──────┬───────────────────────────┘
-         │ No → 규칙 판단 불가
-         │ Yes
-         ▼
-  ┌──────────────────────────────────┐
-  │ 항공편/선편 추출됨?                │
-  └──────┬───────────────────────────┘
-         │ No → 규칙 판단 불가
-         │ Yes
-         ▼
-  ┌──────────────────────────────────┐
-  │ 불일치 필드 있음?                  │
-  └──────┬───────────────────────────┘
-         │ Yes → 반려 (불일치 필드명 포함)
-         │ No
-         ▼
-  ┌──────────────────────────────────┐
-  │ 고객명 확인불가?                   │
-  └──────┬───────────────────────────┘
-         │ Yes → 규칙 판단 불가
-         │ No
-         ▼
-       승인 ✓
+_check_date_range(analysis, location)
+│
+├─ 날짜 또는 대여기간 없음 → 보류 ("날짜 확인불가")
+│
+├─ 날짜 파싱 실패 → 보류 ("날짜 파싱 실패")
+│
+├─ start-1 ≤ 결항일 ≤ end+1 → 승인 ("날짜 검증 통과")
+│
+└─ 범위 밖 → 반려 ("결항일이 대여기간 밖")
 ```
-
-**"규칙 판단 불가" 이후:**
-
-1. `ImageAnalysisGateway`가 있으면 → AI에게 판정 위임
-2. 없으면 → `보류` (수동 검토 필요)
-
-**AI 판정 응답 검증:**
-
-- AI 응답에서 `verdict`가 `"승인"`, `"반려"`, `"보류"` 중 하나가 아니면 → 강제로 `"보류"`로 변환
-- AI 호출 자체가 실패하면 → `verdict="보류"`, `reason="AI 판단 실패 — 수동 검토 필요"`, `ai_used=True`로 기록
 
 ```mermaid
 flowchart TD
-    Start([verify 호출]) --> CompareFields[필드 비교<br/>고객명, 예약번호, 날짜, 연락처]
-    CompareFields --> RuleCheck{규칙 기반 판정}
+    Start([_check_date_range]) --> HasDate{날짜/대여기간<br/>모두 있음?}
 
-    RuleCheck --> Rejection1{rejection_reasons<br/>있음?}
-    Rejection1 -->|Yes| Reject1[반려]
-    Rejection1 -->|No| Quality{quality_issues<br/>있음?}
-
-    Quality -->|Yes| Inconclusive1[규칙 판단 불가]
-    Quality -->|No| Reason{결항사유<br/>추출됨?}
-
-    Reason -->|No| Inconclusive2[규칙 판단 불가]
-    Reason -->|Yes| Flight{항공편/선편<br/>추출됨?}
-
-    Flight -->|No| Inconclusive3[규칙 판단 불가]
-    Flight -->|Yes| Mismatch{불일치 필드<br/>있음?}
-
-    Mismatch -->|Yes| Reject2[반려]
-    Mismatch -->|No| NameCheck{고객명<br/>확인불가?}
-
-    NameCheck -->|Yes| Inconclusive4[규칙 판단 불가]
-    NameCheck -->|No| Approve[승인 ✓]
-
-    Inconclusive1 --> AICheck{AI gateway<br/>있음?}
-    Inconclusive2 --> AICheck
-    Inconclusive3 --> AICheck
-    Inconclusive4 --> AICheck
-
-    AICheck -->|Yes| AIVerdict[AI 판정<br/>승인/반려/보류]
-    AICheck -->|No| Hold[보류<br/>수동 검토 필요]
+    HasDate -->|No| Hold1[보류<br/>날짜 확인불가]
+    HasDate -->|Yes| Parse{날짜 파싱<br/>성공?}
+    Parse -->|No| Hold2[보류<br/>날짜 파싱 실패]
+    Parse -->|Yes| InRange{start-1 ≤ 결항일<br/>≤ end+1?}
+    InRange -->|Yes| Approve[승인 ✓]
+    InRange -->|No| Reject[반려<br/>결항일이 대여기간 밖]
 ```
 
 ### 날짜 파싱 — 지원 형식 4가지
@@ -713,18 +616,7 @@ flowchart TD
 - `%Y/%m/%d` (예: `2026/03/18`)
 - `%Y년 %m월 %d일` (예: `2026년 03월 18일`)
 
-모든 형식을 순회하며 파싱 시도. 전부 실패하면 `확인불가`로 처리.
-
-### 고객명 퍼지 매칭 상세
-
-```python
-# "홍길동/김철수" vs "홍길동" → 일치
-# "홍길" vs "홍길동" → 일치 (2글자 이상 부분 문자열)
-# "홍" vs "홍길동" → 불일치 (1글자는 부분 매칭 불가)
-# "이영희" vs "홍길동" → 불일치
-```
-
-분리 구분자: `/`, `,`, `·` — 여러 명의 이름이 하나의 필드에 들어올 수 있다.
+모든 형식을 순회하며 파싱 시도. 전부 실패하면 `보류`로 처리.
 
 ---
 
@@ -771,7 +663,7 @@ OPENAI_API_KEY=...   # Fallback 분석 모델 (선택)
 | `enabled: false` | 이미지 업로드만 |
 | `enabled: true` + API 키 없음 | 이미지 업로드만 (경고 로그) |
 | `enabled: true` + Gemini 키만 | Gemini 단독 분석 |
-| `enabled: true` + 두 키 모두 | Gemini(primary) + GPT(fallback) |
+| `enabled: true` + 두 키 모두 | Gemini(primary) + GPT(fallback, high detail) |
 
 > **참고**: dev/prod 모두 `analysis.enabled: true`로 설정되어 있다 (2026-03-24 기준). API 키 유무에 따라 실제 분석 활성 여부가 결정된다.
 
@@ -797,12 +689,9 @@ OPENAI_API_KEY=...   # Fallback 분석 모델 (선택)
    ├─ OpenAI 키만 → OpenAIImageClient
    └─ 둘 다 → FallbackImageGateway(primary=Gemini, fallback=OpenAI)
 
-5. CrossVerifier 생성 (조건부)
-   └─ analyzer가 None이면 → None
+5. DriveFileCollector 생성 (PdfConverter 포함)
 
-6. DriveFileCollector 생성 (PdfConverter 포함)
-
-7. ReservationLocator 생성
+6. ReservationLocator 생성
    └─ 예약 채널 목록 + ThreadReferenceStore + exclude_text="예약취소"
 
 8. CancellationImageService 조립 (모든 컴포넌트 주입)
@@ -853,7 +742,7 @@ def _run_startup_cancellation_poll():
 
 `고객명`, `예약번호`, `날짜`, `항공편`, `선편`, `결항사유`, `노선`, `출발지`, `도착지`, `발급기관`
 
-필드가 10개를 초과하면 10개씩 section 블록으로 분할하며, 요약은 300자로 제한된다.
+필드가 10개를 초과하면 10개씩 section 블록으로 분할한다. 핵심 필드 아래에 AI 요약(`summary`)도 표시된다.
 
 ---
 
@@ -869,8 +758,8 @@ def _run_startup_cancellation_poll():
 | 파일 수집 | `return False` (미처리) | 다음 폴링에서 재시도 |
 | 운영현황 행 선점 | `return True` (중복 건) | 이미 처리된 건 |
 | 이미지 업로드 | 예외 전파 | 핵심 기능, 실패 시 전체 중단 |
-| AI 분석 | `return` (분석 생략) | 업로드는 이미 완료 |
-| 교차검증 | `return` (검증 생략) | 분석 결과는 이미 포스트 |
+| AI 분석 | `logger.exception` → `return` (분석 생략) | 업로드는 이미 완료 |
+| 교차검증 | `logger.exception` → `return` (검증 생략) | 분석 결과는 이미 포스트 |
 | 양방향 링크 | `suppress(SlackApiError)` | 부가 기능 |
 
 ### 동시 실행 방지
@@ -985,9 +874,6 @@ service = CancellationImageService(
 # 결항 관련 테스트만
 uv run pytest tests/unit/test_cancellation_image_service.py -v
 
-# 교차검증 테스트만
-uv run pytest tests/unit/test_cross_verifier.py -v
-
 # 전체 유닛 테스트
 uv run pytest tests/unit -v
 ```
@@ -1018,17 +904,17 @@ uv run pytest tests/unit -v
 |-----------|-----------|------|
 | Feature flag off | 로그: `cancellation_analyzer_disabled, reason=analysis.enabled=false` | `config.yaml`에서 `analysis.enabled: true` |
 | API 키 누락 | 로그: `cancellation_analyzer_disabled, reason=no_api_key` | `.env`에 `GEMINI_API_KEY` 또는 `OPENAI_API_KEY` 설정 |
-| API 호출 실패 | `analyzer.analyze()` 예외 → 로그 확인 | API 키 유효성, 네트워크, 할당량 확인 |
+| API 호출 실패 | 로그: `analysis_failed` (traceback 포함) | API 키 유효성, 네트워크, 할당량 확인 |
 | 이미지 전부 필터됨 | 로그: `image_filter_result, filtered_count=0` | 모든 이미지가 4MB 초과. 원본 이미지 크기 줄이기 |
 
 ### 교차검증 결과가 예상과 다름
 
 | 증상 | 원인 | 확인 방법 |
 |------|------|-----------|
-| 항상 "보류" | 결항사유 또는 항공편이 추출되지 않음 | 분석 결과의 `extracted_fields`에서 해당 필드 확인 |
-| 고객명 불일치 | 문서 이름과 예약 이름이 2글자 미만 부분 매칭 | 예: "홍" vs "홍길동"은 1글자라 불일치 |
-| 날짜 불일치 | 결항일이 대여기간 ±1일 범위 밖 | 대여기간과 결항일 비교 확인 |
+| 항상 "보류" | 날짜가 추출되지 않거나 대여기간이 없음 | 분석 결과의 `extracted_fields.날짜`와 예약 데이터의 `rental_period_start/end` 확인 |
+| 날짜 반려 | 결항일이 대여기간 ±1일 범위 밖 | 대여기간과 결항일 비교 확인 |
 | 예약 스레드 못 찾음 | "예약취소" 텍스트 포함 메시지만 존재 | `exclude_text` 필터가 원본까지 제외하는지 확인 |
+| 교차검증 자체 에러 | 로그에 `cross_verification_failed` 이벤트 | traceback으로 근본 원인 확인 |
 
 ### 해외 건이 국내로 처리됨
 
@@ -1049,10 +935,11 @@ uv run pytest tests/unit -v
 | `analysis_result` | INFO | AI 분석 결과 요약 |
 | `cancellation_analyzer_ready` | INFO | 분석기 초기화 완료 |
 | `cancellation_analyzer_disabled` | INFO/WARN | 분석기 비활성 (이유 포함) |
+| `analysis_failed` | ERROR | AI 분석 실패 (traceback 포함) |
+| `cross_verification_failed` | ERROR | 교차검증 실패 (traceback 포함) |
 | `overseas_mention_failed` | ERROR | 해외 건 멘션 포스트 실패 |
 | `reservation_search_fallback_phone` | INFO | 예약번호 검색 실패 → 전화번호 폴백 |
 | `reservation_db_lookup_failed` | WARN | DB 캐시 조회 실패 |
-| `ai_verdict_failed` | ERROR | AI 교차검증 판정 실패 |
 
 ---
 

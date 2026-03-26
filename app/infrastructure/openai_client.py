@@ -27,7 +27,7 @@ class OpenAIImageClient:
                     "type": "image_url",
                     "image_url": {
                         "url": f"data:image/png;base64,{b64}",
-                        "detail": "low",
+                        "detail": "high",
                     },
                 }
             )

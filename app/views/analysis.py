@@ -46,6 +46,15 @@ def build_analysis_result_blocks(result: AnalysisResult) -> list[dict]:
             for i in range(0, len(fields), 10):
                 blocks.append({"type": "section", "fields": fields[i : i + 10]})
 
+    # 요약
+    if result.summary:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": result.summary},
+            }
+        )
+
     # 품질 이슈
     if result.quality_issues:
         blocks.append(
