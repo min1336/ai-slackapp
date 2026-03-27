@@ -5,12 +5,22 @@ from collections.abc import Iterator
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
+from app.core import get_logger
+
+logger = get_logger(__name__)
+
 
 def get_user_real_name(client: WebClient, user_id: str) -> str:
     try:
         result = client.users_info(user=user_id)
         return result["user"]["real_name"]
-    except (SlackApiError, KeyError):
+    except (SlackApiError, KeyError) as e:
+        logger.warning(
+            "get_user_real_name_failed",
+            reason="Slack에서 사용자 이름 조회 실패",
+            user_id=user_id,
+            error=str(e),
+        )
         return ""
 
 
@@ -20,7 +30,14 @@ def get_thread_permalink(client: WebClient, channel_id: str, thread_ts: str) -> 
     try:
         result = client.chat_getPermalink(channel=channel_id, message_ts=thread_ts)
         return result.get("permalink", "")
-    except SlackApiError:
+    except SlackApiError as e:
+        logger.warning(
+            "get_thread_permalink_failed",
+            reason="스레드 퍼마링크 조회 실패",
+            channel_id=channel_id,
+            thread_ts=thread_ts,
+            error=str(e),
+        )
         return ""
 
 
@@ -39,8 +56,14 @@ def get_thread_parent_message(
         messages = result.get("messages", [])
         if messages:
             return messages[0].get("text", "")
-    except SlackApiError:
-        pass
+    except SlackApiError as e:
+        logger.warning(
+            "get_thread_parent_message_failed",
+            reason="스레드 원본 메시지 조회 실패",
+            channel_id=channel_id,
+            thread_ts=thread_ts,
+            error=str(e),
+        )
     return None
 
 
@@ -97,7 +120,14 @@ def find_message_by_text(
                 kwargs["cursor"] = cursor
 
             result = client.conversations_history(**kwargs)
-        except SlackApiError:
+        except SlackApiError as e:
+            logger.warning(
+                "find_message_by_text_failed",
+                reason="채널 메시지 텍스트 검색 중 Slack API 에러",
+                channel_id=channel_id,
+                search_text=search_text,
+                error=str(e),
+            )
             return None
 
         for msg in result.get("messages", []):

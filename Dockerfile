@@ -16,5 +16,6 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
+RUN mkdir -p /var/log/app
 
 CMD ["./entrypoint.sh"]

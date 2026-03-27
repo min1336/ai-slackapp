@@ -6,8 +6,11 @@ from typing import TYPE_CHECKING
 
 from slack_sdk.errors import SlackApiError
 
+from app.core import get_logger
 from app.models import ThreadLocation
 from app.services.message_parser import extract_thread_references
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from app.infrastructure.protocols import SlackMessageReader
@@ -103,6 +106,11 @@ class ThreadDiscoveryService:
                 refs, _ = extract_thread_references(messages)
                 saved += self._store.save_new_references(refs, ch)
             except SlackApiError:
+                logger.exception(
+                    "backfill_channel_failed",
+                    reason="예약 채널 스레드 백필 중 Slack API 에러 — 해당 채널 건너뜀",
+                    channel=ch,
+                )
                 continue
 
         return saved

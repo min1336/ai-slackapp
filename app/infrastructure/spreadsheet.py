@@ -184,13 +184,20 @@ class SpreadsheetService:
             sync_key_col = mapping.column_of("sync_key")
             matches = worksheet.findall(sync_key)
             return any(cell.col == sync_key_col for cell in matches)
-        except (GSpreadException, KeyError) as e:
-            if isinstance(e, GSpreadException) and _is_cell_not_found(e):
+        except GSpreadException as e:
+            if _is_cell_not_found(e):
                 return False
-            logger.warning(
+            logger.exception(
                 "sync_key_search_failed",
+                reason="gspread 에러 — sync_key 검색 실패, 중복 행이 생길 수 있음",
                 sync_key=sync_key,
-                error=str(e),
+            )
+            return False
+        except KeyError:
+            logger.exception(
+                "sync_key_search_failed",
+                reason="sync_key 컬럼 매핑 누락 — 설정 확인 필요",
+                sync_key=sync_key,
             )
             return False
 
@@ -300,9 +307,17 @@ class SpreadsheetService:
             # 과거 완료(TRUE) 히스토리가 있더라도 활성(FALSE) 행이 존재하면
             # 현재 처리 가능한 건으로 본다.
             return has_completed and not has_active
-        except (APIError, GSpreadException, ValueError, KeyError):
-            logger.warning(
+        except APIError:
+            logger.exception(
                 "settlement_completed_check_failed",
+                reason="Sheets API 에러 — 미완료로 간주",
+                booking_key=booking_key,
+            )
+            return False
+        except (GSpreadException, ValueError, KeyError):
+            logger.exception(
+                "settlement_completed_check_failed",
+                reason="시트 접근 또는 컬럼 매핑 실패 — 미완료로 간주",
                 booking_key=booking_key,
             )
             return False
@@ -364,8 +379,17 @@ class SpreadsheetService:
                 for bk, comp in zip(booking_values, completed_values, strict=False)
                 if bk and comp == "TRUE"
             }
-        except (APIError, GSpreadException, ValueError, KeyError) as e:
-            logger.warning("get_completed_booking_keys_failed", error=str(e))
+        except APIError:
+            logger.exception(
+                "get_completed_booking_keys_failed",
+                reason="Sheets API 에러 — 빈 목록 반환",
+            )
+            return set()
+        except (GSpreadException, ValueError, KeyError):
+            logger.exception(
+                "get_completed_booking_keys_failed",
+                reason="시트 접근 또는 컬럼 매핑 실패 — 빈 목록 반환",
+            )
             return set()
 
     def _update_settlement_row(

@@ -24,10 +24,12 @@ services:
       - JOTFORM_API_KEY=${JOTFORM_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LOG_DIR=/var/log/app
     ports:
       - "8080:8080"
     volumes:
       - ./credentials.json:/app/credentials.json:ro
+      - /var/log/slack-bot:/var/log/app
     networks:
       - n8n_network
 

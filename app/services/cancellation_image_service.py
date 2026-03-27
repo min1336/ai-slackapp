@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import threading
-from contextlib import suppress
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -130,11 +129,17 @@ class CancellationImageService:
         collected_images = [data for _, data in collected.images]
 
         if collected.has_pdf:
-            with suppress(SlackApiError):
+            try:
                 self._writer.add_reaction(
                     channel=self._target_channel,
                     timestamp=thread_ts,
                     name=_PDF_EMOJI,
+                )
+            except SlackApiError:
+                logger.warning(
+                    "pdf_reaction_failed",
+                    reason="PDF 첨부 리액션 추가 실패",
+                    thread_ts=thread_ts,
                 )
 
         if self._is_overseas(sub.booking_key):
@@ -164,14 +169,27 @@ class CancellationImageService:
                     ),
                     thread_ts=thread_ts,
                 )
-            except SlackApiError:
-                logger.exception("overseas_mention_failed", booking_key=booking_key)
+            except SlackApiError as e:
+                logger.warning(
+                    "overseas_mention_failed",
+                    reason="해외 결항 건 멘션 포스트 실패",
+                    booking_key=booking_key,
+                    thread_ts=thread_ts,
+                    error=str(e),
+                )
         if self._overseas_reaction:
-            with suppress(SlackApiError):
+            try:
                 self._writer.add_reaction(
                     channel=self._target_channel,
                     timestamp=thread_ts,
                     name=self._overseas_reaction,
+                )
+            except SlackApiError:
+                logger.warning(
+                    "overseas_reaction_failed",
+                    reason="해외 결항 건 리액션 추가 실패",
+                    booking_key=booking_key,
+                    thread_ts=thread_ts,
                 )
 
     def _analyze_and_report(
@@ -189,11 +207,18 @@ class CancellationImageService:
 
         # 이미지 품질 부적합 → X 리액션 + 사유, 즉시 종료
         if not result.is_valid:
-            with suppress(SlackApiError):
+            try:
                 self._writer.add_reaction(
                     channel=self._target_channel,
                     timestamp=thread_ts,
                     name="x",
+                )
+            except SlackApiError:
+                logger.warning(
+                    "invalid_image_reaction_failed",
+                    reason="부적합 이미지 X 리액션 추가 실패",
+                    booking_key=submission.booking_key,
+                    thread_ts=thread_ts,
                 )
             reason_text = "부적합 사유:\n" + "\n".join(
                 f"- {r}" for r in result.rejection_reasons
@@ -289,7 +314,7 @@ class CancellationImageService:
         submission: SurveySubmission,
     ) -> None:
         """승인 시 예약↔취소 스레드 간 양방향 permalink을 포스트한다."""
-        with suppress(SlackApiError):
+        try:
             res_permalink = self._reader.get_thread_url(
                 location.channel, location.thread_ts
             )
@@ -309,3 +334,10 @@ class CancellationImageService:
                     text=cancel_permalink,
                     thread_ts=location.thread_ts,
                 )
+        except SlackApiError:
+            logger.exception(
+                "bidirectional_link_failed",
+                reason="양방향 링크 포스트 실패 — 누락 방향 확인 필요",
+                booking_key=submission.booking_key,
+                thread_ts=thread_ts,
+            )

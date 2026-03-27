@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
@@ -228,7 +227,7 @@ class ApprovalService:
         original_blocks: list,
         error_text: str,
     ) -> None:
-        with suppress(SlackApiError):
+        try:
             if original_blocks and message_ts:
                 self._writer.update_message(
                     channel=channel_id,
@@ -236,9 +235,23 @@ class ApprovalService:
                     text="승인 요청",
                     blocks=original_blocks,
                 )
-        with suppress(SlackApiError):
+        except SlackApiError:
+            logger.exception(
+                "restore_message_failed",
+                reason="승인 에러 후 메시지 복원 실패 — 버튼이 안 보일 수 있음",
+                channel_id=channel_id,
+                ts=message_ts,
+            )
+        try:
             self._writer.post_ephemeral(
                 channel=channel_id,
                 user=user_id,
                 text=error_text,
+            )
+        except SlackApiError:
+            logger.exception(
+                "notify_user_failed",
+                reason="승인 에러 알림 전송 실패 — 사용자가 모를 수 있음",
+                channel_id=channel_id,
+                user_id=user_id,
             )

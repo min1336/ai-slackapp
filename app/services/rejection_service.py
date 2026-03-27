@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from slack_sdk.errors import SlackApiError
@@ -246,7 +245,11 @@ class RejectionService:
         try:
             self._transfer_lifecycle.revert_transfer(booking_key)
         except Exception:
-            logger.warning("transfer_revert_failed", booking_key=booking_key)
+            logger.exception(
+                "transfer_revert_failed",
+                reason="이관 반려 시 기존 정산 복구 실패 — 수동 확인 필요",
+                booking_key=booking_key,
+            )
 
     def _guard_settlement_completed(self, booking_key: str) -> None:
         if self._sheets is None:
@@ -266,16 +269,29 @@ class RejectionService:
     ) -> None:
         if not (processing_shown and metadata and original_blocks):
             return
-        with suppress(SlackApiError):
+        try:
             self._writer.update_message(
                 channel=metadata.channel_id,
                 ts=metadata.message_ts,
                 text="승인 요청",
                 blocks=original_blocks,
             )
+        except SlackApiError:
+            logger.exception(
+                "restore_rejection_message_failed",
+                reason="반려 에러 후 메시지 복원 실패 — 버튼이 안 보일 수 있음",
+                channel_id=metadata.channel_id,
+                ts=metadata.message_ts,
+            )
 
     def _notify_user_safe(self, user_id: str, message: str) -> None:
         if not user_id:
             return
-        with suppress(SlackApiError):
+        try:
             self._writer.post_message(channel=user_id, text=message)
+        except SlackApiError:
+            logger.exception(
+                "notify_user_safe_failed",
+                reason="반려 결과 DM 전송 실패 — 사용자가 반려 사실을 모를 수 있음",
+                user_id=user_id,
+            )
