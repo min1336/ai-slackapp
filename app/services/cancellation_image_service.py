@@ -135,11 +135,12 @@ class CancellationImageService:
                     timestamp=thread_ts,
                     name=_PDF_EMOJI,
                 )
-            except SlackApiError:
+            except SlackApiError as e:
                 logger.warning(
                     "pdf_reaction_failed",
                     reason="PDF 첨부 리액션 추가 실패",
                     thread_ts=thread_ts,
+                    error=str(e),
                 )
 
         if self._is_overseas(sub.booking_key):
@@ -184,12 +185,13 @@ class CancellationImageService:
                     timestamp=thread_ts,
                     name=self._overseas_reaction,
                 )
-            except SlackApiError:
+            except SlackApiError as e:
                 logger.warning(
                     "overseas_reaction_failed",
                     reason="해외 결항 건 리액션 추가 실패",
                     booking_key=booking_key,
                     thread_ts=thread_ts,
+                    error=str(e),
                 )
 
     def _analyze_and_report(
@@ -213,12 +215,13 @@ class CancellationImageService:
                     timestamp=thread_ts,
                     name="x",
                 )
-            except SlackApiError:
+            except SlackApiError as e:
                 logger.warning(
                     "invalid_image_reaction_failed",
                     reason="부적합 이미지 X 리액션 추가 실패",
                     booking_key=submission.booking_key,
                     thread_ts=thread_ts,
+                    error=str(e),
                 )
             reason_text = "부적합 사유:\n" + "\n".join(
                 f"- {r}" for r in result.rejection_reasons
