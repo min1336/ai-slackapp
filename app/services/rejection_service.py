@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from gspread.exceptions import APIError
 from slack_sdk.errors import SlackApiError
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.constants import is_transfer_description, request_type_label
 from app.constants.ui_texts import HeaderText
@@ -244,7 +246,7 @@ class RejectionService:
             return
         try:
             self._transfer_lifecycle.revert_transfer(booking_key)
-        except Exception:
+        except (AppError, SQLAlchemyError, APIError):
             logger.exception(
                 "transfer_revert_failed",
                 reason="이관 반려 시 기존 정산 복구 실패 — 수동 확인 필요",
