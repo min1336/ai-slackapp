@@ -86,13 +86,17 @@ class ServiceContainer:
         self.reader = SlackReader(client)
         self.writer = SlackWriter(client)
 
-        approval_channel = config.settlement.approval_channel_id
+        error_channel = config.settlement.error_channel_id
         writer = self.writer
 
         def _on_sync_failed(booking_key: str, error: str) -> None:
             writer.post_message(
-                channel=approval_channel,
-                text=f"⚠️ 시트 동기화 실패: {booking_key}\n에러: {error}",
+                channel=error_channel,
+                text=(
+                    f"⚠️ 시트 동기화 실패 (배치 재시도 예정)\n"
+                    f"예약번호: {booking_key}\n"
+                    f"에러: {error}"
+                ),
             )
 
         self.sync_processor = SyncProcessor(
