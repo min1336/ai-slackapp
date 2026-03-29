@@ -151,5 +151,11 @@ class SettlementRegistrationService:
     def _notify_user_safe(self, user_id: str, message: str) -> None:
         if not user_id:
             return
-        with suppress(SlackApiError):
+        try:
             self._writer.post_message(channel=user_id, text=message)
+        except SlackApiError:
+            logger.exception(
+                "notify_user_safe_failed",
+                reason="등록 오류 알림 DM 전송 실패 — 사용자가 모를 수 있음",
+                user_id=user_id,
+            )
