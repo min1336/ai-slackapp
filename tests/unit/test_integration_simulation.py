@@ -15,6 +15,7 @@ from app.services.drive_file_collector import DriveFileCollector
 from app.services.image_analyzer import ImageAnalyzer
 from app.services.pdf_converter import PdfConverter
 from app.services.reservation_locator import ReservationLocator
+from tests.fakes.fake_drive import FakeDrive
 from tests.fakes.fake_gemini import FakeGeminiClient
 from tests.fakes.fake_slack import FakeSlackReader, FakeSlackWriter
 from tests.fakes.fake_survey import FakeSurveySheet
@@ -47,22 +48,6 @@ ANALYSIS_RESPONSE = {
 
 # ImageAnalyzer 4MB 필터를 통과할 크기의 JPEG 이미지
 _JPEG_IMAGE = b"\xff\xd8\xff\xe0" + b"\x00" * 1000
-
-
-class FakeDrive:
-    def __init__(self):
-        self.folders: dict[str, str] = {}
-        self.files: dict[str, list[DriveFile]] = {}
-        self.file_contents: dict[str, bytes] = {}
-
-    def find_folder(self, folder_name: str) -> str | None:
-        return self.folders.get(folder_name)
-
-    def list_image_files(self, folder_id: str) -> list[DriveFile]:
-        return self.files.get(folder_id, [])
-
-    def download_file(self, file_id: str) -> bytes:
-        return self.file_contents[file_id]
 
 
 def _sub(
@@ -262,30 +247,24 @@ class TestPhase2_2_MimeDetection:
     """Phase 2.2: magic bytes 기반 MIME 타입 감지."""
 
     def test_jpeg_감지(self):
-        from app.infrastructure.gemini_client import _detect_mime
+        from app.infrastructure.mime import detect_mime
 
-        assert _detect_mime(b"\xff\xd8\xff\xe0" + b"\x00" * 10) == "image/jpeg"
+        assert detect_mime(b"\xff\xd8\xff\xe0" + b"\x00" * 10) == "image/jpeg"
 
     def test_png_감지(self):
-        from app.infrastructure.gemini_client import _detect_mime
+        from app.infrastructure.mime import detect_mime
 
-        assert _detect_mime(b"\x89PNG\r\n\x1a\n" + b"\x00" * 10) == "image/png"
+        assert detect_mime(b"\x89PNG\r\n\x1a\n" + b"\x00" * 10) == "image/png"
 
     def test_webp_감지(self):
-        from app.infrastructure.gemini_client import _detect_mime
+        from app.infrastructure.mime import detect_mime
 
-        assert _detect_mime(b"RIFF\x00\x00\x00\x00WEBP" + b"\x00" * 10) == "image/webp"
+        assert detect_mime(b"RIFF\x00\x00\x00\x00WEBP" + b"\x00" * 10) == "image/webp"
 
     def test_unknown_기본값_png(self):
-        from app.infrastructure.gemini_client import _detect_mime
+        from app.infrastructure.mime import detect_mime
 
-        assert _detect_mime(b"\x00\x00\x00\x00") == "image/png"
-
-    def test_openai도_동일_감지(self):
-        from app.infrastructure.openai_client import _detect_mime
-
-        assert _detect_mime(b"\xff\xd8\xff\xe0" + b"\x00" * 10) == "image/jpeg"
-        assert _detect_mime(b"\x89PNG\r\n\x1a\n" + b"\x00" * 10) == "image/png"
+        assert detect_mime(b"\x00\x00\x00\x00") == "image/png"
 
 
 class TestPhase_전체흐름_시뮬레이션:

@@ -7,21 +7,12 @@ from google import genai
 from google.genai import types
 
 from app.core import get_logger
+from app.infrastructure.mime import detect_mime
 
 logger = get_logger(__name__)
 
 _MAX_RETRIES = 1
 _RETRY_BACKOFF = 2.0  # seconds
-
-
-def _detect_mime(data: bytes) -> str:
-    if data[:2] == b"\xff\xd8":
-        return "image/jpeg"
-    if data[:4] == b"\x89PNG":
-        return "image/png"
-    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
-        return "image/webp"
-    return "image/png"
 
 
 class GeminiClient:
@@ -35,7 +26,7 @@ class GeminiClient:
     def analyze_images(self, *, images: list[bytes], prompt: str) -> dict:
         contents: list[types.Part | str] = []
         for img in images:
-            mime = _detect_mime(img)
+            mime = detect_mime(img)
             contents.append(types.Part.from_bytes(data=img, mime_type=mime))
         contents.append(prompt)
 

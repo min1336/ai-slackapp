@@ -6,18 +6,9 @@ import json
 from openai import OpenAI
 
 from app.core import get_logger
+from app.infrastructure.mime import detect_mime
 
 logger = get_logger(__name__)
-
-
-def _detect_mime(data: bytes) -> str:
-    if data[:2] == b"\xff\xd8":
-        return "image/jpeg"
-    if data[:4] == b"\x89PNG":
-        return "image/png"
-    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
-        return "image/webp"
-    return "image/png"
 
 
 class OpenAIImageClient:
@@ -36,7 +27,7 @@ class OpenAIImageClient:
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": f"data:{_detect_mime(img)};base64,{b64}",
+                        "url": f"data:{detect_mime(img)};base64,{b64}",
                         "detail": "high",
                     },
                 }

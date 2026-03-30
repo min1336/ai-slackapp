@@ -7,6 +7,7 @@ import pymupdf
 
 from app.models import DriveFile, SurveySubmission
 from app.models.analysis import AnalysisResult
+from app.models.cancellation import ReservationData
 from app.services.cancellation_image_service import CancellationImageService
 from app.services.drive_file_collector import DriveFileCollector
 from app.services.image_analyzer import ImageAnalyzer
@@ -14,6 +15,7 @@ from app.services.pdf_converter import PdfConverter
 from app.services.reservation_locator import ReservationLocation, ReservationLocator
 from app.services.thread_reference_store import ThreadReferenceStore
 from tests.fakes.fake_database import FakeDatabase
+from tests.fakes.fake_drive import FakeDrive
 from tests.fakes.fake_gemini import FakeGeminiClient
 from tests.fakes.fake_slack import FakeSlackReader, FakeSlackWriter
 from tests.fakes.fake_survey import FakeSurveySheet
@@ -65,24 +67,6 @@ SAMPLE_RESERVATION_MSG = """\
     업체 : 패밀리렌트카 본사 [제주] - 입판가 정산
 <결제정보>
     총 결제금액 : 185,704원"""
-
-
-class FakeDrive:
-    """DriveImageGateway Protocol 호환 Fake."""
-
-    def __init__(self):
-        self.folders: dict[str, str] = {}  # folder_name → folder_id
-        self.files: dict[str, list[DriveFile]] = {}  # folder_id → files
-        self.file_contents: dict[str, bytes] = {}  # file_id → bytes
-
-    def find_folder(self, folder_name: str) -> str | None:
-        return self.folders.get(folder_name)
-
-    def list_image_files(self, folder_id: str) -> list[DriveFile]:
-        return self.files.get(folder_id, [])
-
-    def download_file(self, file_id: str) -> bytes:
-        return self.file_contents[file_id]
 
 
 def _submission(
@@ -1370,14 +1354,10 @@ class TestCheckDateRange:
 
     @staticmethod
     def _make_analysis(date_str: str) -> AnalysisResult:
-        from app.models.analysis import AnalysisResult
-
         return AnalysisResult(extracted_fields={"날짜": date_str})
 
     @staticmethod
     def _make_location(start: str, end: str) -> ReservationLocation:
-        from app.models.cancellation import ReservationData
-
         return ReservationLocation(
             data=ReservationData(
                 rental_period_start=datetime.strptime(start, "%Y-%m-%d"),
@@ -1458,9 +1438,6 @@ class TestCheckDateRange:
         assert result.verdict == "보류"
 
     def test_대여기간_없으면_보류(self):
-        from app.models.analysis import AnalysisResult
-        from app.models.cancellation import ReservationData
-
         result = CancellationImageService._check_date_range(
             AnalysisResult(extracted_fields={"날짜": "2026-03-01"}),
             ReservationLocation(

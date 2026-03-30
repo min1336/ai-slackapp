@@ -5,22 +5,7 @@ import pymupdf
 from app.models.cancellation import DriveFile
 from app.services.drive_file_collector import DriveFileCollector
 from app.services.pdf_converter import PdfConverter
-
-
-class FakeDrive:
-    def __init__(self):
-        self.folders: dict[str, str] = {}
-        self.files: dict[str, list[DriveFile]] = {}
-        self.file_contents: dict[str, bytes] = {}
-
-    def find_folder(self, folder_name: str) -> str | None:
-        return self.folders.get(folder_name)
-
-    def list_image_files(self, folder_id: str) -> list[DriveFile]:
-        return self.files.get(folder_id, [])
-
-    def download_file(self, file_id: str) -> bytes:
-        return self.file_contents[file_id]
+from tests.fakes.fake_drive import FakeDrive
 
 
 def _make_pdf_bytes(pages: int = 1) -> bytes:
