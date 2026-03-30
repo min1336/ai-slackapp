@@ -13,7 +13,13 @@ logger = get_logger(__name__)
 def _is_rate_limit_error(e: Exception) -> bool:
     """429/rate-limit/quota 에러인지 판별한다."""
     msg = str(e).lower()
-    return "429" in msg or "rate" in msg or "quota" in msg or "exhausted" in msg
+    return (
+        "429" in msg
+        or "rate limit" in msg
+        or "rate_limit" in msg
+        or "quota" in msg
+        or "exhausted" in msg
+    )
 
 
 class FallbackImageGateway:

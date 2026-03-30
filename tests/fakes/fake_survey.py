@@ -24,15 +24,16 @@ class FakeSurveySheet:
             if (
                 existing.booking_key == submission.booking_key
                 and existing.customer_name == submission.customer_name
+                and existing.submission_date == submission.submission_date
             ):
                 return False
         self.formatted_rows.append(submission)
         return True
 
-    def write_analysis_result(self, submission_id: str, result: AnalysisResult) -> None:
-        self.analysis_results.append((submission_id, result))
+    def write_analysis_result(self, booking_key: str, result: AnalysisResult) -> None:
+        self.analysis_results.append((booking_key, result))
 
     def write_verification_result(
-        self, submission_id: str, result: CrossVerificationResult
+        self, booking_key: str, result: CrossVerificationResult
     ) -> None:
-        self.verification_results.append((submission_id, result))
+        self.verification_results.append((booking_key, result))

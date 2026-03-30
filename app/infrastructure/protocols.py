@@ -122,11 +122,11 @@ class SurveySheetGateway(Protocol):
     def mark_processed(self, submission_id: str) -> None: ...
     def write_formatted_row(self, submission: SurveySubmission) -> bool: ...
     def write_analysis_result(
-        self, submission_id: str, result: AnalysisResult
+        self, booking_key: str, result: AnalysisResult
     ) -> None: ...
 
     def write_verification_result(
-        self, submission_id: str, result: CrossVerificationResult
+        self, booking_key: str, result: CrossVerificationResult
     ) -> None: ...
 
 

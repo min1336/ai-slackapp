@@ -274,7 +274,7 @@ class SurveySheetReader:
         )
         return True
 
-    def write_analysis_result(self, submission_id: str, result: AnalysisResult) -> None:
+    def write_analysis_result(self, booking_key: str, result: AnalysisResult) -> None:
         """운영현황 시트에 분석 결과를 기록한다."""
         spreadsheet = self._get_client()
         try:
@@ -286,17 +286,15 @@ class SurveySheetReader:
             )
             return
         try:
-            cell = ws.find(submission_id)
+            cell = ws.find(booking_key)
         except Exception as e:
             if e.__class__.__name__ == "CellNotFound":
-                logger.info(
-                    "analysis_result_row_not_found", submission_id=submission_id
-                )
+                logger.info("analysis_result_row_not_found", booking_key=booking_key)
                 return
             raise
 
         if cell is None:
-            logger.info("analysis_result_row_not_found", submission_id=submission_id)
+            logger.info("analysis_result_row_not_found", booking_key=booking_key)
             return
 
         row = cell.row
@@ -319,11 +317,11 @@ class SurveySheetReader:
 
         logger.info(
             "analysis_result_written",
-            submission_id=submission_id,
+            booking_key=booking_key,
         )
 
     def write_verification_result(
-        self, submission_id: str, result: CrossVerificationResult
+        self, booking_key: str, result: CrossVerificationResult
     ) -> None:
         """운영현황 시트에 교차검증 결과를 기록한다."""
         spreadsheet = self._get_client()
@@ -336,19 +334,17 @@ class SurveySheetReader:
             )
             return
         try:
-            cell = ws.find(submission_id)
+            cell = ws.find(booking_key)
         except Exception as e:
             if e.__class__.__name__ == "CellNotFound":
                 logger.info(
-                    "verification_result_row_not_found", submission_id=submission_id
+                    "verification_result_row_not_found", booking_key=booking_key
                 )
                 return
             raise
 
         if cell is None:
-            logger.info(
-                "verification_result_row_not_found", submission_id=submission_id
-            )
+            logger.info("verification_result_row_not_found", booking_key=booking_key)
             return
 
         row = cell.row
@@ -366,6 +362,6 @@ class SurveySheetReader:
 
         logger.info(
             "verification_result_written",
-            submission_id=submission_id,
+            booking_key=booking_key,
             verdict=result.verdict,
         )

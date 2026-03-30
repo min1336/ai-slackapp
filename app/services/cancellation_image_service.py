@@ -230,11 +230,19 @@ class CancellationImageService:
             reason_text = "부적합 사유:\n" + "\n".join(
                 f"- {r}" for r in result.rejection_reasons
             )
-            self._writer.post_message(
-                channel=self._target_channel,
-                text=reason_text,
-                thread_ts=thread_ts,
-            )
+            try:
+                self._writer.post_message(
+                    channel=self._target_channel,
+                    text=reason_text,
+                    thread_ts=thread_ts,
+                )
+            except SlackApiError as e:
+                logger.warning(
+                    "rejection_reason_post_failed",
+                    booking_key=submission.booking_key,
+                    thread_ts=thread_ts,
+                    error=str(e),
+                )
             return
 
         # 결과 포스트 + 시트 기록 — critical (실패 시 전파)
@@ -245,7 +253,7 @@ class CancellationImageService:
             thread_ts=thread_ts,
             blocks=blocks,
         )
-        self._survey_sheet.write_analysis_result(submission.submission_id, result)
+        self._survey_sheet.write_analysis_result(submission.booking_key, result)
 
         # 교차검증 — optional (실패해도 분석 결과는 이미 포스트됨)
         if self._reservation_locator:
@@ -278,7 +286,7 @@ class CancellationImageService:
         else:
             result = self._check_date_range(analysis_result, location)
 
-        self._survey_sheet.write_verification_result(submission.submission_id, result)
+        self._survey_sheet.write_verification_result(submission.booking_key, result)
 
         if result.verdict == "승인" and location is not None:
             self._post_bidirectional_links(thread_ts, location, submission)

@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import types
+from datetime import datetime
 
 import pymupdf
 
 from app.models import DriveFile, SurveySubmission
+from app.models.analysis import AnalysisResult
 from app.services.cancellation_image_service import CancellationImageService
 from app.services.drive_file_collector import DriveFileCollector
 from app.services.image_analyzer import ImageAnalyzer
 from app.services.pdf_converter import PdfConverter
-from app.services.reservation_locator import ReservationLocator
+from app.services.reservation_locator import ReservationLocation, ReservationLocator
 from app.services.thread_reference_store import ThreadReferenceStore
 from tests.fakes.fake_database import FakeDatabase
 from tests.fakes.fake_gemini import FakeGeminiClient
@@ -1361,3 +1363,117 @@ class TestOverseasHandling:
         assert len(survey.analysis_results) == 0
         assert len(survey.verification_results) == 0
         assert survey.processed_ids == ["1001"]
+
+
+class TestCheckDateRange:
+    """_check_date_range 경계값 테스트."""
+
+    @staticmethod
+    def _make_analysis(date_str: str) -> AnalysisResult:
+        from app.models.analysis import AnalysisResult
+
+        return AnalysisResult(extracted_fields={"날짜": date_str})
+
+    @staticmethod
+    def _make_location(start: str, end: str) -> ReservationLocation:
+        from app.models.cancellation import ReservationData
+
+        return ReservationLocation(
+            data=ReservationData(
+                rental_period_start=datetime.strptime(start, "%Y-%m-%d"),
+                rental_period_end=datetime.strptime(end, "%Y-%m-%d"),
+            ),
+            channel="C-TEST",
+            thread_ts="1234.5678",
+        )
+
+    def test_정확히_시작일_승인(self):
+        result = CancellationImageService._check_date_range(
+            self._make_analysis("2026-03-01"),
+            self._make_location("2026-03-01", "2026-03-05"),
+        )
+        assert result.verdict == "승인"
+
+    def test_정확히_종료일_승인(self):
+        result = CancellationImageService._check_date_range(
+            self._make_analysis("2026-03-05"),
+            self._make_location("2026-03-01", "2026-03-05"),
+        )
+        assert result.verdict == "승인"
+
+    def test_시작일_마이너스1일_경계_승인(self):
+        result = CancellationImageService._check_date_range(
+            self._make_analysis("2026-02-28"),
+            self._make_location("2026-03-01", "2026-03-05"),
+        )
+        assert result.verdict == "승인"
+
+    def test_종료일_플러스1일_경계_승인(self):
+        result = CancellationImageService._check_date_range(
+            self._make_analysis("2026-03-06"),
+            self._make_location("2026-03-01", "2026-03-05"),
+        )
+        assert result.verdict == "승인"
+
+    def test_시작일_마이너스2일_반려(self):
+        result = CancellationImageService._check_date_range(
+            self._make_analysis("2026-02-27"),
+            self._make_location("2026-03-01", "2026-03-05"),
+        )
+        assert result.verdict == "반려"
+
+    def test_종료일_플러스2일_반려(self):
+        result = CancellationImageService._check_date_range(
+            self._make_analysis("2026-03-07"),
+            self._make_location("2026-03-01", "2026-03-05"),
+        )
+        assert result.verdict == "반려"
+
+    def test_날짜_점_형식_승인(self):
+        result = CancellationImageService._check_date_range(
+            self._make_analysis("2026.03.01"),
+            self._make_location("2026-03-01", "2026-03-05"),
+        )
+        assert result.verdict == "승인"
+
+    def test_날짜_슬래시_형식_승인(self):
+        result = CancellationImageService._check_date_range(
+            self._make_analysis("2026/03/01"),
+            self._make_location("2026-03-01", "2026-03-05"),
+        )
+        assert result.verdict == "승인"
+
+    def test_날짜_한글_형식_승인(self):
+        result = CancellationImageService._check_date_range(
+            self._make_analysis("2026년 03월 01일"),
+            self._make_location("2026-03-01", "2026-03-05"),
+        )
+        assert result.verdict == "승인"
+
+    def test_날짜_없으면_보류(self):
+        result = CancellationImageService._check_date_range(
+            self._make_analysis(""),
+            self._make_location("2026-03-01", "2026-03-05"),
+        )
+        assert result.verdict == "보류"
+
+    def test_대여기간_없으면_보류(self):
+        from app.models.analysis import AnalysisResult
+        from app.models.cancellation import ReservationData
+
+        result = CancellationImageService._check_date_range(
+            AnalysisResult(extracted_fields={"날짜": "2026-03-01"}),
+            ReservationLocation(
+                data=ReservationData(),
+                channel="C-TEST",
+                thread_ts="1234.5678",
+            ),
+        )
+        assert result.verdict == "보류"
+
+    def test_파싱_불가_날짜_보류(self):
+        result = CancellationImageService._check_date_range(
+            self._make_analysis("invalid-date"),
+            self._make_location("2026-03-01", "2026-03-05"),
+        )
+        assert result.verdict == "보류"

@@ -10,6 +10,16 @@ from app.core import get_logger
 logger = get_logger(__name__)
 
 
+def _detect_mime(data: bytes) -> str:
+    if data[:2] == b"\xff\xd8":
+        return "image/jpeg"
+    if data[:4] == b"\x89PNG":
+        return "image/png"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/png"
+
+
 class OpenAIImageClient:
     """GPT-4o-mini Vision API 래퍼. ImageAnalysisGateway Protocol 구현."""
 
@@ -26,7 +36,7 @@ class OpenAIImageClient:
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": f"data:image/png;base64,{b64}",
+                        "url": f"data:{_detect_mime(img)};base64,{b64}",
                         "detail": "high",
                     },
                 }

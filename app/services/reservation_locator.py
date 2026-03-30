@@ -58,7 +58,9 @@ class ReservationLocator:
             try:
                 location = self._thread_ref_store.get_by_booking_key(search_text)
             except Exception:
-                logger.warning("reservation_db_lookup_failed", search_text=search_text)
+                logger.exception(
+                    "reservation_db_lookup_failed", search_text=search_text
+                )
                 location = None
             if location:
                 parent_text = self._reader.get_parent_message(
@@ -106,7 +108,7 @@ class ReservationLocator:
             try:
                 self._thread_ref_store.save(search_text, channel, found_ts)
             except Exception:
-                logger.warning("reservation_db_save_failed", search_text=search_text)
+                logger.exception("reservation_db_save_failed", search_text=search_text)
         return ReservationLocation(
             data=parse_reservation_message(parent_text),
             channel=channel,

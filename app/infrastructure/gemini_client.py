@@ -14,6 +14,16 @@ _MAX_RETRIES = 1
 _RETRY_BACKOFF = 2.0  # seconds
 
 
+def _detect_mime(data: bytes) -> str:
+    if data[:2] == b"\xff\xd8":
+        return "image/jpeg"
+    if data[:4] == b"\x89PNG":
+        return "image/png"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/png"
+
+
 class GeminiClient:
     """Gemini Flash API 래퍼. ImageAnalysisGateway Protocol 구현."""
 
@@ -25,7 +35,8 @@ class GeminiClient:
     def analyze_images(self, *, images: list[bytes], prompt: str) -> dict:
         contents: list[types.Part | str] = []
         for img in images:
-            contents.append(types.Part.from_bytes(data=img, mime_type="image/png"))
+            mime = _detect_mime(img)
+            contents.append(types.Part.from_bytes(data=img, mime_type=mime))
         contents.append(prompt)
 
         logger.info(
@@ -51,6 +62,10 @@ class GeminiClient:
                     text_length=len(response.text) if response.text else 0,
                     text_preview=(response.text or "")[:500],
                 )
+                if not response.text:
+                    raise ValueError(
+                        "Gemini returned empty response (possible safety filter)"
+                    )
                 return json.loads(response.text)
             except (TimeoutError, ConnectionError) as e:
                 last_error = e
