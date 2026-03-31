@@ -39,6 +39,14 @@ def _parse_date(date_str: str) -> date | None:
 _PDF_EMOJI = "pdf"
 
 
+def _slack_safe(func, *, event: str, **log_ctx) -> None:
+    """SlackApiError를 잡아 warning 로그만 남기는 래퍼."""
+    try:
+        func()
+    except SlackApiError as e:
+        logger.warning(event, error=str(e), **log_ctx)
+
+
 class CancellationImageService:
     """설문 응답 폴링 → Drive 이미지 검색 → Slack 스레드 업로드."""
 
@@ -92,14 +100,21 @@ class CancellationImageService:
 
         processed = 0
         for sub in submissions:
-            if sub is latest_by_key.get(sub.booking_key):
-                if self._process_submission(sub):
+            try:
+                if sub is latest_by_key.get(sub.booking_key):
+                    if self._process_submission(sub):
+                        self._survey_sheet.mark_processed(sub.submission_id)
+                        processed += 1
+                else:
+                    # 이전 제출 → 처리 완료로 마킹만
                     self._survey_sheet.mark_processed(sub.submission_id)
                     processed += 1
-            else:
-                # 이전 제출 → 처리 완료로 마킹만
-                self._survey_sheet.mark_processed(sub.submission_id)
-                processed += 1
+            except Exception:
+                logger.exception(
+                    "submission_processing_failed",
+                    booking_key=sub.booking_key,
+                    submission_id=sub.submission_id,
+                )
 
         return len(submissions) - processed
 
@@ -114,10 +129,9 @@ class CancellationImageService:
         if collected is None:
             return False
 
-        # 운영현황 행 선점: 이미 존재하면 중복 처리 방지 (Slack 업로드/댓글 스킵)
-        if not self._survey_sheet.write_formatted_row(sub):
-            return True
+        collected_images = [data for _, data in collected.images]
 
+        # 업로드 먼저 — 실패 시 시트 행이 남지 않아 다음 폴링에서 재시도 가능
         self._writer.upload_files(
             channel=self._target_channel,
             thread_ts=thread_ts,
@@ -126,22 +140,19 @@ class CancellationImageService:
                 for name, data in collected.images
             ],
         )
-        collected_images = [data for _, data in collected.images]
+
+        # 업로드 성공 후 운영현황 기록 (중복 체크 겸)
+        if not self._survey_sheet.write_formatted_row(sub):
+            return True
 
         if collected.has_pdf:
-            try:
-                self._writer.add_reaction(
-                    channel=self._target_channel,
-                    timestamp=thread_ts,
-                    name=_PDF_EMOJI,
-                )
-            except SlackApiError as e:
-                logger.warning(
-                    "pdf_reaction_failed",
-                    reason="PDF 첨부 리액션 추가 실패",
-                    thread_ts=thread_ts,
-                    error=str(e),
-                )
+            _slack_safe(
+                lambda: self._writer.add_reaction(
+                    channel=self._target_channel, timestamp=thread_ts, name=_PDF_EMOJI
+                ),
+                event="pdf_reaction_failed",
+                thread_ts=thread_ts,
+            )
 
         if self._is_overseas(sub.booking_key):
             self._handle_overseas(thread_ts, sub.booking_key)
@@ -160,8 +171,8 @@ class CancellationImageService:
 
     def _handle_overseas(self, thread_ts: str, booking_key: str) -> None:
         if self._overseas_mention:
-            try:
-                self._writer.post_message(
+            _slack_safe(
+                lambda: self._writer.post_message(
                     channel=self._target_channel,
                     text=(
                         f"{self._overseas_mention}"
@@ -169,30 +180,22 @@ class CancellationImageService:
                         " — 확인 부탁드립니다."
                     ),
                     thread_ts=thread_ts,
-                )
-            except SlackApiError as e:
-                logger.warning(
-                    "overseas_mention_failed",
-                    reason="해외 결항 건 멘션 포스트 실패",
-                    booking_key=booking_key,
-                    thread_ts=thread_ts,
-                    error=str(e),
-                )
+                ),
+                event="overseas_mention_failed",
+                booking_key=booking_key,
+                thread_ts=thread_ts,
+            )
         if self._overseas_reaction:
-            try:
-                self._writer.add_reaction(
+            _slack_safe(
+                lambda: self._writer.add_reaction(
                     channel=self._target_channel,
                     timestamp=thread_ts,
                     name=self._overseas_reaction,
-                )
-            except SlackApiError as e:
-                logger.warning(
-                    "overseas_reaction_failed",
-                    reason="해외 결항 건 리액션 추가 실패",
-                    booking_key=booking_key,
-                    thread_ts=thread_ts,
-                    error=str(e),
-                )
+                ),
+                event="overseas_reaction_failed",
+                booking_key=booking_key,
+                thread_ts=thread_ts,
+            )
 
     def _analyze_and_report(
         self,
@@ -213,36 +216,27 @@ class CancellationImageService:
 
         # 이미지 품질 부적합 → X 리액션 + 사유, 즉시 종료
         if not result.is_valid:
-            try:
-                self._writer.add_reaction(
-                    channel=self._target_channel,
-                    timestamp=thread_ts,
-                    name="x",
-                )
-            except SlackApiError as e:
-                logger.warning(
-                    "invalid_image_reaction_failed",
-                    reason="부적합 이미지 X 리액션 추가 실패",
-                    booking_key=submission.booking_key,
-                    thread_ts=thread_ts,
-                    error=str(e),
-                )
+            _slack_safe(
+                lambda: self._writer.add_reaction(
+                    channel=self._target_channel, timestamp=thread_ts, name="x"
+                ),
+                event="invalid_image_reaction_failed",
+                booking_key=submission.booking_key,
+                thread_ts=thread_ts,
+            )
             reason_text = "부적합 사유:\n" + "\n".join(
                 f"- {r}" for r in result.rejection_reasons
             )
-            try:
-                self._writer.post_message(
+            _slack_safe(
+                lambda: self._writer.post_message(
                     channel=self._target_channel,
                     text=reason_text,
                     thread_ts=thread_ts,
-                )
-            except SlackApiError as e:
-                logger.warning(
-                    "rejection_reason_post_failed",
-                    booking_key=submission.booking_key,
-                    thread_ts=thread_ts,
-                    error=str(e),
-                )
+                ),
+                event="rejection_reason_post_failed",
+                booking_key=submission.booking_key,
+                thread_ts=thread_ts,
+            )
             return
 
         # 결과 포스트 + 시트 기록 — critical (실패 시 전파)
@@ -330,30 +324,28 @@ class CancellationImageService:
         submission: SurveySubmission,
     ) -> None:
         """승인 시 예약↔취소 스레드 간 양방향 permalink을 포스트한다."""
-        try:
-            res_permalink = self._reader.get_thread_url(
-                location.channel, location.thread_ts
-            )
-            if res_permalink:
-                self._writer.post_message(
+        res_permalink = self._reader.get_thread_url(
+            location.channel, location.thread_ts
+        )
+        if res_permalink:
+            _slack_safe(
+                lambda: self._writer.post_message(
                     channel=self._target_channel,
                     text=res_permalink,
                     thread_ts=thread_ts,
-                )
-
-            cancel_permalink = self._reader.get_thread_url(
-                self._target_channel, thread_ts
+                ),
+                event="res_permalink_post_failed",
+                booking_key=submission.booking_key,
             )
-            if cancel_permalink:
-                self._writer.post_message(
+
+        cancel_permalink = self._reader.get_thread_url(self._target_channel, thread_ts)
+        if cancel_permalink:
+            _slack_safe(
+                lambda: self._writer.post_message(
                     channel=location.channel,
                     text=cancel_permalink,
                     thread_ts=location.thread_ts,
-                )
-        except SlackApiError:
-            logger.exception(
-                "bidirectional_link_failed",
-                reason="양방향 링크 포스트 실패 — 누락 방향 확인 필요",
+                ),
+                event="cancel_permalink_post_failed",
                 booking_key=submission.booking_key,
-                thread_ts=thread_ts,
             )

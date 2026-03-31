@@ -201,27 +201,19 @@ class SurveySheetReader:
             col_idx = len(headers) + 1
             worksheet.update_cell(1, col_idx, _PROCESSED_COL)
 
-        # submission_id로 행 찾기
-        try:
-            cell = worksheet.find(submission_id)
-        except Exception as e:
-            if e.__class__.__name__ == "CellNotFound":
-                logger.warning(
-                    "survey_mark_processed_not_found",
-                    submission_id=submission_id,
-                )
-                return
-            raise
-
-        if cell is None:
+        # Submission ID 컬럼에서만 검색 (다른 컬럼 오탐 방지)
+        sid_col = (
+            headers.index("Submission ID") + 1 if "Submission ID" in headers else None
+        )
+        cells = worksheet.findall(submission_id, in_column=sid_col) if sid_col else []
+        if not cells:
+            logger.warning(
+                "survey_mark_processed_not_found",
+                submission_id=submission_id,
+            )
             return
 
-        worksheet.update_cell(cell.row, col_idx, "TRUE")
-        logger.info(
-            "survey_marked_processed",
-            submission_id=submission_id,
-            row=cell.row,
-        )
+        worksheet.update_cell(cells[0].row, col_idx, "TRUE")
 
     def write_formatted_row(self, submission: SurveySubmission) -> bool:
         """운영현황 시트에 포맷된 행을 추가한다.
@@ -280,78 +272,58 @@ class SurveySheetReader:
         )
         return True
 
-    def write_analysis_result(self, booking_key: str, result: AnalysisResult) -> None:
-        """운영현황 시트에 분석 결과를 기록한다."""
+    def _update_row_by_booking_key(
+        self, booking_key: str, field_map: dict[str, str], event: str
+    ) -> None:
+        """운영현황 시트에서 booking_key의 최신 행을 찾아 field_map 값을 기록한다."""
         spreadsheet = self._get_client()
         try:
             ws = spreadsheet.worksheet(self._formatted_sheet_name)
         except gspread.exceptions.WorksheetNotFound:
             logger.info(
-                "analysis_formatted_sheet_not_found",
-                sheet_name=self._formatted_sheet_name,
+                f"{event}_sheet_not_found", sheet_name=self._formatted_sheet_name
             )
             return
         cells = ws.findall(booking_key, in_column=_BOOKING_KEY_COL)
         if not cells:
-            logger.info("analysis_result_row_not_found", booking_key=booking_key)
+            logger.info(f"{event}_row_not_found", booking_key=booking_key)
             return
 
         row = cells[-1].row
         headers = ws.row_values(1)
         header_col_map = {h: i for i, h in enumerate(headers, 1)}
 
-        # 추출 필드 + 요약 저장 (헤더가 있는 컬럼만)
-        extracted = result.extracted_fields or {}
-        field_map = {
-            "결항일자": extracted.get("날짜", ""),
-            "항공편/선편": extracted.get("항공편", ""),
-            "결항사유": extracted.get("결항사유", ""),
-            "발급기관": extracted.get("발급기관", ""),
-            "AI요약": (result.summary or "")[:100],
-        }
         for header_name, value in field_map.items():
             col = header_col_map.get(header_name)
             if col and value:
                 ws.update_cell(row, col, str(value)[:100])
 
-        logger.info(
-            "analysis_result_written",
-            booking_key=booking_key,
+        logger.info(f"{event}_written", booking_key=booking_key)
+
+    def write_analysis_result(self, booking_key: str, result: AnalysisResult) -> None:
+        """운영현황 시트에 분석 결과를 기록한다."""
+        extracted = result.extracted_fields or {}
+        self._update_row_by_booking_key(
+            booking_key,
+            {
+                "결항일자": extracted.get("날짜", ""),
+                "항공편/선편": extracted.get("항공편", ""),
+                "결항사유": extracted.get("결항사유", ""),
+                "발급기관": extracted.get("발급기관", ""),
+                "AI요약": (result.summary or "")[:100],
+            },
+            event="analysis_result",
         )
 
     def write_verification_result(
         self, booking_key: str, result: CrossVerificationResult
     ) -> None:
         """운영현황 시트에 교차검증 결과를 기록한다."""
-        spreadsheet = self._get_client()
-        try:
-            ws = spreadsheet.worksheet(self._formatted_sheet_name)
-        except gspread.exceptions.WorksheetNotFound:
-            logger.info(
-                "verification_formatted_sheet_not_found",
-                sheet_name=self._formatted_sheet_name,
-            )
-            return
-        cells = ws.findall(booking_key, in_column=_BOOKING_KEY_COL)
-        if not cells:
-            logger.info("verification_result_row_not_found", booking_key=booking_key)
-            return
-
-        row = cells[-1].row
-        headers = ws.row_values(1)
-        header_col_map = {h: i for i, h in enumerate(headers, 1)}
-
-        field_map = {
-            "교차검증결과": result.verdict,
-            "교차검증사유": (result.reason or "")[:100],
-        }
-        for header_name, value in field_map.items():
-            col = header_col_map.get(header_name)
-            if col and value:
-                ws.update_cell(row, col, str(value)[:100])
-
-        logger.info(
-            "verification_result_written",
-            booking_key=booking_key,
-            verdict=result.verdict,
+        self._update_row_by_booking_key(
+            booking_key,
+            {
+                "교차검증결과": result.verdict,
+                "교차검증사유": (result.reason or "")[:100],
+            },
+            event="verification_result",
         )
