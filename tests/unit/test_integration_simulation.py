@@ -240,6 +240,8 @@ class TestPhase2_3_RateLimitFalsePositive:
         assert is_rate_limit_error(Exception("429 Too Many Requests")) is True
         assert is_rate_limit_error(Exception("rate limit exceeded")) is True
         assert is_rate_limit_error(Exception("rate_limit_error")) is True
+        assert is_rate_limit_error(Exception("ratelimit")) is True
+        assert is_rate_limit_error(Exception("too many requests")) is True
         assert is_rate_limit_error(Exception("quota exhausted")) is True
 
 

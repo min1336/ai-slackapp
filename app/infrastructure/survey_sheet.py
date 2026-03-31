@@ -29,6 +29,7 @@ _FORMATTED_HEADERS = [
 ]
 
 _PROCESSED_COL = "처리완료"
+_BOOKING_KEY_COL = _FORMATTED_HEADERS.index("예약번호") + 1  # gspread 1-indexed
 
 _DATE_FORMATS = (
     "%Y-%m-%d %H:%M:%S",
@@ -294,19 +295,12 @@ class SurveySheetReader:
                 sheet_name=self._formatted_sheet_name,
             )
             return
-        try:
-            cell = ws.find(booking_key)
-        except Exception as e:
-            if e.__class__.__name__ == "CellNotFound":
-                logger.info("analysis_result_row_not_found", booking_key=booking_key)
-                return
-            raise
-
-        if cell is None:
+        cells = ws.findall(booking_key, in_column=_BOOKING_KEY_COL)
+        if not cells:
             logger.info("analysis_result_row_not_found", booking_key=booking_key)
             return
 
-        row = cell.row
+        row = cells[-1].row
         headers = ws.row_values(1)
         header_col_map = {h: i for i, h in enumerate(headers, 1)}
 
@@ -342,21 +336,12 @@ class SurveySheetReader:
                 sheet_name=self._formatted_sheet_name,
             )
             return
-        try:
-            cell = ws.find(booking_key)
-        except Exception as e:
-            if e.__class__.__name__ == "CellNotFound":
-                logger.info(
-                    "verification_result_row_not_found", booking_key=booking_key
-                )
-                return
-            raise
-
-        if cell is None:
+        cells = ws.findall(booking_key, in_column=_BOOKING_KEY_COL)
+        if not cells:
             logger.info("verification_result_row_not_found", booking_key=booking_key)
             return
 
-        row = cell.row
+        row = cells[-1].row
         headers = ws.row_values(1)
         header_col_map = {h: i for i, h in enumerate(headers, 1)}
 

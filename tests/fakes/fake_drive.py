@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from app.models.cancellation import DriveFile
 
 
@@ -12,11 +14,12 @@ class FakeDrive:
         self.file_contents: dict[str, bytes] = {}
 
     def find_folder(self, folder_name: str) -> str | None:
-        # contains 매칭 + 최신 우선 (프로덕션 Drive API와 동일 동작)
-        matches = [name for name in self.folders if folder_name in name]
+        pattern = re.compile(
+            rf"(?<![A-Za-z0-9]){re.escape(folder_name)}(?![A-Za-z0-9])"
+        )
+        matches = [name for name in self.folders if pattern.search(name)]
         if not matches:
             return None
-        # 폴더명에 날짜가 포함되므로 역순 정렬 = 최신
         matches.sort(reverse=True)
         return self.folders[matches[0]]
 

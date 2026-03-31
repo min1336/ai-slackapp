@@ -17,6 +17,8 @@ def is_rate_limit_error(e: Exception) -> bool:
         "429" in msg
         or "rate limit" in msg
         or "rate_limit" in msg
+        or "ratelimit" in msg
+        or "too many requests" in msg
         or "quota" in msg
         or "exhausted" in msg
     )

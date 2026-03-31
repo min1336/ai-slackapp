@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from io import BytesIO
 from typing import Any
 
@@ -43,17 +44,24 @@ class DriveImageClient:
                 q=query,
                 fields="files(id, name)",
                 orderBy="createdTime desc",
-                pageSize=1,
+                pageSize=10,
             )
             .execute()
         )
-        files = results.get("files", [])
-        if not files:
-            logger.debug("drive_folder_not_found", folder_name=folder_name)
-            return None
-        folder_id = files[0]["id"]
-        logger.info("drive_folder_found", folder_name=folder_name, folder_id=folder_id)
-        return folder_id
+        # 부분일치 오매칭 방지: booking_key가 독립 토큰으로 존재해야 함
+        pattern = re.compile(
+            rf"(?<![A-Za-z0-9]){re.escape(folder_name)}(?![A-Za-z0-9])"
+        )
+        for f in results.get("files", []):
+            if pattern.search(f["name"]):
+                logger.info(
+                    "drive_folder_found",
+                    folder_name=folder_name,
+                    folder_id=f["id"],
+                )
+                return f["id"]
+        logger.debug("drive_folder_not_found", folder_name=folder_name)
+        return None
 
     def list_image_files(self, folder_id: str) -> list[DriveFile]:
         query = (
