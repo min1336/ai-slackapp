@@ -1,16 +1,19 @@
 # 결항확인서 검증 시스템 — 기술 설계 문서
 
 > 대상 독자: 이 프로젝트에 처음 합류하는 개발자
-> 최종 수정: 2026-03-25
+> 최종 수정: 2026-03-31
 
 이 문서는 [Diataxis 프레임워크](https://docs.divio.com/documentation-system/)에 따라 4개 파트로 구성되어 있다.
 
-| 파트 | 성격 | 언제 읽나 |
-|------|------|-----------|
-| **Part 1. 개요** | 이해 (Explanation) | 시스템이 뭔지 처음 파악할 때 |
-| **Part 2. 시작하기** | 따라하기 (Tutorial) | 처음 로컬에서 돌려볼 때 |
-| **Part 3. 레퍼런스** | 찾아보기 (Reference) | 특정 컴포넌트/로직을 확인할 때 |
-| **Part 4. 가이드** | 문제 해결 (How-to) | 테스트 작성, 디버깅할 때 |
+| 파트 | 성격 | 언제 읽나 | 포함 내용 |
+|------|------|-----------|-----------|
+| **Part 1. 개요** | 이해 (Explanation) | 시스템이 뭔지 처음 파악할 때 | 비즈니스 맥락, 아키텍처, 흐름 요약 |
+| **Part 2. 시작하기** | 따라하기 (Tutorial) | 처음 로컬에서 돌려볼 때 | Quick Start, 워크스루 예시 |
+| **Part 3. 레퍼런스** | 찾아보기 (Reference) | 특정 컴포넌트/로직을 확인할 때 | 컴포넌트 API, 데이터 모델, 설정, 에러 처리 |
+| **Part 4. 가이드** | 문제 해결 (How-to) | 테스트, 디버깅, 운영, 확장할 때 | 테스트, 트러블슈팅, 런북, 데이터계약, 확장, ADR |
+
+> **읽는 순서:** 처음 합류 → Part 1 → Part 2 → 필요시 Part 3/4 참조.
+> **"왜" 질문이 생기면** → Part 4.7 ADR을 먼저 확인.
 
 ---
 
@@ -46,6 +49,10 @@
 - [4.1 테스트 작성 가이드](#41-테스트-작성-가이드)
 - [4.2 트러블슈팅](#42-트러블슈팅)
 - [4.3 용어 사전](#43-용어-사전)
+- [4.4 운영 런북](#44-운영-런북)
+- [4.5 데이터 계약](#45-데이터-계약)
+- [4.6 확장 가이드](#46-확장-가이드)
+- [4.7 아키텍처 결정 기록 (ADR)](#47-아키텍처-결정-기록-adr)
 
 ---
 
@@ -120,7 +127,7 @@ Infrastructure         → 외부 API 통신 (Slack, Drive, Sheets, Gemini, GPT)
 
 | 메서드 | 반환 타입 | 의미 |
 |--------|-----------|------|
-| `poll_and_upload()` | `int` | 처리 건수. Lock 실패 시 `-1` |
+| `poll_and_upload()` | `int` | 미처리 건수 (`len(submissions) - processed`). Lock 실패 시 `-1` |
 | `_process_submission()` | `bool` | `True`=처리 완료(성공 또는 중복), `False`=처리 불가(스레드/파일 없음) |
 | `_analyze_and_report()` | `None` | 분석+포스트 부작용 함수. 실패 시 로그 후 return (예외 전파 안 함) |
 | `_verify_and_report()` | `None` | 검증+포스트 부작용 함수. 실패 시 로그 후 return (예외 전파 안 함) |
@@ -152,17 +159,17 @@ _process_submission(submission)
 │  └─ 결항 채널에서 해당 예약번호가 포함된 스레드 찾기
 │  └─ 없으면 → return False (처리 불가)
 │
-├─ file_collector.collect(folder_name)
-│  └─ Drive 폴더 검색 → 파일 다운로드 → PDF 변환
+├─ file_collector.collect(booking_key)
+│  └─ Drive에서 booking_key를 contains 매칭으로 폴더 검색 → 파일 다운로드 → PDF 변환
 │  └─ 없으면 → return False
 │
-├─ survey_sheet.write_formatted_row(sub)
-│  └─ "운영현황" 시트에 행 선점
-│  └─ 중복 기준: 예약번호 + 고객명 + 작성일자 모두 일치
-│  └─ 이미 존재하면 → return True (처리 완료로 간주)
-│
 ├─ writer.upload_files(...)
-│  └─ 이미지를 Slack 스레드에 업로드
+│  └─ 이미지를 Slack 스레드에 업로드 (업로드 먼저 — 시트 기록 실패 시에도 업로드는 유지)
+│
+├─ survey_sheet.write_formatted_row(sub)
+│  └─ "운영현황" 시트에 행 기록 (중복 체크 겸)
+│  └─ 중복 기준: 예약번호 + 고객명 + 작성일자 모두 일치
+│  └─ 이미 존재하면 → return True (처리 완료로 간주, 분석 단계 생략)
 │
 ├─ PDF 포함 시 → :pdf: 리액션 추가
 │
@@ -313,7 +320,7 @@ sequenceDiagram
         CIS->>Slack: find_message_by_text(channel, booking_key)
         Slack-->>CIS: thread_ts
 
-        CIS->>Collector: collect(folder_name)
+        CIS->>Collector: collect(booking_key)
         Collector->>Drive: find_folder(name)
         Drive-->>Collector: folder_id
         Collector->>Drive: list_image_files(folder_id)
@@ -322,8 +329,9 @@ sequenceDiagram
         Drive-->>Collector: bytes
         Collector-->>CIS: CollectedFiles
 
-        CIS->>Survey: write_formatted_row(sub)
         CIS->>Slack: upload_files(images)
+        Note over CIS: 업로드 먼저 실행<br/>(시트 실패해도 이미지는 보존)
+        CIS->>Survey: write_formatted_row(sub)
 
         alt 해외 건
             CIS->>Slack: post_message(멘션)
@@ -358,7 +366,11 @@ sequenceDiagram
             end
         end
 
-        CIS->>Survey: mark_processed(submission_id)
+        alt _process_submission 성공 (True) 또는 중복 제출
+            CIS->>Survey: mark_processed(submission_id)
+        else _process_submission 실패 (False: 스레드/파일 없음)
+            Note over CIS: mark_processed 호출 안 함<br/>다음 폴링에서 재시도
+        end
     end
     deactivate CIS
 ```
@@ -379,10 +391,9 @@ sequenceDiagram
 
 **핵심 설계:**
 
-- `threading.Lock`으로 동시 폴링 방지 (중복 처리 차단)
-  - **왜 `threading.Lock`?** 이 앱은 Slack Bolt 동기 모드(Socket Mode)로 동작하며, 폴링은 `threading.Thread`에서 실행된다. asyncio 기반이 아니므로 `threading.Lock`이 자연스럽다.
-- optional 컴포넌트(`analyzer`, `reservation_locator`)는 `None` 체크 후 호출
-- 각 단계는 이전 단계 실패와 독립적 — 이미지 업로드 후 분석이 실패해도 업로드는 유지
+- `threading.Lock`으로 동시 폴링 방지 (→ [ADR-5](#adr-5-threadinglock-vs-asynciolock))
+- optional 컴포넌트(`analyzer`, `reservation_locator`)는 `None` 체크 후 호출 (→ [ADR-4](#adr-4-optional-컴포넌트-점진적-활성화))
+- 각 단계는 이전 단계 실패와 독립적 — 이미지 업로드 후 분석이 실패해도 업로드는 유지 (→ [ADR-1](#adr-1-업로드-우선-순서-upload-first))
 
 ### ImageAnalyzer
 
@@ -433,7 +444,9 @@ sequenceDiagram
 3. 파일별 다운로드 + PDF는 `PdfConverter`로 페이지별 이미지 변환
 4. 결과: `CollectedFiles(images=[(filename, bytes), ...], has_pdf=bool)`
 
-**폴더명 규칙**: `{고객명}_{예약번호}_{제출일시}` (예: `홍길동_ABC123_2026-03-20 14:30:00`)
+**폴더명 규칙**: Jotform이 `{고객명}_{예약번호}_{제출일시}` 형식으로 폴더를 생성한다 (예: `홍길동_R240318001_2026-03-20 14:30:00`).
+
+**검색 방법**: `collect(booking_key)`로 호출하면, Drive API `name contains` 쿼리로 해당 예약번호가 포함된 폴더를 찾는다. 추가로 정규식 word-boundary 매칭(`(?<![A-Za-z0-9])booking_key(?![A-Za-z0-9])`)으로 부분일치 오매칭을 방지한다.
 
 ### ReservationLocator
 
@@ -503,16 +516,10 @@ class SurveySubmission:
     """Jotform 설문 응답 1건."""
     submission_id: str       # Jotform 제출 ID
     customer_name: str       # 운전자 성함
-    booking_key: str         # 렌트카 예약번호
+    booking_key: str         # 렌트카 예약번호 (정규화됨: 알파벳+숫자만)
     submission_date: str     # 접수일 (YYYY-MM-DD HH:MM:SS)
     company_name: str        # 업체명
     phone: str               # 연락처
-    image_url: str           # Jotform 업로드 URL
-    note: str                # 추가 상담 내용
-
-    @property
-    def folder_name(self) -> str:
-        """Drive 폴더 검색용: 성함_예약번호_제출날짜"""
 
 @dataclass
 class ReservationData:
@@ -578,10 +585,7 @@ class CrossVerificationResult:
 |------|-----------|------|
 | **날짜** | 대여기간 ±1일 범위 내 포함 여부 | `rental_period_start-1 ≤ 결항일 ≤ rental_period_end+1` |
 
-**설계 근거:**
-
-- **날짜만 비교하는 이유**: 고객명/연락처 비교는 표기 차이(영문, 축약, 오탈자)로 인해 오판율이 높았다. 날짜 비교만으로도 핵심 검증이 가능하므로 인라인화하여 단순화했다.
-- **±1일 여유**: 결항일이 대여 전날이나 반납 다음날이어도, 실제로는 해당 예약에 영향을 줄 수 있다 (전날 출발편, 당일 새벽 도착 등).
+**설계 근거:** → [ADR-2: 날짜만 비교](#adr-2-날짜만-비교-date-only-verification), [ADR-3: +-1일 여유 범위](#adr-3-1일-여유-범위)
 
 ### 판정 흐름
 
@@ -961,3 +965,343 @@ uv run pytest tests/unit -v
 | Block Kit | Slack의 UI 프레임워크. JSON으로 메시지 레이아웃(버튼, 테이블 등)을 정의 |
 | Socket Mode | Slack 앱이 WebSocket으로 이벤트를 수신하는 방식 (HTTP 서버 불필요) |
 | `mark_processed` | 설문 응답을 "처리 완료"로 표시하여 다음 폴링에서 건너뛰게 하는 동작 |
+| `contains 매칭` | Drive API `name contains` 쿼리. 폴더명 전체가 아닌 booking_key 부분만으로 검색 |
+| `word-boundary` | 정규식 경계 매칭. `R240318001`이 `R2403180010`에 오매칭되지 않도록 방지 |
+
+---
+
+## 4.4 운영 런북
+
+> 장애가 발생했을 때, 이 섹션만 읽고 대응할 수 있어야 한다.
+
+### 정상 상태 기준
+
+시스템이 정상이면 다음 조건을 모두 만족한다:
+
+| 항목 | 정상 기준 | 확인 방법 |
+|------|-----------|-----------|
+| 폴링 동작 | 결항 채널 메시지 도착 후 ~5초 뒤 이미지 업로드 시작 | `cancellation_message_detected` 로그 확인 |
+| 미처리 건 | `poll_and_upload()` 반환값이 0 | `survey_submissions_loaded, count=N` → 이후 모두 처리됨 |
+| 시트 동기화 | 운영현황 시트에 행이 존재 | 예약번호로 시트 검색 |
+| AI 분석 | `analysis_result` 로그 발생 | `is_valid=True/False` 확인 |
+| 교차검증 | 판정 결과(승인/반려/보류) 포스트 | 결항 채널 스레드에서 확인 |
+
+### 장애 유형별 대응
+
+#### 1. 이미지가 업로드되지 않음 (가장 빈번)
+
+```text
+[진단 순서]
+1. 로그에서 booking_key로 검색
+2. "drive_collect_no_folder" → Jotform→Drive 동기화 지연 (5~10분 대기 후 재시도)
+3. "drive_folder_not_found" → 폴더명에 booking_key가 포함되지 않음 (Jotform 설정 확인)
+4. "drive_collect_download_failed" → Google Drive API 일시 장애 (재시도)
+
+[재처리 방법]
+결항 채널에 아무 메시지(빈 줄도 가능)를 부모 메시지로 포스트하면 폴링이 재트리거된다.
+원리: 부모 메시지 이벤트 → _trigger_cancellation_poll() → 5초 대기 후 poll_and_upload()
+```
+
+#### 2. AI 분석이 실패함
+
+```text
+[진단]
+로그: "analysis_failed" + traceback
+
+[원인별 대응]
+- google.api_core.exceptions.ResourceExhausted → Gemini API 할당량 초과. 잠시 대기 또는 Fallback(GPT) 확인
+- openai.RateLimitError → OpenAI 할당량 초과
+- 타임아웃 → config.yaml의 analysis.timeout_seconds 증가 (기본 60초)
+
+[영향]
+이미지 업로드는 이미 완료됨. 분석만 누락. 운영팀이 수동으로 확인하면 됨.
+분석 재실행은 불가 (재폴링해도 write_formatted_row 중복 체크에 걸림).
+```
+
+#### 3. 교차검증이 실패함
+
+```text
+[진단]
+로그: "cross_verification_failed" + traceback
+
+[영향]
+분석 결과는 이미 포스트됨. 교차검증 결과만 누락.
+운영현황 시트의 "교차검증결과" 컬럼이 비어있음.
+
+[대응]
+예약 채널에서 수동으로 대여기간 확인 후 시트에 직접 기록.
+```
+
+#### 4. 설문 시트 접근 불가
+
+```text
+[진단]
+로그에 gspread 관련 에러 (HttpError 403/404)
+
+[원인]
+- Google 서비스 계정 권한 만료
+- 시트 ID 변경 (운영팀이 새 시트 생성)
+- OAuth 토큰 갱신 실패 (55분 주기 자동 갱신이 실패)
+
+[대응]
+1. Google Cloud Console에서 서비스 계정 상태 확인
+2. config.yaml의 spreadsheet.id가 올바른지 확인
+3. 앱 재시작 (새 토큰으로 재인증)
+```
+
+### 수동 재처리 절차
+
+시트의 "처리완료" 컬럼을 `TRUE`에서 빈 값으로 변경하면, 다음 폴링에서 해당 건이 재처리된다.
+
+```text
+[주의사항]
+- write_formatted_row 중복 체크가 있으므로, 운영현황 시트에 이미 행이 있으면 분석 단계가 건너뛰어진다.
+- 분석까지 재실행하려면: (1) 결항데이터 시트의 처리완료 해제 + (2) 운영현황 시트의 해당 행 삭제
+- 이미지 업로드는 Slack에 이미 올라가 있으므로 중복 업로드될 수 있다 (무해하지만 스레드가 지저분해짐).
+```
+
+### 로그 상관키 (Correlation Keys)
+
+모든 결항 관련 로그는 다음 키 중 하나 이상을 포함한다. 이 키로 `grep`하면 한 건의 전체 흐름을 추적할 수 있다:
+
+| 키 | 용도 | 예시 |
+|----|------|------|
+| `booking_key` | 건 전체 추적 | `R240318001` |
+| `submission_id` | Jotform 제출 단위 | `5823947102` |
+| `thread_ts` | Slack 스레드 단위 | `1711234567.123456` |
+| `folder_name` | Drive 검색 단위 | `R240318001` (= booking_key) |
+
+```bash
+# 특정 건의 전체 로그 추적
+grep "R240318001" app.log
+```
+
+---
+
+## 4.5 데이터 계약
+
+> 외부 시스템(Jotform, Google Sheets, Slack)과의 인터페이스 명세
+
+### Jotform → Google Sheets (결항데이터 시트)
+
+Jotform 응답이 자동으로 기록되는 시트. 시스템이 읽기 전용으로 사용한다.
+
+| 시트 헤더 (정확한 텍스트) | 필드 | 필수 | 비고 |
+|---------------------------|------|------|------|
+| `Submission ID` | submission_id | O | Jotform 내부 ID. 없으면 `Submission URL`에서 추출 |
+| `Submission Date` | submission_date | - | 여러 포맷 지원 (아래 참조) |
+| `1. 운전자 성함을 입력해주세요.` | customer_name | O | `/` 제거됨 |
+| `2. 취소 및 환불 접수하실 예약번호를 입력해주세요.` | booking_key | O | 정규화: 알파벳+숫자만 추출 |
+| (헤더에 "업체명" 포함) | company_name | - | `_get_row_value(row, "업체명")`으로 키워드 매칭 |
+| (헤더에 "전화번호" 포함) | phone | - | `_get_row_value(row, "전화번호")`으로 키워드 매칭 |
+| `처리완료` | processed flag | - | 시스템이 `TRUE` 기록. 없으면 자동 추가 |
+| `Submission URL` | submission_id 폴백 | - | `/inbox/{id}` 에서 ID 추출 |
+
+**날짜 포맷 지원 (`_normalize_date`):**
+- `YYYY-MM-DD HH:MM:SS`, `YYYY-MM-DD`
+- `MM/DD/YYYY HH:MM:SS AM/PM`, `MM/DD/YYYY HH:MM:SS`, `MM/DD/YYYY`
+- Excel 시리얼 번호 (40000~55000 범위, 예: `46092.37943`)
+
+**중복 제출 처리:** 같은 `booking_key`로 여러 건이 제출되면, `submission_date`가 가장 최신인 것만 처리하고 나머지는 `mark_processed`만 호출.
+
+### 운영현황 시트 (시스템이 쓰기)
+
+`write_formatted_row`가 행을 추가하고, `write_analysis_result`/`write_verification_result`가 필드를 업데이트한다.
+
+**필수 헤더 (정확한 순서):**
+
+```text
+작성일자 | 작성자 | 예약번호 | 연락처 | 고객명 | 업체명 | 결항확인서 확인여부 | 환불 진행여부 | 업체 전달여부
+```
+
+시트가 없으면 자동 생성된다 (위 헤더 포함).
+
+**분석 결과 컬럼** (`write_analysis_result`가 업데이트):
+
+| 시트 컬럼 | 원본 | 글자 제한 |
+|-----------|------|-----------|
+| `결항일자` | `extracted_fields["날짜"]` | 100자 |
+| `항공편/선편` | `extracted_fields["항공편"]` | 100자 |
+| `결항사유` | `extracted_fields["결항사유"]` | 100자 |
+| `발급기관` | `extracted_fields["발급기관"]` | 100자 |
+| `AI요약` | `result.summary` | 100자 |
+
+**교차검증 결과 컬럼** (`write_verification_result`가 업데이트):
+
+| 시트 컬럼 | 원본 | 글자 제한 |
+|-----------|------|-----------|
+| `교차검증결과` | `result.verdict` | 100자 |
+| `교차검증사유` | `result.reason` | 100자 |
+
+**중복 체크 기준:** `예약번호` + `고객명` + `작성일자` 세 컬럼 모두 일치해야 중복. `_update_row_by_booking_key`는 같은 예약번호의 **마지막 행**을 갱신한다 (`cells[-1].row`).
+
+> **헤더에 해당 컬럼이 없으면 해당 필드는 무시된다** (에러 없이 건너뜀). 운영팀이 시트 구조를 변경해도 시스템이 깨지지 않는다.
+
+### Jotform → Google Drive (폴더/파일)
+
+| 항목 | 규칙 |
+|------|------|
+| 폴더 위치 | `config.drive.parent_folder_id` 하위 |
+| 폴더명 | `{고객명}_{예약번호}_{제출일시}` (Jotform이 자동 생성) |
+| 파일 종류 | `image/*` (JPEG, PNG 등) + `application/pdf` |
+| 검색 방법 | `name contains '{booking_key}'` + word-boundary 정규식 |
+| PDF 처리 | PyMuPDF로 페이지별 PNG 변환 |
+
+### Slack 메시지 포맷
+
+**결항 채널 메시지 (스레드 검색 대상):** `find_message_by_text(channel, booking_key)`로 검색. 메시지 본문에 `booking_key` 문자열이 포함되어 있으면 매칭. 특별한 포맷 제약 없음.
+
+**예약 채널 메시지 (`parse_reservation_message`가 파싱):** 예약 채널의 부모 메시지에서 예약 데이터를 추출한다. `message_parser.py`의 정규식 기반. `exclude_text="예약취소"`가 포함된 메시지는 건너뛴다.
+
+---
+
+## 4.6 확장 가이드
+
+### 새 해외 국가 추가
+
+예: 태국 렌트카 결항 건을 `TH` 접두사로 처리하려면.
+
+**변경 체크리스트:**
+
+```text
+1. [설정] config.dev.yaml + config.prod.yaml
+   cancellation.overseas.prefixes: ["OT", "HG", "KL", "IM", "TH"]  ← 추가
+
+2. [설정] 국가별 멘션/리액션을 분리하려면 → 구조 변경 필요 (현재 미지원)
+   현재는 모든 해외 건이 동일한 mention/reaction을 사용한다.
+   국가별 분리가 필요하면:
+   - CancellationImageService.__init__()에 국가별 매핑 추가
+   - _handle_overseas()에서 접두사 → 국가 매핑 로직 추가
+   - config.yaml의 overseas 섹션을 국가별 dict로 변경
+
+3. [테스트] tests/unit/test_cancellation_image_service.py
+   - 기존 TestOverseas 클래스에 TH 접두사 테스트 케이스 추가
+   - 대소문자 혼용 ("th", "Th") 테스트 추가
+
+4. [검증] 로컬에서 확인
+   uv run pytest tests/unit/test_cancellation_image_service.py -v -k "overseas"
+
+5. [배포] config 변경만으로 충분 (코드 변경 없음)
+```
+
+### 새 AI 분석 필드 추가
+
+예: AI가 "탑승 클래스" 정보도 추출하게 하려면.
+
+**변경 체크리스트:**
+
+```text
+1. [프롬프트] app/services/image_analyzer.py
+   _ANALYSIS_PROMPT의 "핵심 필드" 목록에 추가:
+   "고객명, 예약번호, 날짜, 항공편, 결항사유, 발급기관, 탑승클래스"
+
+2. [시트 기록] app/infrastructure/survey_sheet.py
+   write_analysis_result()의 field_map에 추가:
+   {"탑승클래스": extracted.get("탑승클래스", "")}
+
+3. [시트 헤더] 운영현황 시트에 "탑승클래스" 컬럼 수동 추가
+   (없으면 자동 무시되므로, 기록이 안 될 뿐 에러는 나지 않음)
+
+4. [Block Kit] app/views/analysis.py
+   우선순위 필드 목록에 "탑승클래스" 추가 (Slack 메시지에 표시할 경우)
+
+5. [테스트] FakeGeminiClient의 result에 해당 필드 포함한 테스트 추가
+
+6. [주의] AnalysisResult.extracted_fields는 dict이므로 모델 변경 불필요
+```
+
+### 새 교차검증 규칙 추가
+
+예: 결항일 외에 "항공편 존재 여부"도 검증하려면.
+
+**변경 체크리스트:**
+
+```text
+1. [로직] app/services/cancellation_image_service.py
+   _check_date_range()를 확장하거나 별도 메서드 추가
+   → 단, 현재 설계 원칙: 인라인 비교를 단순하게 유지 (날짜만)
+   → 추가 규칙은 별도 Component 서비스로 분리 권장
+
+2. [모델] app/models/analysis.py
+   CrossVerificationResult에 추가 필드가 필요하면 추가
+   → 기존 테스트의 CrossVerificationResult 생성 부분 수정 필요
+
+3. [시트] write_verification_result()의 field_map 확장
+
+4. [테스트] TestCrossVerification 클래스에 새 규칙 테스트 추가
+```
+
+---
+
+## 4.7 아키텍처 결정 기록 (ADR)
+
+> 왜 이렇게 설계했는가. 나중에 "이거 왜 이렇게 되어있지?" 할 때 읽는 섹션.
+
+### ADR-1: 업로드-우선 순서 (Upload-First)
+
+**결정:** 이미지를 Slack에 업로드한 후, 운영현황 시트에 행을 기록한다.
+
+**맥락:** 업로드와 시트 기록 중 어느 것을 먼저 할지 선택해야 했다.
+
+**대안:**
+- (A) 시트 기록 먼저 → 시트에 행은 있는데 이미지가 없는 상태가 될 수 있음
+- (B) 업로드 먼저 → 이미지는 있는데 시트 행이 없을 수 있음 (재폴링으로 복구 가능)
+
+**선택 이유:** (B)를 선택. 시트 기록 실패 시 `mark_processed`가 호출되지 않으므로 다음 폴링에서 재시도된다. 이미지 업로드가 핵심 가치이므로, 시트 기록 실패가 업로드를 막아서는 안 된다. 코드 주석: `"업로드 먼저 — 실패 시 시트 행이 남지 않아 다음 폴링에서 재시도 가능"`.
+
+### ADR-2: 날짜만 비교 (Date-Only Verification)
+
+**결정:** 교차검증에서 결항일과 대여기간만 비교한다. 고객명, 연락처, PNR 등은 비교하지 않는다.
+
+**맥락:** 초기에는 고객명+연락처+날짜를 모두 비교했으나, 오판율이 높았다.
+
+**과거 문제:**
+- 고객명: "홍길동" vs "홍 길동" vs "HONG GILDONG" (공백, 영문, 축약)
+- 연락처: "010-1234-5678" vs "01012345678" (하이픈 유무)
+- PNR: 렌트카 예약번호와 항공사 PNR이 별개 체계
+
+**선택 이유:** 날짜 비교만으로도 핵심 검증(결항이 대여기간에 영향을 주는가?)이 가능하다. 오탈자/표기 차이로 인한 오판을 제거함으로써 운영팀 개입을 줄인다. `ImageAnalyzer`는 데이터 추출만 담당하고, 비교 로직은 넣지 않는다.
+
+### ADR-3: +-1일 여유 범위
+
+**결정:** 결항일이 대여기간의 시작일-1 ~ 종료일+1 범위 내이면 승인한다.
+
+**맥락:** 정확히 대여기간 내인 경우만 승인하면 경계 케이스를 놓친다.
+
+**예시:**
+- 대여 시작일 전날 결항 → 해당 예약에 영향 (전날 출발편, 당일 새벽 도착)
+- 대여 종료일 다음날 결항 → 반납 후 귀국편이므로 영향 가능
+- +-1일 범위를 넘으면 해당 예약과 무관한 결항일 가능성이 높음
+
+### ADR-4: Optional 컴포넌트 (점진적 활성화)
+
+**결정:** `ImageAnalyzer`와 `ReservationLocator`를 optional(`None` 가능)으로 설계한다.
+
+**맥락:** 시스템을 처음 도입할 때 모든 기능이 한번에 준비될 수 없었다.
+
+**이점:**
+- API 키 없이도 이미지 업로드 기능만 사용 가능 (Level 0)
+- AI 모델 장애 시에도 업로드는 정상 동작
+- 새 기능을 추가할 때 기존 기능에 영향 없음
+
+**구현:** `ServiceContainer`에서 조건부 생성. `CancellationImageService` 내부에서 `if self._analyzer:` / `if self._reservation_locator:` 체크.
+
+### ADR-5: threading.Lock vs asyncio.Lock
+
+**결정:** `threading.Lock`을 사용한다.
+
+**맥락:** Slack Bolt 동기 모드(Socket Mode)에서 동작하며, 폴링은 `threading.Thread`에서 실행된다.
+
+**선택 이유:** 이 앱은 asyncio 기반이 아니다. Slack Bolt의 Socket Mode는 동기 핸들러를 사용하고, 백그라운드 작업은 `threading.Thread`로 실행한다. 따라서 `threading.Lock`이 자연스럽다. `non-blocking acquire`(`blocking=False`)를 사용하여 이미 실행 중이면 즉시 `-1`을 반환한다.
+
+### ADR-6: 재시도 전략 (30초, 60초)
+
+**결정:** 첫 폴링 후 미처리 건이 남으면 30초, 60초 간격으로 최대 2회 재시도한다.
+
+**맥락:** Jotform에서 Google Sheets/Drive로 데이터가 동기화되는 데 지연이 있다.
+
+**선택 이유:**
+- 초기 5초 대기: Jotform → Sheet 동기화 (보통 2~3초)
+- 30초 재시도: Drive 폴더 생성 지연 (파일 업로드가 느린 경우)
+- 60초 재시도: 대용량 파일의 Drive 업로드 완료 대기
+- 3회 이상은 Jotform 측 문제일 가능성이 높아 무한 재시도하지 않음
