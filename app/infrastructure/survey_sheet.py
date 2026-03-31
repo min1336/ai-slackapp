@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from threading import Lock
@@ -39,6 +40,12 @@ _DATE_FORMATS = (
 
 
 _EXCEL_EPOCH = datetime(1899, 12, 30)
+
+
+def _normalize_booking_key(raw: str) -> str:
+    """사용자 입력에서 알파벳+숫자만 추출하여 예약번호를 정규화한다."""
+    cleaned = re.sub(r"[^A-Za-z0-9]", "", raw)
+    return cleaned if cleaned else raw.strip()
 
 
 def _normalize_date(raw: str, *, with_time: bool = False) -> str:
@@ -142,9 +149,11 @@ class SurveySheetReader:
                 .strip()
                 .replace("/", "")
             )
-            booking_key = str(
-                row.get("2. 취소 및 환불 접수하실 예약번호를 입력해주세요.", "")
-            ).strip()
+            booking_key = _normalize_booking_key(
+                str(
+                    row.get("2. 취소 및 환불 접수하실 예약번호를 입력해주세요.", "")
+                ).strip()
+            )
 
             if not (customer_name and booking_key):
                 continue

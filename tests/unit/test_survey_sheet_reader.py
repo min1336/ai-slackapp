@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.infrastructure.survey_sheet import _normalize_booking_key
 from app.models import SurveySubmission
 from tests.fakes.fake_survey import FakeSurveySheet
 
@@ -68,3 +69,46 @@ class TestSurveySubmissionModel:
             booking_key="R12345",
         )
         assert sub.folder_name == "홍길동_R12345_"
+
+
+class TestNormalizeBookingKey:
+    """사용자 입력의 '예약번호:' 접두사 등을 제거한다."""
+
+    def test_정상_예약번호_변경없음(self):
+        assert _normalize_booking_key("HG106844") == "HG106844"
+
+    def test_예약번호_콜론_공백(self):
+        assert _normalize_booking_key("예약번호: HG106844") == "HG106844"
+
+    def test_예약번호_콜론_공백없음(self):
+        assert _normalize_booking_key("예약번호:HG106844") == "HG106844"
+
+    def test_예약번호_공백_콜론없음(self):
+        assert _normalize_booking_key("예약번호 HG106844") == "HG106844"
+
+    def test_예약_번호_띄어쓰기(self):
+        assert _normalize_booking_key("예약 번호: HG106844") == "HG106844"
+
+    def test_빈문자열(self):
+        assert _normalize_booking_key("") == ""
+
+    def test_일반_예약번호_IN(self):
+        assert _normalize_booking_key("IN2003129") == "IN2003129"
+
+    def test_일반_예약번호_RB(self):
+        assert _normalize_booking_key("RB2001216") == "RB2001216"
+
+    def test_숫자만(self):
+        assert _normalize_booking_key("1114373") == "1114373"
+
+    def test_해시_접두사(self):
+        assert _normalize_booking_key("#HG106844") == "HG106844"
+
+    def test_공백_포함_예약번호(self):
+        assert _normalize_booking_key("HG 106844") == "HG106844"
+
+    def test_대시_포함(self):
+        assert _normalize_booking_key("HG-106844") == "HG106844"
+
+    def test_한글만_입력_폴백(self):
+        assert _normalize_booking_key("홍길동") == "홍길동"
