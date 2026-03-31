@@ -885,6 +885,33 @@ class TestCrossVerificationReactions:
         assert len(reserve_thread_links) == 1
         assert "cancel-link" in reserve_thread_links[0]["text"]
 
+    def test_교차검증_승인_get_thread_url_실패시_처리_계속(self, monkeypatch):
+        """P1: get_thread_url이 SlackApiError를 던져도 처리가 중단되지 않는다."""
+        from unittest.mock import Mock
+
+        from slack_sdk.errors import SlackApiError
+
+        svc, writer, survey = self._setup_with_verdict(
+            _APPROVE_RESPONSE, with_links=True
+        )
+
+        original_get = svc._reader.get_thread_url
+
+        def _raise_on_get(channel, ts):
+            raise SlackApiError("permalink_failed", Mock())
+
+        monkeypatch.setattr(svc._reader, "get_thread_url", _raise_on_get)
+        svc.poll_and_upload()
+
+        # permalink 실패해도 처리 완료
+        assert survey.processed_ids
+        # 교차검증 결과는 정상 기록 (승인)
+        assert len(survey.verification_results) == 1
+        assert survey.verification_results[0][1].verdict == "승인"
+        # 링크 메시지는 없음 (get_thread_url 실패)
+        link_msgs = [m for m in writer.posted_messages if "slack.com" in m["text"]]
+        assert len(link_msgs) == 0
+
     def test_교차검증_보류_X없음_링크없음(self):
         """예약 스레드를 못 찾으면 보류 — X 리액션 없고 링크도 없다."""
         survey = FakeSurveySheet()

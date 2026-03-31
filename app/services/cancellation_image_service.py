@@ -324,9 +324,17 @@ class CancellationImageService:
         submission: SurveySubmission,
     ) -> None:
         """승인 시 예약↔취소 스레드 간 양방향 permalink을 포스트한다."""
-        res_permalink = self._reader.get_thread_url(
-            location.channel, location.thread_ts
-        )
+        try:
+            res_permalink = self._reader.get_thread_url(
+                location.channel, location.thread_ts
+            )
+        except SlackApiError as e:
+            logger.warning(
+                "res_permalink_get_failed",
+                error=str(e),
+                booking_key=submission.booking_key,
+            )
+            res_permalink = ""
         if res_permalink:
             _slack_safe(
                 lambda: self._writer.post_message(
@@ -338,7 +346,17 @@ class CancellationImageService:
                 booking_key=submission.booking_key,
             )
 
-        cancel_permalink = self._reader.get_thread_url(self._target_channel, thread_ts)
+        try:
+            cancel_permalink = self._reader.get_thread_url(
+                self._target_channel, thread_ts
+            )
+        except SlackApiError as e:
+            logger.warning(
+                "cancel_permalink_get_failed",
+                error=str(e),
+                booking_key=submission.booking_key,
+            )
+            cancel_permalink = ""
         if cancel_permalink:
             _slack_safe(
                 lambda: self._writer.post_message(
