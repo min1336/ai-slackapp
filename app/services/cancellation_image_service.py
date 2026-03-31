@@ -110,7 +110,7 @@ class CancellationImageService:
         if not thread_ts:
             return False
 
-        collected = self._file_collector.collect(sub.folder_name)
+        collected = self._file_collector.collect(sub.booking_key)
         if collected is None:
             return False
 

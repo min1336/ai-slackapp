@@ -10,7 +10,7 @@ class SurveySubmission:
 
     submission_id: str
     customer_name: str  # 운전자 성함
-    booking_key: str  # 예약번호
+    booking_key: str  # 예약번호 (정규화됨)
     submission_date: str = ""  # 접수일
     company_name: str = ""  # 업체명
     phone: str = ""  # 연락처

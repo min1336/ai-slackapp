@@ -32,14 +32,19 @@ class DriveImageClient:
     def find_folder(self, folder_name: str) -> str | None:
         safe_name = folder_name.replace("\\", "\\\\").replace("'", "\\'")
         query = (
-            f"name='{safe_name}' "
+            f"name contains '{safe_name}' "
             f"and '{self._parent_folder_id}' in parents "
             f"and mimeType='application/vnd.google-apps.folder' "
             f"and trashed=false"
         )
         results = (
             self._service.files()
-            .list(q=query, fields="files(id, name)", pageSize=1)
+            .list(
+                q=query,
+                fields="files(id, name)",
+                orderBy="createdTime desc",
+                pageSize=1,
+            )
             .execute()
         )
         files = results.get("files", [])
