@@ -7,6 +7,7 @@ from google import genai
 from google.genai import types
 
 from app.core import get_logger
+from app.infrastructure.fallback_gateway import is_rate_limit_error
 from app.infrastructure.mime import detect_mime
 
 logger = get_logger(__name__)
@@ -68,8 +69,7 @@ class GeminiClient:
                     )
                     time.sleep(_RETRY_BACKOFF * (attempt + 1))
             except Exception as e:
-                error_str = str(e).lower()
-                if "rate" in error_str or "quota" in error_str or "429" in error_str:
+                if is_rate_limit_error(e):
                     last_error = e
                     if attempt < _MAX_RETRIES:
                         logger.warning(

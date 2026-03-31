@@ -229,18 +229,18 @@ class TestPhase2_3_RateLimitFalsePositive:
     """Phase 2.3: 'generate' 등 일반 에러가 rate limit으로 오인되지 않는지 검증."""
 
     def test_generate_content_에러는_rate_limit_아님(self):
-        from app.infrastructure.fallback_gateway import _is_rate_limit_error
+        from app.infrastructure.fallback_gateway import is_rate_limit_error
 
         # "generate_content failed" — "rate"가 "generate"에 포함되지만 rate limit 아님
-        assert _is_rate_limit_error(Exception("generate_content failed")) is False
+        assert is_rate_limit_error(Exception("generate_content failed")) is False
 
     def test_실제_rate_limit_에러_감지(self):
-        from app.infrastructure.fallback_gateway import _is_rate_limit_error
+        from app.infrastructure.fallback_gateway import is_rate_limit_error
 
-        assert _is_rate_limit_error(Exception("429 Too Many Requests")) is True
-        assert _is_rate_limit_error(Exception("rate limit exceeded")) is True
-        assert _is_rate_limit_error(Exception("rate_limit_error")) is True
-        assert _is_rate_limit_error(Exception("quota exhausted")) is True
+        assert is_rate_limit_error(Exception("429 Too Many Requests")) is True
+        assert is_rate_limit_error(Exception("rate limit exceeded")) is True
+        assert is_rate_limit_error(Exception("rate_limit_error")) is True
+        assert is_rate_limit_error(Exception("quota exhausted")) is True
 
 
 class TestPhase2_2_MimeDetection:

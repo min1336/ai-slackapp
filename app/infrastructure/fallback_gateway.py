@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def _is_rate_limit_error(e: Exception) -> bool:
+def is_rate_limit_error(e: Exception) -> bool:
     """429/rate-limit/quota 에러인지 판별한다."""
     msg = str(e).lower()
     return (
@@ -37,7 +37,7 @@ class FallbackImageGateway:
         try:
             return self._primary.analyze_images(images=images, prompt=prompt)
         except Exception as e:
-            if not _is_rate_limit_error(e):
+            if not is_rate_limit_error(e):
                 raise
             logger.warning(
                 "primary_rate_limited_fallback",
