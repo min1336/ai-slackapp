@@ -14,19 +14,6 @@ class SurveySubmission:
     submission_date: str = ""  # 접수일
     company_name: str = ""  # 업체명
     phone: str = ""  # 연락처
-    image_url: str = ""  # Jotform 결항확인서 업로드 URL
-    note: str = ""  # 추가 상담 내용
-
-    @property
-    def folder_name(self) -> str:
-        """Google Drive 폴더명: 성함_예약번호_제출날짜."""
-        date_str = self.submission_date
-        try:
-            dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
-            date_str = dt.strftime("%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            pass
-        return f"{self.customer_name}_{self.booking_key}_{date_str}"
 
 
 @dataclass

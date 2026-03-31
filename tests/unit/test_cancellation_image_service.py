@@ -126,7 +126,7 @@ class TestPollAndUpload:
         survey.submissions = [sub]
 
         drive = FakeDrive()
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="img.jpg", mime_type="image/jpeg")
         ]
@@ -187,7 +187,7 @@ class TestPollAndUpload:
         reader = FakeSlackReader()
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
         drive = FakeDrive()
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = []  # 파일 없음
 
         svc = _make_service(survey=survey, drive=drive, reader=reader)
@@ -202,14 +202,14 @@ class TestPollAndUpload:
         survey.submissions = [old_sub, new_sub]
 
         drive = FakeDrive()
-        # 구 폴더 (처리 안 돼야 함)
-        drive.folders[old_sub.folder_name] = "folder-old"
+        # 구 폴더 (처리 안 돼야 함) — 날짜로 구분
+        drive.folders[f"{old_sub.booking_key}_{old_sub.submission_date}"] = "folder-old"
         drive.files["folder-old"] = [
             DriveFile(id="f-old", name="old.jpg", mime_type="image/jpeg")
         ]
         drive.file_contents["f-old"] = b"\xff\xd8"
         # 신규 폴더 (처리 돼야 함)
-        drive.folders[new_sub.folder_name] = "folder-new"
+        drive.folders[f"{new_sub.booking_key}_{new_sub.submission_date}"] = "folder-new"
         drive.files["folder-new"] = [
             DriveFile(id="f-new", name="new.jpg", mime_type="image/jpeg")
         ]
@@ -240,7 +240,7 @@ class TestProcessSubmission:
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
 
         drive = FakeDrive()
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="bad.jpg", mime_type="image/jpeg"),
         ]
@@ -261,7 +261,7 @@ class TestProcessSubmission:
         writer = FakeSlackWriter()
 
         drive = FakeDrive()
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="a.jpg", mime_type="image/jpeg"),
             DriveFile(id="f2", name="b.png", mime_type="image/png"),
@@ -284,7 +284,7 @@ class TestProcessSubmission:
         writer = FakeSlackWriter()
 
         drive = FakeDrive()
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="bad.jpg", mime_type="image/jpeg"),
             DriveFile(id="f2", name="ok.jpg", mime_type="image/jpeg"),
@@ -319,7 +319,7 @@ class TestPdfConversion:
         writer = FakeSlackWriter()
 
         drive = FakeDrive()
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="cert.pdf", mime_type="application/pdf")
         ]
@@ -343,7 +343,7 @@ class TestPdfConversion:
         writer = FakeSlackWriter()
 
         drive = FakeDrive()
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="multi.pdf", mime_type="application/pdf")
         ]
@@ -367,7 +367,7 @@ class TestPdfConversion:
         writer = FakeSlackWriter()
 
         drive = FakeDrive()
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="cert.pdf", mime_type="application/pdf")
         ]
@@ -389,7 +389,7 @@ class TestPdfConversion:
         writer = FakeSlackWriter()
 
         drive = FakeDrive()
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="photo.jpg", mime_type="image/jpeg")
         ]
@@ -410,7 +410,7 @@ class TestPdfConversion:
         writer = FakeSlackWriter()
 
         drive = FakeDrive()
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="broken.pdf", mime_type="application/pdf"),
             DriveFile(id="f2", name="ok.jpg", mime_type="image/jpeg"),
@@ -439,7 +439,7 @@ class TestFormattedSheet:
         reader.messages_by_text[(TARGET_CH, "R12345")] = "1.0"
 
         drive = FakeDrive()
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="img.jpg", mime_type="image/jpeg")
         ]
@@ -479,7 +479,7 @@ class TestAnalysisIntegration:
         sub = _submission()
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -508,7 +508,7 @@ class TestAnalysisIntegration:
         sub = _submission()
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -531,7 +531,7 @@ class TestAnalysisIntegration:
         sub = _submission()
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -568,7 +568,7 @@ class TestCrossVerification:
 
         # 결항 채널 스레드 세팅
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -617,7 +617,7 @@ class TestCrossVerification:
         sub = _submission()
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -657,7 +657,7 @@ class TestCrossVerification:
         sub = _submission()
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -699,7 +699,7 @@ class TestCrossVerification:
         sub = _submission()
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -731,7 +731,7 @@ class TestCrossVerification:
         sub = _submission()
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -770,7 +770,7 @@ class TestImageValidation:
         sub = _submission()
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -830,7 +830,7 @@ class TestCrossVerificationReactions:
         sub = _submission()
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -897,7 +897,7 @@ class TestCrossVerificationReactions:
         sub = _submission()
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -967,7 +967,7 @@ class TestDocumentConsistencyIntegration:
         sub = _submission()
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="confirm.png", mime_type="image/png"),
             DriveFile(id="f2", name="kakao.png", mime_type="image/png"),
@@ -1049,7 +1049,7 @@ class TestPhoneFallback:
         sub = _submission(phone="010-1234-5678")
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -1096,7 +1096,7 @@ class TestReservationThreadDBLookup:
         sub = _submission()
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -1135,7 +1135,7 @@ class TestReservationThreadDBLookup:
         sub = _submission()
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -1178,7 +1178,7 @@ class TestReservationThreadDBLookup:
         sub = _submission()
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, sub.booking_key)] = "cancel-thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -1219,7 +1219,7 @@ class TestOverseasHandling:
         sub = _submission(key=booking_key)
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, booking_key)] = "thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]
@@ -1325,7 +1325,7 @@ class TestOverseasHandling:
         sub = _submission(key="OT12345")
         survey.submissions = [sub]
         reader.messages_by_text[(TARGET_CH, "OT12345")] = "thread-1"
-        drive.folders[sub.folder_name] = "folder-1"
+        drive.folders[sub.booking_key] = "folder-1"
         drive.files["folder-1"] = [
             DriveFile(id="f1", name="doc.png", mime_type="image/png")
         ]

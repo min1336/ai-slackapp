@@ -43,34 +43,6 @@ class TestFakeSurveySheet:
         assert sheet.formatted_rows[1].booking_key == "R67890"
 
 
-class TestSurveySubmissionModel:
-    def test_folder_name_프로퍼티(self):
-        sub = SurveySubmission(
-            submission_id="1",
-            customer_name="홍길동",
-            booking_key="R12345",
-            submission_date="2026-03-20 09:55:05",
-        )
-        assert sub.folder_name == "홍길동_R12345_2026-03-20 09:55:05"
-
-    def test_folder_name_시간_zero_padding(self):
-        sub = SurveySubmission(
-            submission_id="1",
-            customer_name="김민혁",
-            booking_key="RB2023114",
-            submission_date="2026-03-20 9:55:05",
-        )
-        assert sub.folder_name == "김민혁_RB2023114_2026-03-20 09:55:05"
-
-    def test_folder_name_날짜_없으면_빈문자열(self):
-        sub = SurveySubmission(
-            submission_id="1",
-            customer_name="홍길동",
-            booking_key="R12345",
-        )
-        assert sub.folder_name == "홍길동_R12345_"
-
-
 class TestNormalizeBookingKey:
     """사용자 입력의 '예약번호:' 접두사 등을 제거한다."""
 

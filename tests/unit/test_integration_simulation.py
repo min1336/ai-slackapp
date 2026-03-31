@@ -68,7 +68,7 @@ def _sub(
 
 def _setup_drive(drive: FakeDrive, sub: SurveySubmission) -> None:
     """Drive에 JPEG 이미지 1장 세팅."""
-    drive.folders[sub.folder_name] = "folder-1"
+    drive.folders[sub.booking_key] = "folder-1"
     drive.files["folder-1"] = [
         DriveFile(id="f1", name="cancellation.jpg", mime_type="image/jpeg")
     ]

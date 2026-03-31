@@ -171,8 +171,6 @@ class SurveySheetReader:
             )
             company_name = str(_get_row_value(row, "업체명")).strip()
             phone = str(_get_row_value(row, "전화번호")).strip()
-            image_url = str(_get_row_value(row, "결항확인서")).strip()
-            note = str(_get_row_value(row, "추가적으로 상담")).strip()
 
             submissions.append(
                 SurveySubmission(
@@ -182,8 +180,6 @@ class SurveySheetReader:
                     submission_date=submission_date,
                     company_name=company_name,
                     phone=phone,
-                    image_url=image_url,
-                    note=note,
                 )
             )
 
