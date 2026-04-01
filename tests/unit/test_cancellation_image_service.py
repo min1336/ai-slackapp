@@ -921,8 +921,6 @@ class TestCrossVerificationReactions:
             _APPROVE_RESPONSE, with_links=True
         )
 
-        original_get = svc._reader.get_thread_url
-
         def _raise_on_get(channel, ts):
             raise SlackApiError("permalink_failed", Mock())
 
