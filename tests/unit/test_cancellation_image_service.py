@@ -497,6 +497,32 @@ class TestAnalysisIntegration:
         assert len(writer.posted_messages) >= 1
         assert len(survey.analysis_results) == 1
 
+    def test_analysis_post_failure_still_records_result(self):
+        """P1: 분석 결과 Slack 포스팅 실패 시에도 시트 기록 + 처리완료 마킹."""
+        from unittest.mock import Mock
+
+        from slack_sdk.errors import SlackApiError
+
+        svc, writer, survey, _ = self._setup()
+
+        original_post = writer.post_message
+        call_count = {"n": 0}
+
+        def _fail_first_post(**kwargs):
+            call_count["n"] += 1
+            # 분석 결과 포스팅(첫 번째 post_message)만 실패
+            if call_count["n"] == 1:
+                raise SlackApiError("post_failed", Mock())
+            return original_post(**kwargs)
+
+        writer.post_message = _fail_first_post
+        svc.poll_and_upload()
+
+        # 분석 결과가 시트에 기록됨 (포스팅 실패와 무관)
+        assert len(survey.analysis_results) == 1
+        # submission이 처리 완료로 마킹됨
+        assert survey.processed_ids == ["1001"]
+
     def test_analysis_failure_still_uploads(self):
         survey = FakeSurveySheet()
         drive = FakeDrive()

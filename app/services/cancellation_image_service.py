@@ -239,13 +239,18 @@ class CancellationImageService:
             )
             return
 
-        # 결과 포스트 + 시트 기록 — critical (실패 시 전파)
+        # 결과 포스트 — best-effort (실패해도 시트 기록은 진행)
         blocks = build_analysis_result_blocks(result)
-        self._writer.post_message(
-            channel=self._target_channel,
-            text="검증 결과",
+        _slack_safe(
+            lambda: self._writer.post_message(
+                channel=self._target_channel,
+                text="검증 결과",
+                thread_ts=thread_ts,
+                blocks=blocks,
+            ),
+            event="analysis_result_post_failed",
+            booking_key=submission.booking_key,
             thread_ts=thread_ts,
-            blocks=blocks,
         )
         self._survey_sheet.write_analysis_result(submission.booking_key, result)
 

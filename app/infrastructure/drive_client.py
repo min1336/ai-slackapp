@@ -44,7 +44,7 @@ class DriveImageClient:
                 q=query,
                 fields="files(id, name)",
                 orderBy="createdTime desc",
-                pageSize=10,
+                pageSize=100,
             )
             .execute()
         )

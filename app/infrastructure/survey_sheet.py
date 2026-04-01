@@ -284,14 +284,15 @@ class SurveySheetReader:
                 f"{event}_sheet_not_found", sheet_name=self._formatted_sheet_name
             )
             return
-        cells = ws.findall(booking_key, in_column=_BOOKING_KEY_COL)
+        headers = ws.row_values(1)
+        header_col_map = {h: i for i, h in enumerate(headers, 1)}
+        booking_col = header_col_map.get("예약번호", _BOOKING_KEY_COL)
+        cells = ws.findall(booking_key, in_column=booking_col)
         if not cells:
             logger.info(f"{event}_row_not_found", booking_key=booking_key)
             return
 
         row = cells[-1].row
-        headers = ws.row_values(1)
-        header_col_map = {h: i for i, h in enumerate(headers, 1)}
 
         for header_name, value in field_map.items():
             col = header_col_map.get(header_name)
