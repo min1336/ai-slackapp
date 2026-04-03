@@ -1,223 +1,282 @@
 # Slack 정산 이슈 봇
 
-Slack 스레드에서 정산 이슈를 등록하고 승인/반려 워크플로우를 처리하는 봇입니다.
+Slack 스레드에서 정산 이슈를 등록/승인하고, 결항확인서를 AI로 검증하는 봇.
 
-## Quick Start
+---
 
-### 1. 의존성 설치
+# Part 1. 정산
+
+### 정산 이슈 등록 및 승인
+
+```
+사용자가 예약 채널 스레드에서 `!정산` 입력
+→ 원본 메시지 자동 파싱 → 모달에서 수정/확인
+→ 승인 채널에 승인 요청 포스트
+→ 승인자가 승인/반려 → Google Sheets에 기록
+```
+
+### 이관 예약 자동 연결
+
+```
+업체이관 채널에 메시지 도착
+→ 예약번호 파싱 → 해당 예약의 기존 정산이슈 스레드 탐색 (DB → Slack API 폴백)
+→ 해당 스레드에 이관 정보 포스트
+```
+
+### 데이터 동기화
+
+- **실시간**: DB 저장 → `after_commit` 훅 → Sheets 즉시 반영
+- **배치**: 매일 08:00 DB → Sheets 미동기화 건 처리
+- **역동기화**: 매일 Sheets `정산완료=TRUE` → DB 반영
+
+---
+
+# Part 2. 결항
+
+### 결항확인서 AI 검증
+
+```
+설문 시트(Google Sheets) 폴링 → Google Drive에서 이미지 다운로드
+→ Gemini Flash(primary) / GPT-4o-mini(fallback)로 문서 분석
+→ 예약 데이터와 교차검증 (승인/반려/보류 판정)
+→ 결과를 Slack 채널에 포스팅 + 시트에 기록
+```
+
+**활성화 조건** (두 가지 모두 필요):
+1. `config.{env}.yaml`의 `cancellation.analysis.enabled: true`
+2. `.env`에 `GEMINI_API_KEY` 또는 `OPENAI_API_KEY` 설정
+
+### 해외(일본) 결항 건 처리
+
+예약번호 접두사로 해외 건을 판별하여, AI 분석을 스킵하고 담당팀에 알림만 전달한다.
+
+```
+예약번호 prefix 매칭 (OT, HG, KL, IM)
+→ AI 분석/교차검증 스킵
+→ 스레드에 @해외사업팀_일본파트 멘션 + 🇯🇵 리액션
+```
+
+설정: `config.{env}.yaml`의 `cancellation.overseas`
+
+```yaml
+overseas:
+  prefixes: ["OT", "HG", "KL", "IM"]   # 해외 예약번호 접두사
+  mention: "<!subteam^S03KUCG1H53>"     # 해외사업팀_일본파트
+  reaction: "flag-jp"                    # 🇯🇵
+```
+
+### 외부 서비스 계정
+
+| 서비스 | 계정 | 비고 |
+|--------|------|------|
+| JotForm | `im@teamo2.kr` (Bitwarden) | 설문 폼 관리 |
+| Google Sheets / Drive | `iann@teamo2.kr` | 시트·드라이브 소유자 |
+
+### JotForm 설문 폼
+
+| 환경 | 폼 이름 |
+|------|---------|
+| prod | 결항 예약 취소 및 환불 접수 |
+| dev | [테스트] 결항 예약 취소 및 환불 접수 |
+
+### Slack 채널 · 봇 구성
+
+| 환경 | 봇 | 채널 |
+|------|-----|------|
+| prod | 알리미 | 카모아_예약이, 카모아_알림_결항확인서 |
+| dev | 결항 알리미 테스트 | ai-test |
+
+### DB
+
+정산과 동일한 DB를 공유한다 (스레드 탐색 로직 공용).
+
+### 로컬 테스트 방법
+
+`ai-test` 채널에서 카모아_예약이 스레드 형식의 메시지와 결항확인서 이미지를 직접 올리면, 로컬 서버가 이를 읽고 댓글로 검증 결과를 달아준다.
+
+---
+
+## 필요한 것
+
+- Python 3.12+
+- PostgreSQL 16+ (psycopg2 드라이버)
+- [uv](https://docs.astral.sh/uv/) (없으면: `curl -LsSf https://astral.sh/uv/install.sh | sh`)
+
+## 셋업
 
 ```bash
-# uv 사용 (권장)
+# 1. 클론
+git clone https://github.com/teamo2dev/ai-slackapp.git
+cd ai-slackapp
+
+# 2. 의존성 설치
 uv sync
-
-# 또는 pip 사용
-pip install -e .
-```
-
-### 2. Pre-commit 설정
-
-```bash
 uv run pre-commit install
-```
 
-커밋 시 자동으로 ruff 린팅과 포맷팅이 실행됩니다. `uv run ruff check --fix`와 동일하지만, 커밋할 때 자동 실행되어 문제 있는 코드가 커밋되는 것을 방지합니다.
-
-### 3. 환경변수 설정
-
-```bash
+# 3. 환경변수 설정
 cp .env.sample .env
 ```
 
-`.env` 파일을 열고 값을 설정합니다:
+`.env` 파일을 열고 값을 채운다:
 
 ```env
-# Slack App 설정 (필수)
-SLACK_APP_TOKEN=xapp-xxx          # App-Level Token (Socket Mode용)
-SLACK_BOT_TOKEN=xoxb-xxx          # Bot User OAuth Token
-SLACK_SIGNING_SECRET=xxx          # Signing Secret (선택)
+ENVIRONMENT=dev
 
-# Google Sheets 설정 (필수)
+# Slack (필수)
+SLACK_APP_TOKEN=xapp-xxx          # Socket Mode용 App-Level Token
+SLACK_BOT_TOKEN=xoxb-xxx          # Bot User OAuth Token
+SLACK_SIGNING_SECRET=xxx
+
+# Google Sheets (필수)
 GOOGLE_CREDENTIALS_FILE=credentials.json
 
-# PostgreSQL 설정 (선택 - Supabase 사용 시)
-DATABASE_HOST=db.xxx.supabase.co
-DATABASE_PASSWORD=xxx
+# PostgreSQL (필수)
 DATABASE_USER=postgres
+DATABASE_PASSWORD=xxx
+DATABASE_HOST=xxx
 DATABASE_PORT=5432
 DATABASE_DBNAME=postgres
+
+# AI 분석 (결항 기능 사용 시)
+GEMINI_API_KEY=xxx
+OPENAI_API_KEY=xxx
 ```
 
-> **Note**: DATABASE_HOST와 DATABASE_PASSWORD가 설정되면 PostgreSQL 캐시 레이어가 활성화됩니다. 미설정 시 Google Sheets만 사용합니다.
+### 4. DB 준비
 
-### 4. 앱 설정 (config.yaml)
+기존 DB에 접속하는 경우 이 단계를 건너뛰고 `.env`만 채우면 된다.
 
-`config.yaml` 파일에서 승인자, 스프레드시트, 채널을 설정합니다:
+**새 DB를 만들어야 하는 경우:**
 
-```yaml
-# 승인자 슬랙 UserID
-approvers:
-  - U12345678
-  - U87654321
+```bash
+sudo -u postgres psql -p <port>
 
-# 슬랙 채널 ID (이관 예약 자동 감지용)
-slack_channels:
-  transfer_reservation: "C0XXXXXXXX"
-
-# Spread Sheet ID
-# https://docs.google.com/spreadsheets/d/{id} 에서 id 추출
-spreadsheet:
-  id: "your_spreadsheet_id"
-  sheets:
-    settlement:
-      name: "정산"
-      columns:
-        "예약번호": booking_key
-        "정산완료": settlement_completed
-        # ... 생략
-    issue_log:
-      name: "정산이슈로그"
-      columns:
-        "예약번호": booking_key
-        "sync_key": sync_key
-        # ... 생략
+CREATE USER <user> WITH PASSWORD '<password>';
+CREATE DATABASE <dbname> OWNER <user>;
+GRANT ALL PRIVILEGES ON DATABASE <dbname> TO <user>;
+\q
 ```
 
-### 5. Google Sheets 서비스 계정 설정
+**마이그레이션 적용:**
+
+```bash
+uv run alembic upgrade head
+```
+
+### 5. Google 서비스 계정
 
 1. Google Cloud Console에서 서비스 계정 생성
 2. JSON 키 파일 다운로드 → 프로젝트 루트에 `credentials.json`으로 저장
-3. 스프레드시트에서 서비스 계정 이메일을 편집자로 추가
+3. 대상 스프레드시트에 서비스 계정 이메일을 **편집자**로 추가
 
-### 6. Google Sheets 시트 설정
-
-코드가 정상 동작하려면 아래 설정이 시트에 반영되어야 합니다.
-
-#### 정산 시트
-
-| 필수 설정 | 설명 |
-|-----------|------|
-| `정산완료` 헤더 + 체크박스 | 헤더명은 `config.yaml > spreadsheet.sheets.settlement.columns`와 일치해야 하며 값은 `TRUE/FALSE` 체크박스여야 함 |
-
-- 컬럼 순서는 자유롭게 변경 가능 (헤더 기반 매핑)
-- 운영팀이 `정산완료=TRUE`로 체크하면, 동일 예약번호 신규 등록 시 기존 행을 덮어쓰지 않고 새 행이 생성됨
-
-#### 이슈 로그 시트
-
-- `sync_key` 헤더는 필수이며, 헤더명은 `config.yaml > spreadsheet.sheets.issue_log.columns`와 일치해야 합니다.
-- 컬럼 순서는 자유롭게 변경 가능 (헤더 기반 매핑)
-
-### 7. 실행
+### 6. 로컬 테스트
 
 ```bash
-# uv 사용
+# 서버 실행 (Socket Mode로 Slack 연결)
+uv run python -m app.main
+```
+
+- **dev 환경**: `config.dev.yaml` 사용 — 모든 채널이 `C0AANUJGPAB` (ai-test)로 통일
+- **Slack App**: api.slack.com > Your Apps 에서 봇 이름/설정 확인
+- **Slack App 필요 설정**:
+  - Socket Mode 활성화 + App-Level Token (`connections:write`)
+  - Event Subscriptions + Interactivity & Shortcuts 활성화
+  - Bot Token Scopes: `chat:write`, `channels:history`, `groups:history`, `users:read`, `im:history`, `mpim:history`
+
+## 자주 쓰는 명령어
+
+```bash
+# 서버 실행
 uv run python -m app.main
 
-# 또는 직접 실행
-python -m app.main
+# 유닛 테스트
+uv run pytest tests/unit -v
+
+# 린팅 + 포매팅
+uv run ruff check --fix && uv run ruff format
+
+# DB 마이그레이션 (모델 변경 후)
+uv run alembic revision --autogenerate -m "설명"
+uv run alembic upgrade head
 ```
 
-### 8. 테스트
-
-```bash
-# 전체 테스트
-pytest tests -v
-
-# 유닛 테스트만 (빠름)
-pytest tests/unit -v
-
-# 통합 테스트만 (Fake Worksheet 기반 모듈 통합)
-pytest tests/integration -v
-
-# 실제 Google Sheets API 통합 테스트 (테스트 전용 시트 권장)
-RUN_REAL_INTEGRATION=1 pytest -m integration_real -v
-```
 ---
 
-## 프로젝트 구조
+## 프로덕션
+
+### 배포
+
+`main` 브랜치에 push하면 GitHub Actions가 자동 배포한다.
 
 ```
-app/
-├── main.py                 # 앱 진입점
-├── config.py               # 환경변수 설정
-├── constants/              # 상수 (옵션, ID, UI 텍스트)
-├── models/                 # 데이터 모델
-├── listener/               # Slack 이벤트 핸들러 (Controller)
-├── services/               # 비즈니스 로직
-├── infrastructure/         # 외부 시스템 연동
-└── views/                  # Slack Block Kit 빌더
-
-tests/
-├── unit/                   # 유닛 테스트
-└── integration/            # 통합 테스트
+Push to main → Docker 빌드 → GHCR push → AWS 서버 배포 (docker compose up -d)
 ```
 
-### 레이어 아키텍처
+수동 배포: GitHub Actions > Deploy to Production Server > `workflow_dispatch`.
+`force_infra_deploy: true`는 Secret 변경 시 컨테이너 강제 재생성.
+
+### 인프라
+
+| 구성 | 상세 |
+|------|------|
+| 이미지 레지스트리 | `ghcr.io/teamo2dev/slack-bot` |
+| 서버 | AWS EC2 (Bastion Host 경유) |
+| 컨테이너 | Docker Compose (`docker-compose.prod.yml`) |
+| DB | PostgreSQL |
+| 네트워크 | n8n과 Docker network 공유 (`n8n-cloud-tm2-network`) |
+
+### GitHub Secrets
+
+| Secret | 용도 |
+|--------|------|
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` | SG 임시 허용 |
+| `AWS_TM2_BASTION_HOST` / `USERNAME` / `KEY` / `PORT` / `SG` | Bastion Host 접속 |
+| `PROD_SERVER_HOST` / `USER` / `KEY` / `PORT` | 프로덕션 서버 접속 |
+| `GHCR_PAT` | GitHub Container Registry 인증 |
+| `SLACK_APP_TOKEN` / `SLACK_BOT_TOKEN` / `SLACK_SIGNING_SECRET` | Slack |
+| `DATABASE_HOST` / `PASSWORD` / `USER` / `PORT` / `DBNAME` | PostgreSQL |
+| `GEMINI_API_KEY` / `OPENAI_API_KEY` | AI 분석 |
+| `JOTFORM_API_KEY` | JotForm 연동 |
+
+### 프로덕션 채널
+
+| 채널 | ID | 용도 |
+|------|-----|------|
+| 카모아_업체이관 | `C0115V08YS1` | 이관 예약 감지 |
+| 정산이슈_확인 | `C0AGV65DXMX` | 승인 요청 포스팅 |
+| 카모아_알림_결항확인서 | `C03ACLFMAFN` | 결항 검증 결과 |
+| 카모아_예약이 외 6개 | config 참조 | 정산 명령 수신 |
+
+### 프로덕션 시트
+
+| 시트 | 시트명 | 비고 |
+|------|--------|------|
+| 정산 | `정산용(AI연동)` | header 2행, `정산완료` 체크박스 필수 |
+| 이슈로그 | `CS확인용(AI연동)` | header 1행, `sync_key` 헤더 필수 |
+| 결항 설문 | `결항데이터` | 설문 응답 폴링 대상 |
+| 결항 관리 | `결항관리` | 검증 결과 기록 |
+
+### 로그 확인
+
+```bash
+docker logs slack-bot --tail 100 -f
+tail -f /var/log/slack-bot/*.log
+```
+
+---
+
+## 상세 문서
+
+[`CLAUDE.md`](CLAUDE.md) -- 아키텍처, 레이어 규칙, 에러 핸들링, 테스트 패턴, 코드 스타일
+
+## 커밋 컨벤션
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      listener/                          │
-│              (Controller - 요청/응답 처리)               │
-├─────────────────────────────────────────────────────────┤
-│         services/                    views/             │
-│     (비즈니스 로직)              (UI 블록 생성)           │
-├─────────────────────────────────────────────────────────┤
-│                   infrastructure/                       │
-│              (외부 시스템 통신)                          │
-├─────────────────────────────────────────────────────────┤
-│                      models/                            │
-│                   (데이터 모델)                          │
-└─────────────────────────────────────────────────────────┘
+TYPE: (TICKET) 설명
+# 예: FEAT: (AI-98) 결항 AI 검증 추가
+# TYPE: FEAT, FIX, TEST, DOCS, CHORE, REFACTOR
 ```
 
-| 레이어 | 역할 | 호출 가능 | 경계 |
-|--------|------|----------|------|
-| **listener/** | Slack 이벤트 수신, 응답 반환 | services, views, models | infrastructure 직접 호출 금지 |
-| **services/** | 비즈니스 로직 | infrastructure, models | listener 호출 금지 |
-| **infrastructure/** | 외부 시스템 통신 (Slack API, Google Sheets) | models | 비즈니스 로직 포함 금지 |
-| **views/** | Slack Block Kit JSON 생성 | models | 데이터 가공 금지 |
-| **models/** | 데이터 구조 정의 | (없음) | 모든 레이어에서 import 가능 |
+## License
 
-**원칙: 레이어를 건너뛰어 호출하지 않는다** (listener → ~~infrastructure~~ 금지)
-
-### 데이터 모델 선택 기준
-
-| 기준 | Pydantic | dataclass |
-|------|----------|-----------|
-| JSON 직렬화 필요 | O | X |
-| 필드 검증/변환 필요 | O | X |
-| 외부 입력 처리 | O | X |
-| 단순 데이터 홀더 | X | O |
-
-```python
-# Pydantic - Slack 버튼 value 등 JSON 변환 필요시
-data = SettlementData.model_validate_json(button_value)
-button_value = data.model_dump_json()
-
-# dataclass - 내부 데이터 변환만 (스프레드시트 행 등)
-row = SettlementRow(...)
-row.to_dict()  # → {"settlement_day": "2025-01-28", "user_name": "작성자", ...}
-```
-
-## Slack App 설정
-
-### 필요한 Bot Token Scopes
-
-- `chat:write` - 메시지 전송
-- `channels:history` - 채널 메시지 읽기
-- `groups:history` - 비공개 채널 메시지 읽기
-- `users:read` - 사용자 정보 조회
-- `im:history` - DM 메시지 읽기
-- `mpim:history`
-
-### Socket Mode
-
-이 봇은 Socket Mode를 사용합니다. Slack App 설정에서:
-
-1. **Settings > Socket Mode** 활성화
-2. **App-Level Token** 생성 (`connections:write` scope)
-3. **Event Subscriptions** 활성화
-4. **Interactivity & Shortcuts** 활성화
-
-### Slack UI Block Kit Builder
-[Block Kit Builder](https://app.slack.com/block-kit-builder/T07JC381Y#%7B%22blocks%22:%5B%7B%22type%22:%22section%22,%22text%22:%7B%22type%22:%22mrkdwn%22,%22text%22:%22Hello,%20Assistant%20to%20the%20Regional%20Manager%20Dwight!%20*Michael%20Scott*%20wants%20to%20know%20where%20you'd%20like%20to%20take%20the%20Paper%20Company%20investors%20to%20dinner%20tonight.%5Cn%5Cn%20*Please%20select%20a%20restaurant:*%22%7D%7D,%7B%22type%22:%22divider%22%7D,%7B%22type%22:%22section%22,%22text%22:%7B%22type%22:%22mrkdwn%22,%22text%22:%22*Farmhouse%20Thai%20Cuisine*%5Cn:star::star::star::star:%201528%20reviews%5Cn%20They%20do%20have%20some%20vegan%20options,%20like%20the%20roti%20and%20curry,%20plus%20they%20have%20a%20ton%20of%20salad%20stuff%20and%20noodles%20can%20be%20ordered%20without%20meat!!%20They%20have%20something%20for%20everyone%20here%22%7D,%22accessory%22:%7B%22type%22:%22image%22,%22image_url%22:%22https://s3-media3.fl.yelpcdn.com/bphoto/c7ed05m9lC2EmA3Aruue7A/o.jpg%22,%22alt_text%22:%22alt%20text%20for%20image%22%7D%7D,%7B%22type%22:%22section%22,%22text%22:%7B%22type%22:%22mrkdwn%22,%22text%22:%22*Kin%20Khao*%5Cn:star::star::star::star:%201638%20reviews%5Cn%20The%20sticky%20rice%20also%20goes%20wonderfully%20with%20the%20caramelized%20pork%20belly,%20which%20is%20absolutely%20melt-in-your-mouth%20and%20so%20soft.%22%7D,%22accessory%22:%7B%22type%22:%22image%22,%22image_url%22:%22https://s3-media2.fl.yelpcdn.com/bphoto/korel-1YjNtFtJlMTaC26A/o.jpg%22,%22alt_text%22:%22alt%20text%20for%20image%22%7D%7D,%7B%22type%22:%22section%22,%22text%22:%7B%22type%22:%22mrkdwn%22,%22text%22:%22*Ler%20Ros*%5Cn:star::star::star::star:%202082%20reviews%5Cn%20I%20would%20really%20recommend%20the%20%20Yum%20Koh%20Moo%20Yang%20-%20Spicy%20lime%20dressing%20and%20roasted%20quick%20marinated%20pork%20shoulder,%20basil%20leaves,%20chili%20&%20rice%20powder.%22%7D,%22accessory%22:%7B%22type%22:%22image%22,%22image_url%22:%22https://s3-media2.fl.yelpcdn.com/bphoto/DawwNigKJ2ckPeDeDM7jAg/o.jpg%22,%22alt_text%22:%22alt%20text%20for%20image%22%7D%7D,%7B%22type%22:%22divider%22%7D,%7B%22type%22:%22actions%22,%22elements%22:%5B%7B%22type%22:%22button%22,%22text%22:%7B%22type%22:%22plain_text%22,%22text%22:%22Farmhouse%22,%22emoji%22:true%7D,%22value%22:%22click_me_123%22%7D,%7B%22type%22:%22button%22,%22text%22:%7B%22type%22:%22plain_text%22,%22text%22:%22Kin%20Khao%22,%22emoji%22:true%7D,%22value%22:%22click_me_123%22,%22url%22:%22https://google.com%22%7D,%7B%22type%22:%22button%22,%22text%22:%7B%22type%22:%22plain_text%22,%22text%22:%22Ler%20Ros%22,%22emoji%22:true%7D,%22value%22:%22click_me_123%22,%22url%22:%22https://google.com%22%7D%5D%7D%5D%7D)
-해당 링크를 통해 UI를 직접 구성하고 JSON을 사용할 수 있습니다.
+Private - Carmore Internal Use Only
